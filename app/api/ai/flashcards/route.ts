@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { getUser } from "@/lib/auth-server"
 import { generateFlashcards } from "@/lib/ai"
 import { consumeCredit } from "@/lib/credits"
 import { logUsage } from "@/lib/database"

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { getUser } from "@/lib/auth-server"
 import { getCredits } from "@/lib/database"
 import { isTrialActive } from "@/lib/database"
 

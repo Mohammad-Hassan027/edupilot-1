@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { getUser } from "@/lib/auth-server"
 import { getProfile, upsertProfile, getCredits, getSubscription } from "@/lib/database"
 
 export async function GET() {

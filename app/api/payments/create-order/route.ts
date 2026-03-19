@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { getUser } from "@/lib/auth-server"
 import { createRazorpayOrder } from "@/lib/payments"
 import { createPaymentRecord } from "@/lib/database"
 

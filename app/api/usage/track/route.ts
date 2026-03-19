@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { getUser } from "@/lib/auth-server"
 import { logUsage } from "@/lib/database"
 import type { FeatureKey } from "@/types"
 

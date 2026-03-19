@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase-server"
 
 export async function GET(req: NextRequest) {
-  const supabase = getSupabaseServer()
+  const supabase = await getSupabaseServer()
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
 
