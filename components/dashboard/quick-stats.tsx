@@ -1,58 +1,99 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { BookOpen, Clock, Trophy, Flame, Target, HelpCircle } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Clock, Flame, HelpCircle, MessageSquareText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const stats = [
-  {
-    label: "Learning Streak",
-    value: "12",
-    unit: "days",
-    change: "Personal best!",
-    icon: Flame,
-    color: "text-orange-500",
-    bgColor: "bg-orange-500/10",
-  },
-  {
-    label: "Learning Hours",
-    value: "27.1",
-    unit: "hrs",
-    change: "+18% vs last week",
-    icon: Clock,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-  },
-  {
-    label: "Goals Completed",
-    value: "85",
-    unit: "%",
-    change: "5 of 6 goals",
-    icon: Target,
-    color: "text-emerald-500",
-    bgColor: "bg-emerald-500/10",
-  },
-  {
-    label: "Quizzes Taken",
-    value: "24",
-    unit: "tests",
-    change: "Avg score: 82%",
-    icon: HelpCircle,
-    color: "text-violet-500",
-    bgColor: "bg-violet-500/10",
-  },
-]
+interface Stats {
+  streak: number
+  learningHours: string
+  quizzesTaken: number
+  aiChats: number
+  weekTrend: string
+  thisWeekCount: number
+}
 
 export function QuickStats() {
+  const [stats, setStats]     = useState<Stats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/user/stats")
+      .then((r) => r.json())
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setIsLoading(false))
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="border-border bg-card">
+            <CardContent className="flex items-center gap-4 p-4">
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-7 w-16" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  const cards = [
+    {
+      label:   "Learning Streak",
+      value:   String(stats?.streak ?? 0),
+      unit:    "days",
+      change:  (stats?.streak ?? 0) >= 7 ? "🔥 Keep it up!" : (stats?.streak ?? 0) > 0 ? "Going strong!" : "Start today!",
+      icon:    Flame,
+      color:   "text-orange-500",
+      bgColor: "bg-orange-500/10",
+    },
+    {
+      label:   "Learning Hours",
+      value:   stats?.learningHours ?? "0.0",
+      unit:    "hrs",
+      change:  `${stats?.weekTrend ?? "0%"} vs last week`,
+      icon:    Clock,
+      color:   "text-primary",
+      bgColor: "bg-primary/10",
+    },
+    {
+      label:   "AI Chats",
+      value:   String(stats?.aiChats ?? 0),
+      unit:    "chats",
+      change:  stats?.thisWeekCount ? `${stats.thisWeekCount} this week` : "No activity yet",
+      icon:    MessageSquareText,
+      color:   "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+    },
+    {
+      label:   "Quizzes Taken",
+      value:   String(stats?.quizzesTaken ?? 0),
+      unit:    "tests",
+      change:  (stats?.quizzesTaken ?? 0) > 0 ? `${stats!.quizzesTaken} total` : "Try a quiz!",
+      icon:    HelpCircle,
+      color:   "text-violet-500",
+      bgColor: "bg-violet-500/10",
+    },
+  ]
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {stats.map((stat) => (
+      {cards.map((stat) => (
         <Card
           key={stat.label}
           className="border-border bg-card transition-all hover:shadow-lg hover:border-primary/20"
         >
           <CardContent className="flex items-center gap-4 p-4">
-            <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", stat.bgColor)}>
+            <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl shrink-0", stat.bgColor)}>
               <stat.icon className={cn("h-6 w-6", stat.color)} />
             </div>
             <div className="min-w-0 flex-1">

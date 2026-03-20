@@ -69,9 +69,9 @@ export function DashboardHeader() {
   const searchRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
-  const { profile, email, subscription, credits, isLoading } = useUser()
+  const { profile, email, subscription, credits, isLoading, fullName } = useUser()
 
-  const displayName = profile?.full_name || email?.split("@")[0] || "User"
+  const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
   const firstName = displayName.split(" ")[0]
   const initials = displayName
     .split(" ")
