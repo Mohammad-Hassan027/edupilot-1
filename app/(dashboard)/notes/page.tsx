@@ -50,71 +50,9 @@ interface GeneratedNote {
   type: "summary" | "concepts" | "bullets" | "revision"
   title: string
   content: string
-  icon: typeof FileText
+  icon: string
 }
 
-const sampleNotes: GeneratedNote[] = [
-  {
-    type: "summary",
-    title: "Summary",
-    icon: BookOpen,
-    content: `**Overview of Machine Learning**
-
-Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It focuses on developing algorithms that can access data and use it to learn for themselves.
-
-**Key Components:**
-- Training data
-- Model architecture
-- Loss functions
-- Optimization algorithms
-
-The main goal is to allow computers to learn automatically without human intervention and adjust actions accordingly.`,
-  },
-  {
-    type: "concepts",
-    title: "Key Concepts",
-    icon: Lightbulb,
-    content: `1. **Supervised Learning**: Learning from labeled data with known outcomes
-2. **Unsupervised Learning**: Finding patterns in unlabeled data
-3. **Reinforcement Learning**: Learning through trial and error with rewards
-4. **Neural Networks**: Computing systems inspired by biological neural networks
-5. **Deep Learning**: Subset of ML using multiple layers of neural networks
-6. **Feature Engineering**: Process of selecting relevant input variables`,
-  },
-  {
-    type: "bullets",
-    title: "Bullet Notes",
-    icon: List,
-    content: `• Machine learning is a branch of AI
-• Systems learn from data without explicit programming
-• Three main types: supervised, unsupervised, reinforcement
-• Requires training data and validation data
-• Common algorithms: regression, classification, clustering
-• Applications: image recognition, NLP, recommendation systems
-• Challenges: overfitting, bias, computational requirements
-• Evaluation metrics: accuracy, precision, recall, F1 score`,
-  },
-  {
-    type: "revision",
-    title: "Revision Notes",
-    icon: RefreshCw,
-    content: `**Quick Review Points:**
-
-Q: What is machine learning?
-A: A subset of AI where systems learn from data without explicit programming.
-
-Q: Name the three types of ML.
-A: Supervised, Unsupervised, and Reinforcement Learning.
-
-Q: What is overfitting?
-A: When a model learns training data too well, including noise, and fails to generalize.
-
-Q: What's the difference between classification and regression?
-A: Classification predicts categories, regression predicts continuous values.
-
-**Remember**: Data quality > Model complexity`,
-  },
-]
 
 export default function NotesPage() {
   const [selectedUpload, setSelectedUpload] = useState<string>("text")
@@ -123,12 +61,90 @@ export default function NotesPage() {
   const [generatedNotes, setGeneratedNotes] = useState<GeneratedNote[] | null>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
 
+  const [generateError, setGenerateError] = useState("")
+
   const handleGenerate = async () => {
+    if (selectedUpload === "text" && !inputText.trim()) return
     setIsGenerating(true)
-    // Simulate AI generation
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setGeneratedNotes(sampleNotes)
-    setIsGenerating(false)
+    setGenerateError("")
+    try {
+      const prompt = selectedUpload === "text"
+        ? `You are an expert study notes creator. Convert the following content into comprehensive study notes.
+
+Content:
+${inputText}
+
+Create 4 types of notes:
+1. SUMMARY: A concise 3-4 sentence summary of the key points
+2. KEY CONCEPTS: List the 5-7 most important concepts with brief explanations
+3. BULLET POINTS: Create organized bullet point notes covering all major topics
+4. REVISION QUESTIONS: Generate 5 questions for self-testing
+
+Format each section clearly with its label.`
+        : `Generate comprehensive study notes about the uploaded ${selectedUpload} content. Include summary, key concepts, bullet points, and revision questions.`
+
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        if (data.requiresLogin) { setGenerateError("Please log in to use the Notes Generator."); return }
+        if (data.requiresUpgrade) { setGenerateError("No credits left. Activate your trial to continue."); return }
+        setGenerateError(data.error || "Failed to generate notes")
+        return
+      }
+
+      const rawText: string = data.reply || ""
+      const parsed: GeneratedNote[] = [
+        {
+          type: "summary",
+          title: "Summary",
+          content: extractSection(rawText, ["SUMMARY", "Summary"]) || rawText.slice(0, 500),
+          icon: "summary",
+        },
+        {
+          type: "concepts",
+          title: "Key Concepts",
+          content: extractSection(rawText, ["KEY CONCEPTS", "Key Concepts"]) || "",
+          icon: "concepts",
+        },
+        {
+          type: "bullets",
+          title: "Bullet Points",
+          content: extractSection(rawText, ["BULLET POINTS", "Bullet Points"]) || "",
+          icon: "bullets",
+        },
+        {
+          type: "revision",
+          title: "Revision Questions",
+          content: extractSection(rawText, ["REVISION QUESTIONS", "Revision Questions"]) || "",
+          icon: "revision",
+        },
+      ].filter(n => n.content.trim().length > 0)
+
+      setGeneratedNotes(parsed.length > 0 ? parsed : [{ type: "summary", title: "Notes", content: rawText, icon: "summary" }])
+    } catch {
+      setGenerateError("Network error. Please check your connection.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  function extractSection(text: string, headings: string[]): string {
+    for (const heading of headings) {
+      const idx = text.indexOf(heading)
+      if (idx === -1) continue
+      const start = idx + heading.length
+      // Find next heading or end
+      const nextMatch = text.slice(start).search(/
+[A-Z][A-Z ]+:/)
+      const end = nextMatch === -1 ? undefined : start + nextMatch
+      return text.slice(start, end).replace(/^[:.\s]+/, "").trim()
+    }
+    return ""
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,6 +273,11 @@ export default function NotesPage() {
               </>
             )}
           </Button>
+          {generateError && (
+            <div className="mt-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+              {generateError}
+            </div>
+          )}
         </div>
 
         {/* Output Section */}

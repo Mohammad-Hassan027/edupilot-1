@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase-server"
 import { mapAuthError } from "@/lib/auth"
@@ -10,12 +11,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const supabase = getSupabaseServer()
+    const supabase = await getSupabaseServer()
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      // Differentiate "user not found" vs "wrong password"
       if (
         error.message.includes("Invalid login credentials") ||
         error.message.includes("User not found")
@@ -30,10 +30,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-      },
+      user: { id: data.user.id, email: data.user.email },
     })
   } catch (err) {
     console.error("[login] Error:", err)

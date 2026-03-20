@@ -4,59 +4,30 @@ import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
-const geist = Geist({
-  subsets:["latin"],
-  variable:"--font-geist"
-})
-
-const geistMono = Geist_Mono({
-  subsets:["latin"],
-  variable:"--font-geist-mono"
-})
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 
 export const metadata: Metadata = {
-  title:{
-    default:'EduPilot | AI Study Platform',
-    template:'%s | EduPilot'
+  title: { default: 'EduPilot | AI Study Platform', template: '%s | EduPilot' },
+  description: 'The intelligent AI-powered workspace for serious learners.',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-light-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-icon.png',
   },
-  description:'The intelligent workspace for serious learners.',
 }
 
-export default function RootLayout({
-children,
-}:{
-children:React.ReactNode
-}){
-
-return(
-
-<html
-lang="en"
-className={`${geist.variable} ${geistMono.variable}`}
-suppressHydrationWarning
->
-
-<body
-className={`${geist.className} min-h-screen bg-background antialiased`}
->
-
-<ThemeProvider
-attribute="class"
-defaultTheme="dark"
-enableSystem
-disableTransitionOnChange
->
-
-{children}
-
-</ThemeProvider>
-
-<Analytics/>
-
-</body>
-
-</html>
-
-)
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body className={`${geist.className} min-h-screen bg-background antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          {children}
+        </ThemeProvider>
+        <Analytics />
+      </body>
+    </html>
+  )
 }
