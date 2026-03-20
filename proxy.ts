@@ -1,58 +1,29 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
 
-export async function proxy(request: NextRequest) {
+export async function proxy(request) {
 
-  const response = NextResponse.next()
+  let response = NextResponse.next()
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
-        get(name: string) {
+        get(name) {
           return request.cookies.get(name)?.value
         },
-        set() {},
-        remove() {},
-      },
+        set(name,value,options){
+          response.cookies.set(name,value,options)
+        },
+        remove(name,options){
+          response.cookies.set(name,"",options)
+        }
+      }
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const protectedRoutes = [
-    "/dashboard",
-    "/ai-tutor",
-    "/flashcards",
-    "/planner",
-    "/quiz",
-    "/profile",
-    "/billing"
-  ]
-
-  const isProtected = protectedRoutes.some(route =>
-    request.nextUrl.pathname.startsWith(route)
-  )
-
-  if (isProtected && !user) {
-    return NextResponse.redirect(new URL("/login", request.url))
-  }
+  await supabase.auth.getUser()
 
   return response
-}
-
-export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/ai-tutor/:path*",
-    "/flashcards/:path*",
-    "/planner/:path*",
-    "/quiz/:path*",
-    "/profile/:path*",
-    "/billing/:path*"
-  ]
 }
