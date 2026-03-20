@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
 
     const user = await getUser()
 
-    // ── Guest flow ──────────────────────────────────────────────────────────
+    // ── Guest flow ─────────────────────────────────────────────────────────
     if (!user) {
-      const cookieStore = cookies()
+      const cookieStore = await cookies()
       const guestCookie = cookieStore.get(GUEST_COOKIE)
       const questionsUsed = parseInt(guestCookie?.value ?? "0", 10)
 
@@ -50,18 +50,17 @@ export async function POST(req: NextRequest) {
         isGuest: true,
       })
 
-      // Increment guest counter via cookie
       response.cookies.set(GUEST_COOKIE, String(questionsUsed + 1), {
         httpOnly: true,
         sameSite: "lax",
-        maxAge: 60 * 60 * 24, // 24 hours
+        maxAge: 60 * 60 * 24,
         path: "/",
       })
 
       return response
     }
 
-    // ── Authenticated user flow ──────────────────────────────────────────────
+    // ── Authenticated user flow ────────────────────────────────────────────
     const creditResult = await consumeCredit(user.id, "ai_chat")
 
     if (!creditResult.allowed) {
@@ -77,7 +76,6 @@ export async function POST(req: NextRequest) {
 
     const aiResponse = await generateAIResponse(message.trim())
 
-    // Log usage (non-blocking)
     logUsage(user.id, "ai_chat", "question_asked", {
       messageLength: message.length,
       creditsRemaining: creditResult.remaining,
@@ -92,6 +90,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error("[ai/chat] Error:", err)
-    return NextResponse.json({ error: "AI service unavailable. Please try again." }, { status: 500 })
+    const message = err instanceof Error ? err.message : "AI service unavailable"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

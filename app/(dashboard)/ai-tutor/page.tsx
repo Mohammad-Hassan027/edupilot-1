@@ -57,7 +57,6 @@ export default function AITutorPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Check if user is guest and load real chat history
   useEffect(() => {
     async function init() {
       try {
@@ -66,7 +65,6 @@ export default function AITutorPage() {
           setIsGuest(true)
         } else if (res.ok) {
           setIsGuest(false)
-          // Load real chat history from usage logs
           const historyRes = await fetch("/api/user/chat-history")
           if (historyRes.ok) {
             const data = await historyRes.json()
@@ -125,7 +123,6 @@ export default function AITutorPage() {
         throw new Error(data.error || "Failed to get AI response")
       }
 
-      // If guest just used their 1 free question, mark it
       if (data.isGuest && data.guestQuestionsRemaining === 0) {
         setGuestUsed(true)
       }

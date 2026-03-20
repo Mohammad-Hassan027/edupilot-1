@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import type { Credits, Subscription, Profile, FeatureKey, FREE_CREDITS } from "@/types"
+import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
 import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ export async function createProfile(userId: string, email: string, fullName?: st
 }
 
 export async function getProfile(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("profiles")
     .select("*")
@@ -34,7 +34,7 @@ export async function getProfile(userId: string) {
 }
 
 export async function upsertProfile(userId: string, updates: Partial<Profile>) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("profiles")
     .upsert({ user_id: userId, ...updates, updated_at: new Date().toISOString() })
@@ -48,7 +48,7 @@ export async function upsertProfile(userId: string, updates: Partial<Profile>) {
 // ─── Credits ─────────────────────────────────────────────────────────────────
 
 export async function createCredits(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("credits")
     .insert({
@@ -68,7 +68,7 @@ export async function createCredits(userId: string) {
 }
 
 export async function getCredits(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("credits")
     .select("*")
@@ -80,7 +80,7 @@ export async function getCredits(userId: string) {
 }
 
 export async function deductCredit(userId: string, feature: FeatureKey): Promise<boolean> {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const credits = await getCredits(userId)
   if (!credits) return false
 
@@ -103,8 +103,7 @@ export async function deductCredit(userId: string, feature: FeatureKey): Promise
 }
 
 export async function refillCreditsForTrial(userId: string) {
-  const admin = getSupabaseAdmin()
-  // During trial: effectively unlimited (set to 9999)
+  const admin = await getSupabaseAdmin()
   const { error } = await admin
     .from("credits")
     .update({
@@ -121,7 +120,7 @@ export async function refillCreditsForTrial(userId: string) {
 // ─── Subscription ─────────────────────────────────────────────────────────────
 
 export async function createSubscription(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("subscriptions")
     .insert({
@@ -142,7 +141,7 @@ export async function createSubscription(userId: string) {
 }
 
 export async function getSubscription(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("subscriptions")
     .select("*")
@@ -154,10 +153,10 @@ export async function getSubscription(userId: string) {
 }
 
 export async function activateTrial(userId: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const now = new Date()
   const expiry = new Date(now)
-  expiry.setDate(expiry.getDate() + 14) // 14 day trial
+  expiry.setDate(expiry.getDate() + 14)
 
   const { data, error } = await admin
     .from("subscriptions")
@@ -186,18 +185,22 @@ export async function isTrialActive(userId: string): Promise<boolean> {
 
 export async function logUsage(
   userId: string,
-  feature: FeatureKey,
+  feature: string,
   action: string,
   metadata?: Record<string, unknown>
 ) {
-  const admin = getSupabaseAdmin()
-  await admin.from("usage_logs").insert({
-    user_id: userId,
-    feature,
-    action,
-    metadata: metadata ?? null,
-  })
-  // Non-throwing — log failures are silent
+  try {
+    const admin = await getSupabaseAdmin()
+    await admin.from("usage_logs").insert({
+      user_id: userId,
+      feature,
+      action,
+      metadata: metadata ?? null,
+      created_at: new Date().toISOString(),
+    })
+  } catch {
+    // Non-throwing — log failures are silent
+  }
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────────
@@ -208,7 +211,7 @@ export async function createPaymentRecord(
   amount: number,
   planId: string
 ) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("payments")
     .insert({
@@ -238,7 +241,7 @@ export async function updatePaymentRecord(
     refunded?: boolean
   }
 ) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { error } = await admin
     .from("payments")
     .update({ ...updates, updated_at: new Date().toISOString() })

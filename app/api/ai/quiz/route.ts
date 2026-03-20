@@ -1,98 +1,56 @@
 export const dynamic = "force-dynamic"
-
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { generateQuiz } from "@/lib/ai"
 import { consumeCredit } from "@/lib/credits"
 import { logUsage } from "@/lib/database"
 
-export async function POST(req:NextRequest){
+export async function POST(req: NextRequest) {
+  try {
+    const { topic, count = 5 } = await req.json()
 
-try{
+    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
+      return NextResponse.json({ error: "Topic is required" }, { status: 400 })
+    }
 
-const body =
-await req.json()
+    const user = await getUser()
 
-const topic =
-body.topic
+    if (!user) {
+      return NextResponse.json(
+        { error: "Login required to generate quizzes.", code: "UNAUTHORIZED", requiresLogin: true },
+        { status: 401 }
+      )
+    }
 
-if(!topic){
+    const creditResult = await consumeCredit(user.id, "ai_chat")
 
-return NextResponse.json(
+    if (!creditResult.allowed) {
+      return NextResponse.json(
+        {
+          error: "You have used your free credits. Activate your 14-day trial.",
+          code: "NO_CREDITS",
+          requiresUpgrade: true,
+        },
+        { status: 402 }
+      )
+    }
 
-{error:"Topic required"},
+    const questions = await generateQuiz(topic.trim(), Math.min(Number(count) || 5, 10))
 
-{status:400}
+    logUsage(user.id, "quiz", "quiz_generated", {
+      topic,
+      count: questions.length,
+      creditsRemaining: creditResult.remaining,
+    }).catch(console.error)
 
-)
-
-}
-
-const user =
-await getUser()
-
-if(!user){
-
-return NextResponse.json(
-
-{error:"Login required"},
-
-{status:401}
-
-)
-
-}
-
-const credit =
-await consumeCredit(
-
-user.id,
-"ai_chat"
-
-)
-
-if(!credit.allowed){
-
-return NextResponse.json(
-
-{error:"No credits"},
-
-{status:402}
-
-)
-
-}
-
-const quiz =
-await generateQuiz(topic)
-
-await logUsage(
-
-user.id,
-"ai_chat",
-"quiz_generated"
-
-)
-
-return NextResponse.json({
-
-success:true,
-quiz
-
-})
-
-}catch(e){
-
-console.error(e)
-
-return NextResponse.json(
-
-{error:"Quiz failed"},
-
-{status:500}
-
-)
-
-}
-
+    return NextResponse.json({
+      success: true,
+      questions,
+      creditsRemaining: creditResult.remaining,
+    })
+  } catch (err) {
+    console.error("[ai/quiz] Error:", err)
+    const message = err instanceof Error ? err.message : "Failed to generate quiz"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

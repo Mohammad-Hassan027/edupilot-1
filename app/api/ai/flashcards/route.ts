@@ -8,13 +8,17 @@ import { logUsage } from "@/lib/database"
 export async function POST(req: NextRequest) {
   try {
     const user = await getUser()
+
     if (!user) {
-      return NextResponse.json({ error: "Login required to generate flashcards.", code: "UNAUTHORIZED", requiresLogin: true }, { status: 401 })
+      return NextResponse.json(
+        { error: "Login required to generate flashcards.", code: "UNAUTHORIZED", requiresLogin: true },
+        { status: 401 }
+      )
     }
 
     const { topic, count = 5 } = await req.json()
 
-    if (!topic || typeof topic !== "string") {
+    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
     }
 
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const flashcards = await generateFlashcards(topic.trim(), Math.min(count, 10))
+    const flashcards = await generateFlashcards(topic.trim(), Math.min(Number(count) || 5, 10))
 
     logUsage(user.id, "flashcards", "flashcards_generated", {
       topic,
@@ -46,6 +50,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error("[ai/flashcards] Error:", err)
-    return NextResponse.json({ error: "AI service unavailable. Please try again." }, { status: 500 })
+    const message = err instanceof Error ? err.message : "Failed to generate flashcards"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
