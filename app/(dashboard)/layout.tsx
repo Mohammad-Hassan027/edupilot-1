@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation"
+import { getUser } from "@/lib/auth-server"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const user = await getUser()
+
+  if (!user) {
+    redirect("/login")
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar />
