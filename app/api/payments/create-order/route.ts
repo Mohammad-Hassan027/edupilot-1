@@ -11,34 +11,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { planId } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const planId = body?.planId
 
     if (!planId) {
       return NextResponse.json({ error: "planId is required" }, { status: 400 })
     }
 
-    // Trial activation costs ₹1
-    const amount = 1
+    // Validate Razorpay keys are present before attempting order creation
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
+      console.error("[create-order] Razorpay keys missing from environment")
+      return NextResponse.json(
+        { error: "Payment system not configured. Please contact support." },
+        { status: 503 }
+      )
+    }
 
-    const receipt = `edupilot_${user.id.slice(0, 8)}_${Date.now()}`
-    const order = await createRazorpayOrder(amount, receipt, {
+    const receipt = `ep_${user.id.slice(0, 8)}_${Date.now()}`.slice(0, 40)
+    const order = await createRazorpayOrder(1, receipt, {
       planId,
       userId: user.id,
-      email: user.email ?? "",
+      email:  user.email ?? "",
     })
 
-    // Persist payment record in DB
-    await createPaymentRecord(user.id, order.id, amount * 100, planId)
+    // Save payment record (non-fatal if DB write fails)
+    await createPaymentRecord(user.id, order.id, 100, planId).catch((err) => {
+      console.error("[create-order] Failed to save payment record:", err)
+    })
 
     return NextResponse.json({
-      success: true,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
+      success:     true,
+      orderId:     order.id,
+      amount:      order.amount,
+      currency:    order.currency,
       razorpayKey: process.env.RAZORPAY_KEY_ID,
     })
   } catch (error) {
     console.error("[create-order] Error:", error)
-    return NextResponse.json({ error: "Failed to create payment order" }, { status: 500 })
+    const msg = error instanceof Error ? error.message : "Failed to create payment order"
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

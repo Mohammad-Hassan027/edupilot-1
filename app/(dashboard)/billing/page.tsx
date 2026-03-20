@@ -4,254 +4,247 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, Check, Clock, Zap, Globe, BarChart3, Sparkles, ArrowRight, CreditCard } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Check, Clock, Zap, CreditCard, ArrowRight, Sparkles, AlertCircle
+} from "lucide-react"
 import { PaymentModal } from "@/components/billing/payment-modal"
+import { useUser } from "@/hooks/use-user"
 
 const plans = [
   {
-    id: "free",
-    name: "Free Trial",
-    price: "0",
-    period: "14 days",
-    description: "Perfect for getting started",
-    features: [
-      "AI Tutor (limited queries)",
-      "Basic note generation",
-      "Simple flashcards",
-      "Study planner",
-      "Community support",
-    ],
-    limitations: [
-      "Limited AI sessions",
-      "Basic analytics",
-      "No voice assistant",
-    ],
-    cta: "Current Plan",
-    badge: "Active",
-    highlighted: true,
-  },
-  {
     id: "standard",
     name: "Standard",
-    price: "99",
-    period: "per month",
-    description: "For serious learners",
+    price: "1",
+    period: "14-day trial",
+    description: "₹1 account verification — refunded instantly",
     features: [
-      "Unlimited AI Tutor",
-      "Advanced note generation",
-      "Smart flashcards with spaced repetition",
-      "AI Study Planner",
-      "Learning analytics",
+      "Unlimited AI Tutor sessions",
+      "Unlimited quiz generation",
+      "Unlimited flashcard creation",
+      "AI Notes generator",
+      "Study planner with AI",
+      "Full learning analytics",
       "Priority support",
-      "Export to PDF/Notion",
     ],
-    limitations: [
-      "No voice assistant",
-      "API access",
-    ],
-    cta: "Upgrade to Standard",
-    badge: null,
-    highlighted: false,
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: "299",
-    period: "per month",
-    description: "The ultimate learning suite",
-    features: [
-      "Everything in Standard",
-      "Advanced analytics & insights",
-      "Custom study paths",
-      "AI Voice Assistant",
-      "API access",
-      "Dedicated support",
-      "Early access to features",
-    ],
-    limitations: [],
-    cta: "Upgrade to Premium",
-    badge: null,
-    highlighted: false,
+    cta: "Activate 14-Day Trial",
+    highlighted: true,
   },
 ]
 
 export default function BillingPage() {
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const { email, subscription, credits, isLoading, refetch } = useUser()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const currentPlan = "free"
-  const trialDaysRemaining = 12
 
-  const handleUpgrade = (planId: string) => {
-    if (planId !== currentPlan) {
-      setSelectedPlan(planId)
-      setShowPaymentModal(true)
-    }
-  }
+  const isTrial     = subscription?.trial_active === true
+  const isPro       = subscription?.status === "active"
+  const isUpgraded  = isTrial || isPro
+
+  const trialExpiry = subscription?.trial_expiry
+  const trialDaysLeft = trialExpiry
+    ? Math.max(0, Math.ceil((new Date(trialExpiry).getTime() - Date.now()) / 86400000))
+    : 0
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
+    <div className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Subscription & Billing</h1>
-        <p className="text-muted-foreground">Manage your plan and upgrade to unlock more features</p>
+        <p className="text-muted-foreground">Manage your plan and unlock unlimited access</p>
       </div>
 
-      {/* Current Plan Info */}
-      <Alert className="border-accent/50 bg-accent/5">
-        <Clock className="h-4 w-4 text-accent" />
-        <AlertDescription>
-          <span className="font-semibold text-foreground">Free Trial Active:</span> You have <span className="text-accent font-semibold">{trialDaysRemaining} days</span> remaining on your free trial. Upgrade anytime to unlock all features.
-        </AlertDescription>
-      </Alert>
-
-      {/* Plans Grid */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {plans.map((plan) => (
-          <Card
-            key={plan.id}
-            className={`relative border-border transition-all ${
-              plan.highlighted
-                ? "border-accent/50 bg-card ring-1 ring-accent/20"
-                : "bg-card"
-            } ${plan.id === currentPlan ? "opacity-75" : ""}`}
-          >
-            {/* Badge */}
-            {plan.badge && (
-              <Badge className="absolute -top-3 left-6 bg-accent text-accent-foreground">
-                {plan.badge}
-              </Badge>
+      {/* Current status banner */}
+      {isLoading ? (
+        <Skeleton className="h-14 rounded-lg" />
+      ) : isUpgraded ? (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10">
+          <Sparkles className="h-4 w-4 text-emerald-500" />
+          <AlertDescription>
+            {isTrial ? (
+              <>
+                <span className="font-semibold text-foreground">Trial Active 🎉</span>{" "}
+                You have <span className="text-emerald-500 font-semibold">{trialDaysLeft} days</span> of unlimited access remaining.
+                {trialExpiry && (
+                  <span className="text-muted-foreground text-sm ml-2">
+                    (expires {new Date(trialExpiry).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="font-semibold text-foreground">Pro Plan Active — Unlimited access enabled.</span>
             )}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="border-amber-500/40 bg-amber-500/10">
+          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <AlertDescription>
+            <span className="font-semibold text-foreground">Free Plan</span>{" "}
+            — You have{" "}
+            <span className="text-amber-500 font-semibold">{credits?.ai_chat_remaining ?? 0} AI credits</span> remaining.
+            Activate your trial to get unlimited access for 14 days.
+          </AlertDescription>
+        </Alert>
+      )}
 
-            <CardHeader>
-              <CardTitle className="text-xl">{plan.name}</CardTitle>
-              <CardDescription>{plan.description}</CardDescription>
-              <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-foreground">₹{plan.price}</span>
-                <span className="text-sm text-muted-foreground">/{plan.period}</span>
+      {/* Credits summary */}
+      {!isLoading && !isUpgraded && (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              Your Credits
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-3 gap-4">
+            {[
+              { label: "AI Chats",    remaining: credits?.ai_chat_remaining    ?? 0, used: credits?.ai_chat_used    ?? 0 },
+              { label: "Flashcards", remaining: credits?.flashcards_remaining  ?? 0, used: credits?.flashcards_used  ?? 0 },
+              { label: "Study Plans",remaining: credits?.study_plan_remaining  ?? 0, used: credits?.study_plan_used  ?? 0 },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-border bg-secondary/50 p-3 text-center">
+                <p className={`text-2xl font-bold ${item.remaining === 0 ? "text-destructive" : "text-foreground"}`}>
+                  {item.remaining}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.label} left</p>
+                <p className="text-xs text-muted-foreground">{item.used} used</p>
               </div>
-            </CardHeader>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
-            <CardContent className="space-y-6">
-              {/* Features */}
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-muted-foreground">Includes:</p>
+      {/* Plan card */}
+      {!isUpgraded && (
+        <div className="max-w-md mx-auto">
+          {plans.map((plan) => (
+            <Card key={plan.id} className="border-accent/50 bg-card ring-1 ring-accent/20 relative">
+              <Badge className="absolute -top-3 left-6 bg-accent text-accent-foreground">
+                Most Popular
+              </Badge>
+              <CardHeader>
+                <CardTitle className="text-xl">{plan.name}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
+                <div className="mt-4 flex items-baseline gap-1">
+                  <span className="text-3xl font-bold text-foreground">₹{plan.price}</span>
+                  <span className="text-sm text-muted-foreground">/ {plan.period}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <ul className="space-y-2">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-sm text-foreground">
-                      <Check className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                      {feature}
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-3 text-sm text-foreground">
+                      <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                      {f}
                     </li>
                   ))}
                 </ul>
+                <Button
+                  className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                  onClick={() => setShowPaymentModal(true)}
+                >
+                  <Zap className="h-4 w-4" />
+                  {plan.cta}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  ₹1 is charged for verification only and refunded immediately after payment.
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Already on trial — show expiry info */}
+      {isUpgraded && (
+        <Card className="border-border bg-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              Trial Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Status</span>
+              <Badge className="bg-emerald-500/20 text-emerald-500">
+                {isTrial ? "Trial Active" : "Pro"}
+              </Badge>
+            </div>
+            {trialExpiry && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Expires</span>
+                <span className="font-medium text-foreground">
+                  {new Date(trialExpiry).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                </span>
               </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Days remaining</span>
+              <span className="font-semibold text-emerald-500">{trialDaysLeft} days</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              {/* Limitations */}
-              {plan.limitations.length > 0 && (
-                <div className="space-y-2 pt-4 border-t border-border">
-                  <p className="text-sm font-medium text-muted-foreground">Not included:</p>
-                  <ul className="space-y-2">
-                    {plan.limitations.map((limitation) => (
-                      <li key={limitation} className="flex items-start gap-3 text-sm text-muted-foreground">
-                        <span className="text-muted-foreground mt-0.5">-</span>
-                        {limitation}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* CTA Button */}
-              <Button
-                onClick={() => handleUpgrade(plan.id)}
-                disabled={plan.id === currentPlan}
-                className={`w-full gap-2 ${
-                  plan.id === currentPlan
-                    ? "opacity-50 cursor-not-allowed"
-                    : plan.highlighted
-                      ? "bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                      : ""
-                }`}
-              >
-                {plan.id === currentPlan ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    {plan.cta}
-                  </>
-                ) : (
-                  <>
-                    {plan.cta}
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Payment Methods Info */}
+      {/* Billing info — real email */}
       <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-4 w-4" />
-            Accepted Payment Methods
+            Billing Information
           </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
-            {["Razorpay", "UPI", "Net Banking", "Cards", "Wallets"].map((method) => (
-              <div
-                key={method}
-                className="flex items-center justify-center p-4 rounded-lg border border-border bg-secondary/50 text-sm font-medium text-foreground"
-              >
-                {method}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Billing Info */}
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle>Billing Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <p className="text-sm text-muted-foreground">Email</p>
-              <p className="font-medium text-foreground">alex@example.com</p>
+              <p className="text-sm text-muted-foreground">Account email</p>
+              <p className="font-medium text-foreground">
+                {isLoading ? <Skeleton className="h-5 w-40 inline-block" /> : email ?? "—"}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Current Status</p>
-              <Badge className="bg-accent/20 text-accent">Active</Badge>
+              <p className="text-sm text-muted-foreground">Current plan</p>
+              <Badge className="mt-1">
+                {isTrial ? "Trial" : isPro ? "Pro" : "Free"}
+              </Badge>
             </div>
           </div>
           <div className="border-t border-border pt-4">
-            <p className="text-sm text-muted-foreground mb-2">
-              Your payment method will be securely processed through Razorpay. All payment information is encrypted and PCI compliant.
+            <p className="text-sm text-muted-foreground">
+              Payments are securely processed through Razorpay. We never store your card details.
             </p>
           </div>
         </CardContent>
       </Card>
 
+      {/* Accepted payment methods */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Accepted Payment Methods</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {["Razorpay", "UPI", "Net Banking", "Credit / Debit Cards", "Wallets"].map((m) => (
+              <span key={m} className="px-3 py-1.5 rounded-lg border border-border bg-secondary/50 text-sm text-foreground">
+                {m}
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Payment Modal */}
-      {selectedPlan && (
-        <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => {
-            setShowPaymentModal(false)
-            setSelectedPlan(null)
-          }}
-          plan={plans.find((p) => p.id === selectedPlan)!}
-          onPaymentSuccess={() => {
-            setShowPaymentModal(false)
-            setSelectedPlan(null)
-            // You can add a success toast notification here
-          }}
-        />
-      )}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        plan={plans[0]}
+        onPaymentSuccess={() => {
+          setShowPaymentModal(false)
+          refetch()
+        }}
+      />
     </div>
   )
 }

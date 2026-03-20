@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
-import { verifyRazorpaySignature, issueRefund } from "@/lib/payments"
-import { getRazorpay } from "@/lib/payments"
-import { updatePaymentRecord, activateTrial } from "@/lib/database"
-import { refillCreditsForTrial } from "@/lib/database"
+import { verifyRazorpaySignature, fetchRazorpayPayment, issueRefund } from "@/lib/payments"
+import { updatePaymentRecord, activateTrial, refillCreditsForTrial } from "@/lib/database"
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing payment details" }, { status: 400 })
     }
 
-    // Verify signature cryptographically
+    // 1. Verify signature
     const isValid = verifyRazorpaySignature(
       razorpay_order_id,
       razorpay_payment_id,
@@ -32,41 +30,37 @@ export async function POST(request: NextRequest) {
     )
 
     if (!isValid) {
-      await updatePaymentRecord(razorpay_order_id, { status: "failed" })
+      await updatePaymentRecord(razorpay_order_id, { status: "failed" }).catch(() => {})
       return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 })
     }
 
-    // Fetch payment details from Razorpay
-    const rp = getRazorpay()
-    const payment = await rp.payments.fetch(razorpay_payment_id)
-
-    // Update payment record
+    // 2. Update payment record to captured
     await updatePaymentRecord(razorpay_order_id, {
       razorpay_payment_id,
       razorpay_signature,
       status: "captured",
     })
 
-    // Issue ₹1 refund (verification charge)
+    // 3. Try to issue ₹1 refund (non-fatal if it fails)
     let refunded = false
-    if (Number(payment.amount) === 100) {
-      try {
+    try {
+      const payment = await fetchRazorpayPayment(razorpay_payment_id)
+      if (Number(payment.amount) === 100) {
         await issueRefund(razorpay_payment_id, 100)
         await updatePaymentRecord(razorpay_order_id, { status: "refunded", refunded: true })
         refunded = true
-      } catch (refundError) {
-        console.error("[verify-payment] Refund error:", refundError)
-        // Non-fatal — trial still activates
       }
+    } catch (refundErr) {
+      console.error("[verify-payment] Refund error (non-fatal):", refundErr)
     }
 
-    // Activate 14-day trial + refill credits
+    // 4. Activate 14-day trial + unlimited credits
     const subscription = await activateTrial(user.id)
     await refillCreditsForTrial(user.id)
 
     return NextResponse.json({
       success: true,
-      message: "Payment verified. Your 14-day trial has been activated!",
+      message: "Payment verified. Your 14-day trial is now active!",
       paymentId: razorpay_payment_id,
       orderId: razorpay_order_id,
       planId,
@@ -75,6 +69,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[verify-payment] Error:", error)
-    return NextResponse.json({ error: "Payment verification failed" }, { status: 500 })
+    const msg = error instanceof Error ? error.message : "Payment verification failed"
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
