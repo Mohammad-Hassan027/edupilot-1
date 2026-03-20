@@ -2,7 +2,10 @@
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
-
+:root{
+--font-sans:var(--font-geist);
+--font-mono:var(--font-geist-mono);
+}
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

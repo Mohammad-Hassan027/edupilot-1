@@ -5,7 +5,7 @@ import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
-  const admin = getSupabaseAdmin()
+  const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("profiles")
     .insert({
