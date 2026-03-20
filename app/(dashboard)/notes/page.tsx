@@ -139,10 +139,10 @@ Format each section clearly with its label.`
       if (idx === -1) continue
       const start = idx + heading.length
       // Find next heading or end
-      const nextMatch = text.slice(start).search(/
-[A-Z][A-Z ]+:/)
+      const remaining = text.slice(start)
+      const nextMatch = remaining.search(/\n[A-Z][A-Z ]+:/)
       const end = nextMatch === -1 ? undefined : start + nextMatch
-      return text.slice(start, end).replace(/^[:.\s]+/, "").trim()
+      return text.slice(start, end).replace(/^[:.\s\n]+/, "").trim()
     }
     return ""
   }
