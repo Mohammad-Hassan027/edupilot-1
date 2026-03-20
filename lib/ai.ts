@@ -1,58 +1,75 @@
-export async function generateAIResponse(message:string){
+const GEMINI_MODEL = "gemini-1.5-flash"
 
-const res =
-await fetch(
+async function callGemini(prompt: string) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    }
+  )
 
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+  const data = await res.json()
 
-{
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-
-contents:[{
-
-parts:[{
-
-text:`
-You are EduPilot AI tutor.
-
-Answer like a teacher.
-Clear explanation.
-Step-by-step.
-
-Question:
-
-${message}
-
-Answer:
-`
-
-}]
-
-}]
-
-})
-
+  return (
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+    ""
+  )
 }
 
-)
+export async function generateAIResponse(message: string) {
+  const text = await callGemini(`
+You are EduPilot AI Tutor.
+Explain clearly, step by step, in a helpful teaching style.
 
-const data =
-await res.json()
+User question:
+${message}
+`)
+  return text || "AI unavailable"
+}
 
-return(
+export async function generateQuiz(topic: string) {
+  const text = await callGemini(`
+Generate exactly 5 multiple-choice questions about: ${topic}
 
-data?.candidates?.[0]
-?.content?.parts?.[0]
-?.text ||
+Return ONLY valid JSON in this format:
+[
+  {
+    "question": "string",
+    "options": ["A", "B", "C", "D"],
+    "answer": "A"
+  }
+]
 
-"No response"
+No markdown. No extra text.
+`)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return []
+  }
+}
 
-)
+export async function generateFlashcards(topic: string) {
+  const text = await callGemini(`
+Generate flashcards about: ${topic}
 
+Return ONLY valid JSON in this format:
+[
+  {
+    "question": "string",
+    "answer": "string"
+  }
+]
+
+No markdown. No extra text.
+`)
+  try {
+    return JSON.parse(text)
+  } catch {
+    return []
+  }
 }
