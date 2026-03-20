@@ -1,57 +1,35 @@
-export const dynamic = "force-dynamic"
+export const dynamic="force-dynamic"
 
-import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseServer } from "@/lib/supabase-server"
+import { NextResponse }
+from "next/server"
 
-export async function GET(req: NextRequest){
+import { getSupabaseServer }
+from "@/lib/supabase-server"
 
-  const supabase =
-  await getSupabaseServer()
+export async function GET(){
 
-  const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL
+const supabase =
+await getSupabaseServer()
 
-  if(!siteUrl){
+const siteUrl =
+process.env.NEXT_PUBLIC_SITE_URL
 
-    return NextResponse.json({
+const { data } =
+await supabase.auth.signInWithOAuth({
 
-      error:"SITE_URL missing"
+provider:"google",
 
-    },{status:500})
+options:{
 
-  }
+redirectTo:
+`${siteUrl}/auth/callback`
 
-  const { data, error } =
-  await supabase.auth.signInWithOAuth({
+}
 
-    provider:"google",
+})
 
-    options:{
-
-      redirectTo:
-      `${siteUrl}/auth/callback`,
-
-      queryParams:{
-        access_type:"offline",
-        prompt:"consent"
-      }
-
-    }
-
-  })
-
-  if(error || !data?.url){
-
-    return NextResponse.redirect(
-
-      `${siteUrl}/login?error=oauth_failed`
-
-    )
-
-  }
-
-  return NextResponse.redirect(
-    data.url
-  )
+return NextResponse.redirect(
+data.url
+)
 
 }
