@@ -31,26 +31,37 @@ ${message}
   return text || "AI unavailable"
 }
 
-export async function generateQuiz(topic: string) {
-  const text = await callGemini(`
-Generate exactly 5 multiple-choice questions about: ${topic}
+export async function generateQuiz(topic:string){
 
-Return ONLY valid JSON in this format:
+const text =
+await callGemini(`
+
+Generate 5 MCQ questions about:
+
+${topic}
+
+Return JSON only:
+
 [
-  {
-    "question": "string",
-    "options": ["A", "B", "C", "D"],
-    "answer": "A"
-  }
+{
+"question":"",
+"options":["","","",""],
+"answer":""
+}
 ]
 
-No markdown. No extra text.
 `)
-  try {
-    return JSON.parse(text)
-  } catch {
-    return []
-  }
+
+try{
+
+return JSON.parse(text)
+
+}catch{
+
+return []
+
+}
+
 }
 
 export async function generateFlashcards(topic: string) {
