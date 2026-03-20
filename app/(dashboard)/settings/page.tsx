@@ -152,9 +152,7 @@ export default function SettingsPage() {
               <Button variant={theme === "dark" ? "default" : "outline"} size="sm" className="gap-2" onClick={() => setTheme("dark")}>
                 <Moon className="h-4 w-4" />Dark
               </Button>
-              <Button variant={theme === "system" ? "default" : "outline"} size="sm" onClick={() => setTheme("system")}>
-                System
-              </Button>
+
             </div>
           </div>
         </CardContent>

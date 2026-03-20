@@ -16,42 +16,47 @@ export async function POST(request: NextRequest) {
       razorpay_payment_id,
       razorpay_signature,
       planId,
+      testMode,
     } = await request.json()
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return NextResponse.json({ error: "Missing payment details" }, { status: 400 })
     }
 
-    // 1. Verify signature
-    const isValid = verifyRazorpaySignature(
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature
-    )
+    // 1. Verify signature — skip in test simulation mode
+    if (!testMode) {
+      const isValid = verifyRazorpaySignature(
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature
+      )
 
-    if (!isValid) {
-      await updatePaymentRecord(razorpay_order_id, { status: "failed" }).catch(() => {})
-      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 })
+      if (!isValid) {
+        await updatePaymentRecord(razorpay_order_id, { status: "failed" }).catch(() => {})
+        return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 })
+      }
+
+      // 2. Update payment record to captured (real payment only)
+      await updatePaymentRecord(razorpay_order_id, {
+        razorpay_payment_id,
+        razorpay_signature,
+        status: "captured",
+      }).catch(() => {})
     }
 
-    // 2. Update payment record to captured
-    await updatePaymentRecord(razorpay_order_id, {
-      razorpay_payment_id,
-      razorpay_signature,
-      status: "captured",
-    })
-
-    // 3. Try to issue ₹1 refund (non-fatal if it fails)
+    // 3. Try to issue ₹1 refund (real payment only, non-fatal)
     let refunded = false
-    try {
-      const payment = await fetchRazorpayPayment(razorpay_payment_id)
-      if (Number(payment.amount) === 100) {
-        await issueRefund(razorpay_payment_id, 100)
-        await updatePaymentRecord(razorpay_order_id, { status: "refunded", refunded: true })
-        refunded = true
+    if (!testMode) {
+      try {
+        const payment = await fetchRazorpayPayment(razorpay_payment_id)
+        if (Number(payment.amount) === 100) {
+          await issueRefund(razorpay_payment_id, 100)
+          await updatePaymentRecord(razorpay_order_id, { status: "refunded", refunded: true })
+          refunded = true
+        }
+      } catch (refundErr) {
+        console.error("[verify-payment] Refund error (non-fatal):", refundErr)
       }
-    } catch (refundErr) {
-      console.error("[verify-payment] Refund error (non-fatal):", refundErr)
     }
 
     // 4. Activate 14-day trial + unlimited credits

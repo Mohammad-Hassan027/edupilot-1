@@ -46,6 +46,46 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
     }
   }, [])
 
+  // Test mode: activate trial without real payment
+  const handleTestSimulate = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      setPaymentStatus("processing")
+
+      // Create a fake order ID for test mode
+      const fakeOrderId = `test_order_${Date.now()}`
+      const fakePaymentId = `test_pay_${Date.now()}`
+      const fakeSig = "test_signature_bypass"
+
+      const verifyResponse = await fetch("/api/payments/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_order_id:   fakeOrderId,
+          razorpay_payment_id: fakePaymentId,
+          razorpay_signature:  fakeSig,
+          planId: plan.id,
+          testMode: true,       // signals server to skip signature check
+        }),
+      })
+
+      const verifyData = await verifyResponse.json()
+
+      if (!verifyResponse.ok) {
+        throw new Error(verifyData.error || "Test simulation failed")
+      }
+
+      setPaymentStatus("success")
+      setTimeout(() => { onPaymentSuccess(); onClose() }, 1800)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Test simulation failed")
+      setPaymentStatus("error")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handlePayment = async () => {
     try {
       setIsLoading(true)

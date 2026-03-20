@@ -61,9 +61,15 @@ export default function ContactPage() {
                   <p className="text-sm text-muted-foreground">For technical support.</p>
                   <a
                     href="mailto:support@edupilot.ai"
-                    className="mt-1 text-sm font-medium text-primary hover:underline"
+                    className="mt-1 text-sm font-medium text-primary hover:underline block"
                   >
                     support@edupilot.ai
+                  </a>
+                  <a
+                    href="tel:+916352751256"
+                    className="mt-1 text-sm font-medium text-primary hover:underline block"
+                  >
+                    +91 63527 51256
                   </a>
                 </div>
               </CardContent>

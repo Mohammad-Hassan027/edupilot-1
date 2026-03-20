@@ -37,9 +37,9 @@ export interface Credits {
 export type FeatureKey = "ai_chat" | "flashcards" | "study_plan"
 
 export const FREE_CREDITS: Record<FeatureKey, number> = {
-  ai_chat: 5,
-  flashcards: 3,
-  study_plan: 2,
+  ai_chat: 20,
+  flashcards: 20,
+  study_plan: 20,
 }
 
 // ─── Subscription & Trial ────────────────────────────────────────────────────

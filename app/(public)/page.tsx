@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowRight, Brain, FileText, Calendar, Layers, HelpCircle, Mic, Sparkles, CheckCircle2, Play } from "lucide-react"
@@ -105,6 +106,11 @@ const blogPosts = [
 ]
 
 export default function LandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  useEffect(() => {
+    fetch("/api/user/profile").then(r => setIsLoggedIn(r.ok)).catch(() => {})
+  }, [])
+
   return (
     <div className="relative">
       {/* Hero Section */}

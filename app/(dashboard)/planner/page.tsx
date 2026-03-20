@@ -16,7 +16,8 @@ import {
   Sparkles,
   Check,
   X,
-  Brain
+  Brain,
+  Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -91,6 +92,10 @@ export default function PlannerPage() {
   const [newTaskDuration, setNewTaskDuration] = useState("1h")
   const [newTaskSubject, setNewTaskSubject] = useState("")
   const calendarDays = generateCalendarDays()
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiGoal, setAiGoal] = useState("")
+  const [aiHours, setAiHours] = useState("4")
+  const [aiGenerated, setAiGenerated] = useState(false)
 
   const toggleTask = (id: string) => {
     setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
@@ -141,6 +146,43 @@ export default function PlannerPage() {
     setTasks([...tasks, ...newTasks])
     setAiSuggestions(aiSuggestionsData)
     setShowAISuggestions(false)
+  }
+
+  const handleGenerateAIPlan = async () => {
+    if (!aiGoal.trim()) return
+    setAiLoading(true)
+    try {
+      const prompt = `You are a study planner AI. Create a daily study schedule for a student.
+Goal: ${aiGoal}
+Available study hours today: ${aiHours} hours
+Current time: ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+
+Return ONLY a valid JSON array. No markdown, no backticks:
+[{"time":"09:00 - 10:30","activity":"Subject Name (specific task)","reason":"Why this timing is optimal"}]
+
+Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times realistic and specific to the goal.`
+
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      })
+      const data = await res.json()
+      if (!res.ok) return
+
+      const cleaned = data.reply.replace(/\`\`\`json\s*/g, "").replace(/\`\`\`\s*/g, "").trim()
+      const parsed = JSON.parse(cleaned)
+      if (Array.isArray(parsed)) {
+        setAiSuggestions(parsed.map((item: AIScheduleItem) => ({ ...item, selected: false })))
+        setAiGenerated(true)
+      }
+    } catch {
+      // fallback to static data on parse error
+      setAiSuggestions(aiSuggestionsData.map(s => ({ ...s, selected: false })))
+      setAiGenerated(true)
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   return (
@@ -319,17 +361,42 @@ export default function PlannerPage() {
       </div>
 
       {/* AI Suggestions Modal */}
-      <Dialog open={showAISuggestions} onOpenChange={setShowAISuggestions}>
+      <Dialog open={showAISuggestions} onOpenChange={(open) => { setShowAISuggestions(open); if (!open) { setAiGenerated(false); setAiGoal(""); } }}>
         <DialogContent className="bg-card border-border max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-primary" />
-              AI Study Plan Suggestions
+              AI Study Plan Generator
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
+            {!aiGenerated ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Tell the AI what you want to study today and it will create a personalized schedule.</p>
+                <div className="space-y-2">
+                  <Label>What do you want to study today?</Label>
+                  <Input placeholder="e.g. Calculus, Machine Learning, History..." value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} className="bg-secondary border-border" onKeyDown={(e) => e.key === "Enter" && handleGenerateAIPlan()} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Available hours today</Label>
+                  <Select value={aiHours} onValueChange={setAiHours}>
+                    <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["2","3","4","5","6","8"].map(h => <SelectItem key={h} value={h}>{h} hours</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowAISuggestions(false)}>Cancel</Button>
+                  <Button className="flex-1 gap-2" onClick={handleGenerateAIPlan} disabled={!aiGoal.trim() || aiLoading}>
+                    {aiLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Generating...</> : <><Sparkles className="h-4 w-4" />Generate Plan</>}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
             <p className="text-sm text-muted-foreground">
-              Based on your learning patterns and goals, here's an optimized study schedule. Select one or multiple sessions to add to your planner:
+              Here&apos;s your AI-generated study schedule. Select sessions to add to your planner:
             </p>
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {aiSuggestions.map((suggestion, index) => (
@@ -366,8 +433,8 @@ export default function PlannerPage() {
               ))}
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowAISuggestions(false)}>
-                Cancel
+              <Button variant="outline" className="flex-1" onClick={() => { setAiGenerated(false); setAiGoal(""); }}>
+                ← Back
               </Button>
               <Button
                 className="flex-1 gap-2"
@@ -378,6 +445,8 @@ export default function PlannerPage() {
                 Apply Selected ({aiSuggestions.filter((item) => item.selected).length})
               </Button>
             </div>
+          </>
+          )}
           </div>
         </DialogContent>
       </Dialog>
