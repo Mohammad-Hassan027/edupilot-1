@@ -3,153 +3,53 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import {
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw,
-  Check,
-  Shuffle,
-  Layers,
-  Plus,
-  Star,
-  Sparkles,
-  ArrowRight,
-} from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Layers, Plus, Sparkles, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
-interface Flashcard {
-  id: string
-  front: string
-  back: string
-  mastered: boolean
+interface Flashcard { id: string; front: string; back: string; mastered: boolean }
+
+const DEMO_CARD: Flashcard = {
+  id: "demo",
+  front: "What is EduPilot?",
+  back: "EduPilot is an AI-powered study assistant that helps you learn faster with smart flashcards, quizzes, and personalized study plans.",
+  mastered: false,
 }
-
-const sampleFlashcards: Flashcard[] = [
-  {
-    id: "1",
-    front: "What is a REST API?",
-    back: "REST (Representational State Transfer) API is an architectural style for building web services that use HTTP methods to access and manipulate resources.",
-    mastered: false,
-  },
-  {
-    id: "2",
-    front: "What is the difference between let and const in JavaScript?",
-    back: "let allows reassignment while const creates a constant reference. Both are block-scoped unlike var.",
-    mastered: true,
-  },
-  {
-    id: "3",
-    front: "Define cognitive bias",
-    back: "A systematic pattern of deviation from rational judgment, where inferences about other people and situations may be drawn in an illogical fashion.",
-    mastered: false,
-  },
-  {
-    id: "4",
-    front: "What is product-market fit?",
-    back: "The degree to which a product satisfies a strong market demand. It's achieved when customers are buying, using, and telling others about your product.",
-    mastered: false,
-  },
-  {
-    id: "5",
-    front: "Explain the 80/20 rule (Pareto Principle)",
-    back: "Roughly 80% of consequences come from 20% of causes. In business, 80% of sales often come from 20% of customers.",
-    mastered: true,
-  },
-]
-
-interface Deck {
-  id: string
-  name: string
-  topic: string
-  count: number
-  lastStudied: string
-  color: string
-}
-
-const decks: Deck[] = [
-  { id: "1", name: "JavaScript Concepts", topic: "Programming", count: 45, lastStudied: "2 hrs ago", color: "bg-primary/20 text-primary" },
-  { id: "2", name: "UI Design Principles", topic: "Design", count: 32, lastStudied: "Yesterday", color: "bg-violet-500/20 text-violet-500" },
-  { id: "3", name: "Interview Prep", topic: "Career", count: 28, lastStudied: "3 days ago", color: "bg-emerald-500/20 text-emerald-500" },
-  { id: "4", name: "Marketing Basics", topic: "Business", count: 56, lastStudied: "1 week ago", color: "bg-orange-500/20 text-orange-500" },
-]
 
 export default function FlashcardsPage() {
-  const [cards, setCards] = useState<Flashcard[]>(sampleFlashcards)
+  const [cards, setCards]               = useState<Flashcard[]>([DEMO_CARD])
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [isFlipped, setIsFlipped] = useState(false)
-  const [selectedDeck, setSelectedDeck] = useState("1")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [createMode, setCreateMode] = useState<"manual" | "ai" | null>(null)
-  const [aiTopic, setAiTopic] = useState("")
-  const [aiCount, setAiCount] = useState("5")
+  const [isFlipped, setIsFlipped]       = useState(false)
+  const [dialogOpen, setDialogOpen]     = useState(false)
+  const [aiTopic, setAiTopic]           = useState("")
+  const [aiCount, setAiCount]           = useState("10")
   const [isGenerating, setIsGenerating] = useState(false)
-
-  const currentCard = cards[currentIndex]
-  const masteredCount = cards.filter((c) => c.mastered).length
-  const progress = (masteredCount / cards.length) * 100
-
-  const handleNext = () => {
-    if (currentIndex < cards.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-      setIsFlipped(false)
-    }
-  }
-
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
-      setIsFlipped(false)
-    }
-  }
-
-  const handleMastered = () => {
-    setCards((prev) =>
-      prev.map((card, i) => (i === currentIndex ? { ...card, mastered: true } : card))
-    )
-    handleNext()
-  }
-
-  const handleShuffle = () => {
-    const shuffled = [...cards].sort(() => Math.random() - 0.5)
-    setCards(shuffled)
-    setCurrentIndex(0)
-    setIsFlipped(false)
-  }
-
-  const handleReset = () => {
-    setCards((prev) => prev.map((card) => ({ ...card, mastered: false })))
-    setCurrentIndex(0)
-    setIsFlipped(false)
-  }
-
-  const [generateError, setGenerateError] = useState("")
-  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [genError, setGenError]         = useState("")
+  const [showLoginModal, setShowLoginModal]     = useState(false)
   const [showCreditsModal, setShowCreditsModal] = useState(false)
 
-  const handleGenerateAI = async () => {
-    if (!aiTopic.trim()) return
+  const currentCard = cards[currentIndex]
+  const masteredCount = cards.filter(c => c.mastered).length
+  const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
 
+  const handleNext = () => { if (currentIndex < cards.length - 1) { setCurrentIndex(i => i + 1); setIsFlipped(false) } }
+  const handlePrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); setIsFlipped(false) } }
+  const handleMastered = () => {
+    setCards(prev => prev.map((c, i) => i === currentIndex ? { ...c, mastered: true } : c))
+    if (currentIndex < cards.length - 1) { setCurrentIndex(i => i + 1); setIsFlipped(false) }
+  }
+  const handleShuffle = () => { setCards(c => [...c].sort(() => Math.random() - 0.5)); setCurrentIndex(0); setIsFlipped(false) }
+  const handleReset   = () => { setCards(c => c.map(x => ({ ...x, mastered: false }))); setCurrentIndex(0); setIsFlipped(false) }
+
+  const handleGenerate = async () => {
+    if (!aiTopic.trim()) return
     setIsGenerating(true)
-    setGenerateError("")
+    setGenError("")
     try {
       const res = await fetch("/api/ai/flashcards", {
         method: "POST",
@@ -157,300 +57,133 @@ export default function FlashcardsPage() {
         body: JSON.stringify({ topic: aiTopic.trim(), count: parseInt(aiCount) }),
       })
       const data = await res.json()
-
       if (!res.ok) {
-        if (data.code === "UNAUTHORIZED" || data.requiresLogin) { setShowLoginModal(true); return }
-        if (data.code === "NO_CREDITS" || data.requiresUpgrade) { setShowCreditsModal(true); return }
-        setGenerateError(data.error || "Failed to generate flashcards")
-        return
+        if (data.requiresLogin)  { setShowLoginModal(true);  setDialogOpen(false); return }
+        if (data.requiresUpgrade){ setShowCreditsModal(true); setDialogOpen(false); return }
+        setGenError(data.error || "Failed to generate flashcards"); return
       }
-
-      const generatedCards: Flashcard[] = data.flashcards.map((f: {front:string;back:string}, i: number) => ({
-        id: `ai-${Date.now()}-${i}`,
-        front: f.front,
-        back: f.back,
-        mastered: false,
+      const newCards: Flashcard[] = data.flashcards.map((f: { front: string; back: string }, i: number) => ({
+        id: `ai-${Date.now()}-${i}`, front: f.front, back: f.back, mastered: false,
       }))
-
-      setCards((prev) => [...generatedCards, ...prev])
-      setIsCreateDialogOpen(false)
-      setCreateMode(null)
-      setAiTopic("")
-      setAiCount("5")
+      setCards(newCards)
       setCurrentIndex(0)
       setIsFlipped(false)
+      setDialogOpen(false)
+      setAiTopic("")
+    } catch {
+      setGenError("Network error. Please try again.")
     } finally {
       setIsGenerating(false)
     }
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
-          <p className="text-muted-foreground">Create and review your learning decks</p>
+    <>
+      <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
+            <p className="text-muted-foreground">Review and memorize with AI-generated cards</p>
+          </div>
+          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+            <Sparkles className="h-4 w-4" /> Generate with AI
+          </Button>
         </div>
-        <Button className="gap-2" onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Create New Flashcard
-        </Button>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Deck Selector */}
-        <div className="lg:col-span-1 space-y-4">
-          <Card className="border-border bg-card">
-            <CardContent className="p-4 space-y-3">
-              <h3 className="font-semibold text-foreground">Your Study Decks</h3>
-              <div className="space-y-2">
-                {decks.map((deck) => (
-                  <button
-                    key={deck.id}
-                    onClick={() => setSelectedDeck(deck.id)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-3 rounded-lg transition-all",
-                      selectedDeck === deck.id
-                        ? "bg-primary/10 border border-primary"
-                        : "bg-secondary hover:bg-secondary/80 border border-transparent"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", deck.color)}>
-                        <Layers className="h-4 w-4" />
-                      </div>
-                      <span className="font-medium text-foreground">{deck.name}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm text-muted-foreground">{deck.count} cards</span>
-                      <p className="text-xs text-muted-foreground">{deck.lastStudied}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+        {/* Progress */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm text-muted-foreground">
+            <span>Card {currentIndex + 1} of {cards.length}</span>
+            <span>{masteredCount} mastered · {Math.round(progress)}%</span>
+          </div>
+          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+
+        {/* Card */}
+        <div className="relative h-64 cursor-pointer" onClick={() => setIsFlipped(!isFlipped)}>
+          <div className={cn("absolute inset-0 transition-all duration-500 [transform-style:preserve-3d]", isFlipped && "[transform:rotateY(180deg)]")}>
+            {/* Front */}
+            <Card className={cn("absolute inset-0 border-border bg-card [backface-visibility:hidden]", currentCard?.mastered && "border-emerald-500/30 bg-emerald-500/5")}>
+              <CardContent className="h-full flex flex-col items-center justify-center p-8 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Question</p>
+                <p className="text-xl font-semibold text-foreground">{currentCard?.front}</p>
+                <p className="text-sm text-muted-foreground mt-6">Click to reveal answer</p>
+              </CardContent>
+            </Card>
+            {/* Back */}
+            <Card className="absolute inset-0 border-primary/30 bg-primary/5 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+              <CardContent className="h-full flex flex-col items-center justify-center p-8 text-center">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Answer</p>
+                <p className="text-lg text-foreground">{currentCard?.back}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="outline" size="icon" onClick={handlePrev} disabled={currentIndex === 0}><ChevronLeft className="h-4 w-4" /></Button>
+          <div className="flex gap-2 flex-1 justify-center">
+            {isFlipped && !currentCard?.mastered && (
+              <Button size="sm" className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={handleMastered}>
+                <Check className="h-4 w-4" /> Got it!
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleShuffle}><Shuffle className="h-4 w-4" /> Shuffle</Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleReset}><RotateCcw className="h-4 w-4" /> Reset</Button>
+          </div>
+          <Button variant="outline" size="icon" onClick={handleNext} disabled={currentIndex === cards.length - 1}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+
+        {/* All mastered message */}
+        {masteredCount === cards.length && cards.length > 1 && (
+          <Card className="border-emerald-500/30 bg-emerald-500/10">
+            <CardContent className="p-4 text-center">
+              <p className="font-semibold text-emerald-500">🎉 You&apos;ve mastered all cards!</p>
+              <p className="text-sm text-muted-foreground mt-1">Generate a new set or shuffle to review again.</p>
             </CardContent>
           </Card>
-
-          {/* Progress */}
-
-        </div>
-
-        {/* Flashcard Area */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Card Counter */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              Card {currentIndex + 1} of {cards.length}
-            </span>
-            {currentCard.mastered && (
-              <span className="flex items-center gap-1 text-sm text-emerald-500">
-                <Star className="h-4 w-4 fill-current" />
-                Mastered
-              </span>
-            )}
-          </div>
-
-          {/* Flashcard */}
-          <div
-            className="relative h-[400px] cursor-pointer perspective-1000"
-            onClick={() => setIsFlipped(!isFlipped)}
-          >
-            <div
-              className={cn(
-                "absolute inset-0 w-full h-full transition-transform duration-500 transform-style-preserve-3d",
-                isFlipped && "rotate-y-180"
-              )}
-              style={{
-                transformStyle: "preserve-3d",
-                transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-              }}
-            >
-              {/* Front */}
-              <Card
-                className="absolute inset-0 w-full h-full border-border bg-card flex items-center justify-center p-8"
-                style={{ backfaceVisibility: "hidden" }}
-              >
-                <CardContent className="text-center">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-4">Question</p>
-                  <p className="text-xl font-medium text-foreground">{currentCard.front}</p>
-                  <p className="text-sm text-muted-foreground mt-8">Click to reveal answer</p>
-                </CardContent>
-              </Card>
-
-              {/* Back */}
-              <Card
-                className="absolute inset-0 w-full h-full border-border bg-primary/5 flex items-center justify-center p-8"
-                style={{
-                  backfaceVisibility: "hidden",
-                  transform: "rotateY(180deg)",
-                }}
-              >
-                <CardContent className="text-center">
-                  <p className="text-xs uppercase tracking-wide text-primary mb-4">Answer</p>
-                  <p className="text-xl font-medium text-foreground">{currentCard.back}</p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentIndex === 0}
-              className="gap-2"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-
-            <Button
-              onClick={handleMastered}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Check className="h-4 w-4" />
-              Mark as Mastered
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleNext}
-              disabled={currentIndex === cards.length - 1}
-              className="gap-2"
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Create Flashcard Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="bg-card border-border max-w-md">
+      {/* AI Generate Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Flashcards</DialogTitle>
-            <DialogDescription>
-              Choose how you'd like to create your flashcards
-            </DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" />Generate AI Flashcards</DialogTitle>
           </DialogHeader>
-
-          {!createMode ? (
-            <div className="space-y-3">
-              {/* Manual Creation Option */}
-              <button
-                onClick={() => setCreateMode("manual")}
-                className="w-full flex items-center justify-between p-4 rounded-lg border-2 border-border hover:border-primary/50 transition-all group"
-              >
-                <div className="text-left">
-                  <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                    Create Manually
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Add flashcards one by one with your own content
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </button>
-
-              {/* AI Generation Option */}
-              <button
-                onClick={() => setCreateMode("ai")}
-                className="w-full flex items-center justify-between p-4 rounded-lg border-2 border-primary/30 hover:border-primary bg-primary/5 transition-all group"
-              >
-                <div className="text-left">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      Generate with AI
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Automatically generate flashcards using AI
-                  </p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-primary" />
-              </button>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Topic</Label>
+              <Input placeholder="e.g. Photosynthesis, JavaScript Arrays, World War II..."
+                value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}
+                className="bg-secondary border-border"
+                onKeyDown={(e) => e.key === "Enter" && handleGenerate()} />
             </div>
-          ) : createMode === "ai" ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="topic">Topic or Subject</Label>
-                <Input
-                  id="topic"
-                  placeholder="e.g., French Vocabulary, Photosynthesis"
-                  className="bg-secondary border-border"
-                  value={aiTopic}
-                  onChange={(e) => setAiTopic(e.target.value)}
-                  disabled={isGenerating}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="count">Number of Flashcards</Label>
-                <Select value={aiCount} onValueChange={setAiCount} disabled={isGenerating}>
-                  <SelectTrigger className="bg-secondary border-border">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3 flashcards</SelectItem>
-                    <SelectItem value="5">5 flashcards</SelectItem>
-                    <SelectItem value="10">10 flashcards</SelectItem>
-                    <SelectItem value="15">15 flashcards</SelectItem>
-                    <SelectItem value="20">20 flashcards</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setCreateMode(null)}
-                  disabled={isGenerating}
-                >
-                  Back
-                </Button>
-                <Button
-                  className="flex-1 gap-2"
-                  onClick={handleGenerateAI}
-                  disabled={!aiTopic.trim() || isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Generate
-                    </>
-                  )}
-                </Button>
-              </div>
+            <div className="space-y-2">
+              <Label>Number of flashcards</Label>
+              <Select value={aiCount} onValueChange={setAiCount}>
+                <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[5,10,15,20,25,30].map(n => <SelectItem key={n} value={String(n)}>{n} cards</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Create your flashcard manually by entering the question and answer.
-              </p>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setCreateMode(null)}
-              >
-                Back
+            {genError && <p className="text-sm text-destructive">{genError}</p>}
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button className="flex-1 gap-2" onClick={handleGenerate} disabled={!aiTopic.trim() || isGenerating}>
+                {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" />Generating...</> : <><Sparkles className="h-4 w-4" />Generate</>}
               </Button>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Flashcards" />
       <CreditsExhaustedModal open={showCreditsModal} onOpenChange={setShowCreditsModal} feature="flashcards" />
-    </div>
+    </>
   )
 }
