@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { createClient } from "@supabase/supabase-js"
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 
 const navItems = [
   { label: "Home",        href: "/" },
@@ -33,12 +33,6 @@ interface AuthUser {
   avatarUrl: string | null
 }
 
-// Use Supabase client directly — no extra API call needed
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 export function PublicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [authUser, setAuthUser]             = useState<AuthUser | null>(null)
@@ -48,7 +42,7 @@ export function PublicHeader() {
 
   useEffect(() => {
     // Get initial session instantly from local storage (no network call)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const u = session.user
         const name =
@@ -62,7 +56,7 @@ export function PublicHeader() {
     })
 
     // Listen to auth state changes (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = getSupabaseBrowserClient().auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const u = session.user
         const name =

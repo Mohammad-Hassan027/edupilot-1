@@ -9,13 +9,9 @@ import {
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Logo } from "@/components/logo"
-import { createClient } from "@supabase/supabase-js"
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 import { useState, useEffect } from "react"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 const navItems = [
   { icon: Home,              label: "Home",       href: "/",          external: true,  guestOk: true  },
@@ -41,10 +37,10 @@ export function DashboardSidebar() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
       setIsLoggedIn(!!session?.user)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: { subscription } } = getSupabaseBrowserClient().auth.onAuthStateChange((_e, s) => {
       setIsLoggedIn(!!s?.user)
     })
     return () => subscription.unsubscribe()

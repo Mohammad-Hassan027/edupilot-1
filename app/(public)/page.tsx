@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 import Image from "next/image"
 import { ArrowRight, Brain, FileText, Calendar, Layers, HelpCircle, Mic, Sparkles, CheckCircle2, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -106,9 +107,35 @@ const blogPosts = [
 ]
 
 export default function LandingPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoggedIn, setIsLoggedIn]   = useState(false)
+  const [userName, setUserName]       = useState<string | null>(null)
+
   useEffect(() => {
-    fetch("/api/user/profile").then(r => setIsLoggedIn(r.ok)).catch(() => {})
+    // Instant read from local session — no network call
+    getSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsLoggedIn(true)
+        const u = session.user
+        const name =
+          u.user_metadata?.full_name ||
+          u.user_metadata?.name ||
+          u.email?.split("@")[0] ||
+          "User"
+        setUserName(name)
+      }
+    })
+    const { data: { subscription } } = getSupabaseBrowserClient().auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setIsLoggedIn(true)
+        const u = session.user
+        const name = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User"
+        setUserName(name)
+      } else {
+        setIsLoggedIn(false)
+        setUserName(null)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   return (
@@ -146,8 +173,8 @@ export default function LandingPage() {
             {/* CTA Buttons */}
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button size="lg" asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground gap-2">
-                <Link href="/register">
-                  Start for Free
+                <Link href={isLoggedIn ? "/dashboard" : "/register"}>
+                  {isLoggedIn ? (userName ? `Welcome, ${userName.split(" ")[0]}` : "Go to Dashboard") : "Start for Free"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -364,8 +391,8 @@ export default function LandingPage() {
                   asChild
                   className="bg-white text-primary hover:bg-white/90"
                 >
-                  <Link href="/register">
-                    Get Started Free
+                  <Link href={isLoggedIn ? "/dashboard" : "/register"}>
+                    {isLoggedIn ? "Go to Dashboard" : "Get Started Free"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>

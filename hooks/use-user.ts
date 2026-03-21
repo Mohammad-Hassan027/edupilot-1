@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { Profile, Credits, Subscription } from "@/types"
-import { createClient } from "@supabase/supabase-js"
-
-// Supabase browser client — reads from localStorage instantly, no network
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 
 interface UserData {
   profile: Profile | null
@@ -32,7 +26,7 @@ export function useUser(): UserData {
 
   // Phase 1: read name INSTANTLY from Supabase local session (no network)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const u = session.user
         const name =
