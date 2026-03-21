@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Search, ChevronDown, Mail, MessageSquare, Clock, Send, CheckCircle2, HelpCircle, BookOpen, CreditCard, Settings, Zap } from "lucide-react"
+import { Search, ChevronDown, Mail, MessageSquare, Clock, Send, CheckCircle2, HelpCircle, BookOpen, CreditCard, Settings, Zap, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -183,22 +183,33 @@ export default function HelpCenterPage() {
                   <div>
                     <h3 className="font-semibold text-foreground">Email Support</h3>
                     <p className="text-sm text-muted-foreground mb-1">For general inquiries</p>
-                    <a href="mailto:support@edupilot.ai" className="text-sm text-primary hover:underline">
-                      support@edupilot.ai
+                    <a href="mailto:contact@edupilot.ai" className="text-sm text-primary hover:underline">
+                      contact@edupilot.ai
                     </a>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="border-border bg-card">
-                <CardContent className="flex items-start gap-4 p-5">
+                <CardContent className="flex items-start gap-4 p-6">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <Phone className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Live Chat</h3>
-                    <p className="text-sm text-muted-foreground mb-1">Available Mon-Fri, 9am-6pm IST</p>
-                    <span className="text-sm text-primary">Start chat in dashboard</span>
+                    <h3 className="font-semibold text-foreground">Support</h3>
+                    <p className="text-sm text-muted-foreground">For technical support.</p>
+                    <a
+                      href="mailto:contact@edupilot.ai"
+                      className="mt-1 text-sm font-medium text-primary hover:underline block"
+                    >
+                      contact@edupilot.ai
+                    </a>
+                    <a
+                      href="tel:+916352751256"
+                      className="mt-1 text-sm font-medium text-primary hover:underline block"
+                    >
+                      +91 63527 51256
+                    </a>
                   </div>
                 </CardContent>
               </Card>
