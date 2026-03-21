@@ -9,12 +9,33 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 
 export default function ContactPage() {
-  const [submitted, setSubmitted] = useState(false)
+  const [submitted, setSubmitted]   = useState(false)
+  const [isLoading, setIsLoading]   = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+  const [firstName, setFirstName]   = useState("")
+  const [lastName, setLastName]     = useState("")
+  const [email, setEmail]           = useState("")
+  const [subject, setSubject]       = useState("")
+  const [message, setMessage]       = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Simulate form submission
-    setSubmitted(true)
+    setIsLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, email, subject, message }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || "Failed to send message. Please try again."); return }
+      setSubmitted(true)
+    } catch {
+      setError("Network error. Please check your connection and try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -146,10 +167,15 @@ export default function ContactPage() {
                     Message sent successfully!
                   </h3>
                   <p className="text-muted-foreground">
-                    We&apos;ll get back to you as soon as possible.
+                    We&apos;ve sent a confirmation to your email. Our team will respond within 24 hours.
                   </p>
                 </div>
               ) : (
+                {error && (
+                  <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -158,6 +184,8 @@ export default function ContactPage() {
                         id="firstName"
                         placeholder="John"
                         required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
                         className="border-border bg-secondary"
                       />
                     </div>
@@ -167,6 +195,8 @@ export default function ContactPage() {
                         id="lastName"
                         placeholder="Doe"
                         required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
                         className="border-border bg-secondary"
                       />
                     </div>
@@ -179,6 +209,8 @@ export default function ContactPage() {
                       type="email"
                       placeholder="john@example.com"
                       required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="border-border bg-secondary"
                     />
                   </div>
@@ -189,6 +221,8 @@ export default function ContactPage() {
                       id="subject"
                       placeholder="How can we help?"
                       required
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
                       className="border-border bg-secondary"
                     />
                   </div>
@@ -200,6 +234,8 @@ export default function ContactPage() {
                       placeholder="Tell us more about your inquiry..."
                       rows={5}
                       required
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
                       className="border-border bg-secondary resize-none"
                     />
                   </div>
@@ -207,9 +243,10 @@ export default function ContactPage() {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground"
+                    disabled={isLoading}
                   >
                     <Send className="mr-2 h-4 w-4" />
-                    Send Message
+                    {isLoading ? "Sending..." : "Send Message"}
                   </Button>
                 </form>
               )}

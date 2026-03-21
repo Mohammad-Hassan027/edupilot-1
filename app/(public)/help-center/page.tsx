@@ -78,9 +78,35 @@ export default function HelpCenterPage() {
   const [ticketSubmitted, setTicketSubmitted] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
-  const handleTicketSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting]   = useState(false)
+  const [submitError, setSubmitError]     = useState<string | null>(null)
+  const [ticketName, setTicketName]       = useState("")
+  const [ticketEmail, setTicketEmail]     = useState("")
+  const [ticketCategory, setTicketCategory] = useState("")
+  const [ticketSubject, setTicketSubject] = useState("")
+  const [ticketMessage, setTicketMessage] = useState("")
+
+  const handleTicketSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setTicketSubmitted(true)
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch("/api/help", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: ticketName, email: ticketEmail,
+          category: ticketCategory, subject: ticketSubject, message: ticketMessage,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSubmitError(data.error || "Failed to submit ticket. Please try again."); return }
+      setTicketSubmitted(true)
+    } catch {
+      setSubmitError("Network error. Please check your connection and try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -247,10 +273,15 @@ export default function HelpCenterPage() {
                     Ticket submitted!
                   </h3>
                   <p className="text-muted-foreground">
-                    We&apos;ll respond to your inquiry within 24-48 hours.
+                    A confirmation has been sent to your email. Our team will respond within 24 hours.
                   </p>
                 </div>
               ) : (
+                {submitError && (
+                  <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                    {submitError}
+                  </div>
+                )}
                 <form onSubmit={handleTicketSubmit} className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -259,6 +290,8 @@ export default function HelpCenterPage() {
                         id="name"
                         placeholder="Your name"
                         required
+                        value={ticketName}
+                        onChange={(e) => setTicketName(e.target.value)}
                         className="border-border bg-secondary"
                       />
                     </div>
@@ -269,6 +302,8 @@ export default function HelpCenterPage() {
                         type="email"
                         placeholder="you@example.com"
                         required
+                        value={ticketEmail}
+                        onChange={(e) => setTicketEmail(e.target.value)}
                         className="border-border bg-secondary"
                       />
                     </div>
@@ -276,7 +311,7 @@ export default function HelpCenterPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
-                    <Select required>
+                    <Select required value={ticketCategory} onValueChange={setTicketCategory}>
                       <SelectTrigger className="border-border bg-secondary">
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
@@ -296,6 +331,8 @@ export default function HelpCenterPage() {
                       id="subject"
                       placeholder="Brief description of your issue"
                       required
+                      value={ticketSubject}
+                      onChange={(e) => setTicketSubject(e.target.value)}
                       className="border-border bg-secondary"
                     />
                   </div>
@@ -307,6 +344,8 @@ export default function HelpCenterPage() {
                       placeholder="Please describe your issue in detail..."
                       rows={5}
                       required
+                      value={ticketMessage}
+                      onChange={(e) => setTicketMessage(e.target.value)}
                       className="border-border bg-secondary resize-none"
                     />
                   </div>
@@ -314,9 +353,10 @@ export default function HelpCenterPage() {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground"
+                    disabled={isSubmitting}
                   >
                     <Send className="mr-2 h-4 w-4" />
-                    Submit Ticket
+                    {isSubmitting ? "Submitting..." : "Submit Ticket"}
                   </Button>
                 </form>
               )}
