@@ -60,10 +60,10 @@ export default function ContactPage() {
                   <h3 className="font-semibold text-foreground">Support</h3>
                   <p className="text-sm text-muted-foreground">For technical support.</p>
                   <a
-                    href="mailto:support@edupilot.ai"
+                    href="mailto:contact@edupilot.ai"
                     className="mt-1 text-sm font-medium text-primary hover:underline block"
                   >
-                    support@edupilot.ai
+                    contact@edupilot.ai
                   </a>
                   <a
                     href="tel:+916352751256"
@@ -82,7 +82,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground">Location</h3>
-                  <p className="text-sm text-muted-foreground">Bangalore, India</p>
+                  <p className="text-sm text-muted-foreground">India</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Operating remotely worldwide
                   </p>
