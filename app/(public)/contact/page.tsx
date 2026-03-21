@@ -171,6 +171,7 @@ export default function ContactPage() {
                   </p>
                 </div>
               ) : (
+                <>
                 {error && (
                   <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
                     {error}
@@ -249,6 +250,7 @@ export default function ContactPage() {
                     {isLoading ? "Sending..." : "Send Message"}
                   </Button>
                 </form>
+                </>
               )}
             </CardContent>
           </Card>

@@ -277,6 +277,7 @@ export default function HelpCenterPage() {
                   </p>
                 </div>
               ) : (
+                <>
                 {submitError && (
                   <div className="mb-4 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
                     {submitError}
@@ -359,6 +360,7 @@ export default function HelpCenterPage() {
                     {isSubmitting ? "Submitting..." : "Submit Ticket"}
                   </Button>
                 </form>
+                </>
               )}
             </CardContent>
           </Card>
