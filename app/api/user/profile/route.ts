@@ -49,10 +49,13 @@ export async function GET() {
     (user.user_metadata?.name as string) ||
     null
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     success: true,
     data: { profile, credits, subscription, email: user.email, authName },
   })
+  // Cache for 30 seconds to reduce DB hammering
+  response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60")
+  return response
 }
 
 export async function PATCH(req: NextRequest) {

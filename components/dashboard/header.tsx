@@ -109,10 +109,10 @@ export function DashboardHeader() {
     setIsLoggingOut(true)
     try {
       await fetch("/api/auth/logout", { method: "POST" })
-      router.push("/login")
+      router.push("/")
       router.refresh()
     } catch {
-      router.push("/login")
+      router.push("/")
     } finally {
       setIsLoggingOut(false)
     }

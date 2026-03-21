@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
+import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
@@ -52,11 +53,11 @@ export async function createCredits(userId: string) {
     .from("credits")
     .insert({
       user_id: userId,
-      ai_chat_remaining: 20,
+      ai_chat_remaining: FREE_CREDIT_VALUES.ai_chat,
       ai_chat_used: 0,
-      flashcards_remaining: 20,
+      flashcards_remaining: FREE_CREDIT_VALUES.flashcards,
       flashcards_used: 0,
-      study_plan_remaining: 20,
+      study_plan_remaining: FREE_CREDIT_VALUES.study_plan,
       study_plan_used: 0,
     })
     .select()

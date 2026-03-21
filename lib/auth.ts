@@ -79,7 +79,6 @@ export function mapAuthError(supabaseError: string): string {
   const map: Record<string, string> = {
     "Invalid login credentials": "Invalid email or password. Please try again.",
     "User already registered": "Account already exists. Please login.",
-    "Email not confirmed": "Please verify your email before logging in.",
     "Too many requests": "Too many attempts. Please wait a few minutes.",
     "User not found": "No account found. Please register.",
     "Password should be at least 6 characters":

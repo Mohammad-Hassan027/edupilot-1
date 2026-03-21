@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { createClient } from "@supabase/supabase-js"
 
 const navItems = [
   { label: "Home",        href: "/" },
@@ -32,29 +33,51 @@ interface AuthUser {
   avatarUrl: string | null
 }
 
+// Use Supabase client directly — no extra API call needed
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
 export function PublicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [authUser, setAuthUser]             = useState<AuthUser | null>(null)
-  const [authLoading, setAuthLoading]       = useState(true)
+  const [authReady, setAuthReady]           = useState(false)
   const pathname = usePathname()
   const router   = useRouter()
 
-  // Check auth state on mount
   useEffect(() => {
-    fetch("/api/user/profile")
-      .then((r) => {
-        if (!r.ok) { setAuthUser(null); return null }
-        return r.json()
-      })
-      .then((data) => {
-        if (!data) return
-        const p = data.data.profile
-        const e = data.data.email
-        const n = p?.full_name || data.data.authName || e?.split("@")[0] || "User"
-        setAuthUser({ email: e, fullName: n, avatarUrl: p?.avatar_url || null })
-      })
-      .catch(() => setAuthUser(null))
-      .finally(() => setAuthLoading(false))
+    // Get initial session instantly from local storage (no network call)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const u = session.user
+        const name =
+          u.user_metadata?.full_name ||
+          u.user_metadata?.name ||
+          u.email?.split("@")[0] ||
+          "User"
+        setAuthUser({ email: u.email ?? null, fullName: name, avatarUrl: u.user_metadata?.avatar_url ?? null })
+      }
+      setAuthReady(true)
+    })
+
+    // Listen to auth state changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const u = session.user
+        const name =
+          u.user_metadata?.full_name ||
+          u.user_metadata?.name ||
+          u.email?.split("@")[0] ||
+          "User"
+        setAuthUser({ email: u.email ?? null, fullName: name, avatarUrl: u.user_metadata?.avatar_url ?? null })
+      } else {
+        setAuthUser(null)
+      }
+      setAuthReady(true)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const handleLogout = async () => {
@@ -70,140 +93,85 @@ export function PublicHeader() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        {/* Logo — goes to dashboard if logged in, home if not */}
-        <Link href={authUser ? "/dashboard" : "/"} className="flex items-center gap-2.5 group">
-          <Logo size="md" />
-        </Link>
+        <Logo size="md" href={authUser ? "/dashboard" : "/"} />
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "px-3 py-2 text-sm font-medium transition-colors rounded-lg",
-                pathname === item.href
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}
-            >
+            <Link key={item.href} href={item.href}
+              className={cn("px-3 py-2 text-sm font-medium transition-colors rounded-lg",
+                pathname === item.href ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}>
               {item.label}
             </Link>
           ))}
         </nav>
 
-        {/* Actions */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
-
-          {/* Auth buttons — desktop */}
           <div className="hidden items-center gap-2 sm:flex">
-            {authLoading ? (
+            {!authReady ? (
               <div className="h-8 w-20 rounded-lg bg-secondary animate-pulse" />
             ) : authUser ? (
-              // ── Logged in: show user dropdown ─────────────────────────
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 hover:border-primary/50 transition-all cursor-pointer">
                     <Avatar className="h-7 w-7">
-                      <AvatarImage
-                        src={authUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.email}`}
-                        alt={authUser.fullName ?? "User"}
-                      />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                        {initials}
-                      </AvatarFallback>
+                      <AvatarImage src={authUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.email}`} alt={authUser.fullName ?? "User"} />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">{initials}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium text-foreground max-w-[120px] truncate">
-                      {authUser.fullName}
-                    </span>
+                    <span className="text-sm font-medium text-foreground max-w-[120px] truncate">{authUser.fullName}</span>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 bg-card border-border">
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
-                      <LayoutDashboard className="h-4 w-4" /> Dashboard
-                    </Link>
+                    <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/profile" className="flex items-center gap-2 cursor-pointer">
-                      <User className="h-4 w-4" /> Profile
-                    </Link>
+                    <Link href="/profile" className="flex items-center gap-2 cursor-pointer"><User className="h-4 w-4" /> Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive cursor-pointer"
-                    onClick={handleLogout}
-                  >
+                  <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleLogout}>
                     <LogOut className="h-4 w-4 mr-2" /> Logout
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              // ── Not logged in: show Sign In / Get Started ─────────────
               <>
-                <Button variant="ghost" asChild>
-                  <Link href="/login">Sign In</Link>
-                </Button>
+                <Button variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
                 <Button asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
                   <Link href="/register">Get Started</Link>
                 </Button>
               </>
             )}
           </div>
-
-          {/* Mobile Menu Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="border-t border-border bg-background md:hidden">
           <nav className="container mx-auto flex flex-col gap-1 p-4">
             {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "px-3 py-2.5 text-sm font-medium transition-colors rounded-lg",
-                  pathname === item.href
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                )}
-              >
+              <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}
+                className={cn("px-3 py-2.5 text-sm font-medium transition-colors rounded-lg",
+                  pathname === item.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}>
                 {item.label}
               </Link>
             ))}
             <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
               {authUser ? (
                 <>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                      Dashboard
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" className="w-full text-destructive" onClick={handleLogout}>
-                    Logout
-                  </Button>
+                  <Button asChild variant="outline" className="w-full"><Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link></Button>
+                  <Button variant="ghost" className="w-full text-destructive" onClick={handleLogout}>Logout</Button>
                 </>
               ) : (
                 <>
-                  <Button variant="outline" asChild className="w-full">
-                    <Link href="/login">Sign In</Link>
-                  </Button>
-                  <Button asChild className="w-full bg-gradient-to-r from-primary to-accent">
-                    <Link href="/register">Get Started</Link>
-                  </Button>
+                  <Button variant="outline" asChild className="w-full"><Link href="/login">Sign In</Link></Button>
+                  <Button asChild className="w-full bg-gradient-to-r from-primary to-accent"><Link href="/register">Get Started</Link></Button>
                 </>
               )}
             </div>

@@ -1,19 +1,14 @@
-import { redirect } from "next/navigation"
-import { getUser } from "@/lib/auth-server"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 
-export default async function DashboardLayout({
+// Note: individual protected routes (/notes, /quiz, etc.) are blocked by middleware.
+// The /dashboard route itself is intentionally viewable by guests (read-only view).
+// All AI features inside the dashboard components check auth before calling APIs.
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const user = await getUser()
-
-  if (!user) {
-    redirect("/login")
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar />
