@@ -123,7 +123,7 @@ async function sendEmail(to: string, otp: string): Promise<boolean> {
   }
 
   const fromAddress =
-    process.env.RESEND_FROM_EMAIL || "EduPilot <onboarding@resend.dev>"
+    "EduPilot Support <onboarding@resend.dev>"
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
