@@ -26,7 +26,7 @@ export const blogPosts: BlogPost[] = [
     author: "Sarah Chen",
     date: "2026-03-15",
     readTime: "5 min read",
-    image: "/blog/ai-notes.jpg",
+    image: "/blog/LearnFasterUsingAI.png",
     content: [
       {
         type: "paragraph",
