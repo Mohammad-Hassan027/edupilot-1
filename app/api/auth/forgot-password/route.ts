@@ -88,21 +88,7 @@ function buildEmailHTML(toEmail: string, otp: string): string {
                 Do not share this code with anyone — EduPilot staff will never ask for it.
               </p>
 
-              <!-- WARNING BOX -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);
-                             border-radius:10px;padding:16px 20px;">
-                    <p style="color:#fbbf24;font-size:13px;font-weight:700;margin:0 0 6px;">
-                      🔒 Didn&apos;t request this?
-                    </p>
-                    <p style="color:#94a3b8;font-size:13px;margin:0;line-height:1.6;">
-                      If you did not request a password reset, please ignore this email.
-                      Your account password will remain unchanged and is safe.
-                    </p>
-                  </td>
-                </tr>
-              </table>
+
             </td>
           </tr>
 
@@ -148,7 +134,7 @@ async function sendEmail(to: string, otp: string): Promise<boolean> {
     body: JSON.stringify({
       from:    fromAddress,
       to:      [to],
-      subject: `${otp} is your EduPilot password reset code`,
+      subject: "EduPilot — Password Reset Request",
       html:    buildEmailHTML(to, otp),
       text:    `EduPilot Password Reset\n\nYour verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} EduPilot`,
     }),
