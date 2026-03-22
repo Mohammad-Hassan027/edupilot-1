@@ -69,7 +69,8 @@ export function DashboardHeader() {
   const searchRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
-  const { profile, email, subscription, credits, isLoading, fullName } = useUser()
+  const { profile, email, subscription, credits, isLoading, fullName, error } = useUser()
+  const isGuest = error === "not_authenticated"
 
   const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
   const firstName = displayName.split(" ")[0]
@@ -204,10 +205,11 @@ export function DashboardHeader() {
         {/* Welcome Message - Desktop */}
         <div className="hidden md:block">
           <h1 className="text-xl font-semibold text-foreground">
-            Welcome back,{" "}
-            <span className="text-primary">
-              {isLoading ? "..." : firstName}
-            </span>
+            {isGuest ? (
+              <>Welcome to{" "}<span className="text-primary">EduPilot</span></>
+            ) : (
+              <>Welcome back,{" "}<span className="text-primary">{isLoading ? "..." : firstName}</span></>
+            )}
           </h1>
         </div>
 
