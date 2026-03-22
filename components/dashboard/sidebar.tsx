@@ -12,41 +12,49 @@ import { Logo } from "@/components/logo"
 import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 import { useState, useEffect } from "react"
 
-
 const navItems = [
-  { icon: Home,              label: "Home",       href: "/",          external: true,  guestOk: true  },
-  { icon: LayoutDashboard,   label: "Dashboard",  href: "/dashboard",                  guestOk: true  },
-  { icon: MessageSquareText, label: "AI Tutor",   href: "/ai-tutor",  highlight: true, guestOk: true  },
-  { icon: FileText,          label: "Notes",      href: "/notes",                      guestOk: false },
-  { icon: Layers,            label: "Flashcards", href: "/flashcards",                 guestOk: false },
-  { icon: Mic,               label: "AI Voice",   href: "/ai-voice",                   guestOk: false },
-  { icon: QuizIcon,          label: "Quiz",       href: "/quiz",                       guestOk: false },
-  { icon: Calendar,          label: "Planner",    href: "/planner",                    guestOk: false },
-  { icon: BookOpen,          label: "Blogs",      href: "/blogs",     external: true,  guestOk: true  },
+  { icon: Home,              label: "Home",       href: "/",           external: true,  guestOk: true  },
+  { icon: LayoutDashboard,   label: "Dashboard",  href: "/dashboard",                   guestOk: true  },
+  { icon: MessageSquareText, label: "AI Tutor",   href: "/ai-tutor",   highlight: true, guestOk: true  },
+  { icon: FileText,          label: "Notes",      href: "/notes",                        guestOk: false },
+  { icon: Layers,            label: "Flashcards", href: "/flashcards",                   guestOk: false },
+  { icon: Mic,               label: "AI Voice",   href: "/ai-voice",                     guestOk: false },
+  { icon: QuizIcon,          label: "Quiz",       href: "/quiz",                         guestOk: false },
+  { icon: Calendar,          label: "Planner",    href: "/planner",                      guestOk: false },
+  { icon: BookOpen,          label: "Blogs",      href: "/blogs",      external: true,  guestOk: true  },
 ]
 
 const bottomItems = [
-  { icon: User,        label: "Profile",     href: "/profile",     guestOk: false },
-  { icon: Settings,    label: "Settings",    href: "/settings",    guestOk: false },
-  { icon: HelpCircle,  label: "Help Center", href: "/help-center", guestOk: true  },
+  { icon: User,       label: "Profile",     href: "/profile",     guestOk: false },
+  { icon: Settings,   label: "Settings",    href: "/settings",    guestOk: false },
+  { icon: HelpCircle, label: "Help Center", href: "/help-center", guestOk: true  },
 ]
 
 export function DashboardSidebar() {
-  const pathname = usePathname()
-  const router   = useRouter()
+  const pathname    = usePathname()
+  const router      = useRouter()
+  // null = still loading, true = logged in, false = confirmed guest
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
 
   useEffect(() => {
-    getSupabaseBrowserClient().auth.getSession().then(({ data: { session } }) => {
+    const supabase = getSupabaseBrowserClient()
+
+    // Read from local storage first — instant, no network
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setIsLoggedIn(!!session?.user)
     })
-    const { data: { subscription } } = getSupabaseBrowserClient().auth.onAuthStateChange((_e, s) => {
-      setIsLoggedIn(!!s?.user)
+
+    // Also listen for auth state changes (login / logout events)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session?.user)
     })
+
     return () => subscription.unsubscribe()
   }, [])
 
   const handleNavClick = (item: typeof navItems[0], e: React.MouseEvent) => {
+    // Only block if we have CONFIRMED the user is a guest (isLoggedIn === false)
+    // null means still loading — let them through
     if (!item.guestOk && isLoggedIn === false) {
       e.preventDefault()
       router.push("/login")
@@ -54,9 +62,10 @@ export function DashboardSidebar() {
   }
 
   const renderItem = (item: typeof navItems[0]) => {
-    const isActive   = pathname === item.href
-    const isLocked   = !item.guestOk && isLoggedIn === false
-    const Icon       = item.icon
+    const isActive = pathname === item.href
+    // Show lock ONLY when confirmed guest (false), NOT when loading (null)
+    const isLocked = !item.guestOk && isLoggedIn === false
+    const Icon     = item.icon
 
     return (
       <Tooltip key={item.label}>
@@ -74,7 +83,8 @@ export function DashboardSidebar() {
               item.highlight && !isActive && !isLocked && "text-primary hover:text-primary"
             )}
           >
-            <Icon className={cn("h-5 w-5 shrink-0",
+            <Icon className={cn(
+              "h-5 w-5 shrink-0",
               item.highlight && !isActive && !isLocked && "text-primary",
               isLocked && "opacity-50"
             )} />
