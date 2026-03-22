@@ -114,14 +114,14 @@ export default async function BlogPostPage({
           </div>
 
           {/* Featured Image */}
-          <div className="mb-12 aspect-video overflow-hidden rounded-2xl bg-gradient-to-br from-secondary to-muted">
+          <div className="mb-12 overflow-hidden rounded-2xl bg-gradient-to-br from-secondary to-muted">
             <Image
               src={post.image}
               alt={post.title}
               width={1200}
               height={800}
               priority
-              className="h-full w-full object-cover"
+              className="w-full h-auto object-contain"
             />
           </div>
 
