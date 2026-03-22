@@ -17,7 +17,7 @@ const mainFeatures = [
       "Smart highlighting and key concepts",
     ],
     color: "from-primary to-yellow-500",
-    image: "/features/ai-notes.jpg",
+    image: "/features/AINotesGenerator.png",
   },
   {
     icon: Brain,
@@ -30,7 +30,7 @@ const mainFeatures = [
       "Multi-language support",
     ],
     color: "from-accent to-blue-400",
-    image: "/features/ai-tutor.jpg",
+    image: "/features/AITutorChatbot.png",
   },
   {
     icon: Calendar,
@@ -43,7 +43,7 @@ const mainFeatures = [
       "Calendar integration",
     ],
     color: "from-emerald-500 to-teal-400",
-    image: "/features/study-planner.jpg",
+    image: "/features/SmartStudyplanner.png",
   },
   {
     icon: Layers,
@@ -56,7 +56,7 @@ const mainFeatures = [
       "Image and audio support",
     ],
     color: "from-violet-500 to-purple-400",
-    image: "/features/flashcards.jpg",
+    image: "/features/FlashcardswithSM2.png",
   },
   {
     icon: HelpCircle,
@@ -69,7 +69,7 @@ const mainFeatures = [
       "Performance analytics",
     ],
     color: "from-rose-500 to-pink-400",
-    image: "/features/quiz.jpg",
+    image: "/features/QuizGenerator.png",
   },
   {
     icon: Mic,
@@ -82,7 +82,7 @@ const mainFeatures = [
       "Multiple voice options",
     ],
     color: "from-orange-500 to-amber-400",
-    image: "/features/voice-assistant.jpg",
+    image: "/features/AITutorChatbot.png",
   },
 ]
 
@@ -91,25 +91,25 @@ const additionalFeatures = [
     icon: Zap,
     title: "Lightning Fast",
     description: "Powered by cutting-edge AI models for instant responses",
-    image: "/features/lightning-fast.jpg",
+    image: "/features/LightningFast.png",
   },
   {
     icon: Shield,
     title: "Secure & Private",
     description: "Your data is encrypted and never shared with third parties",
-    image: "/features/secure-private.jpg",
+    image: "/features/SecurePrivate.png",
   },
   {
     icon: Users,
     title: "Collaborative",
     description: "Share notes and study materials with friends and classmates",
-    image: "/features/collaborative.jpg",
+    image: "/features/Collaborative.png",
   },
   {
     icon: BarChart3,
     title: "Analytics",
     description: "Track your progress with detailed learning analytics",
-    image: "/features/analytics.jpg",
+    image: "/features/Analytics.png",
   },
 ]
 

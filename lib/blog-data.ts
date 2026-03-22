@@ -76,7 +76,7 @@ export const blogPosts: BlogPost[] = [
     author: "Dr. James Park",
     date: "2026-03-12",
     readTime: "6 min read",
-    image: "/blog/HowAITutorsHelpLearning.png",
+    image: "/blog/HowSpacedRepetitionWorks.png",
     content: [
       {
         type: "paragraph",
@@ -168,7 +168,7 @@ export const blogPosts: BlogPost[] = [
     author: "Emily Watson",
     date: "2026-03-08",
     readTime: "8 min read",
-    image: "/blog/LearnFasterUsingAI.png",
+    image: "/blog/HowtoPlanStudyUsingAI.png",
     content: [
       {
         type: "paragraph",
@@ -415,6 +415,53 @@ export const blogPosts: BlogPost[] = [
           "Customized review schedules for challenging concepts",
           "Alternative explanations and resources"
         ]
+      }
+    ]
+  },
+  {
+    slug: "complete-feature-guide",
+    title: "Complete EduPilot Feature Guide",
+    description: "An in-depth look at every feature EduPilot offers and how to use them together for optimal learning.",
+    category: "Guide",
+    author: "Chris Anderson",
+    date: "2024-02-22",
+    readTime: "12 min read",
+    image: "/blog/GettingStartedwithEduPilot.png",
+    content: [
+      {
+        type: "paragraph",
+        content: "EduPilot brings together multiple AI-powered learning tools in one integrated platform. This guide covers every feature and shows how they work together to create a comprehensive study system."
+      },
+      {
+        type: "heading",
+        content: "The EduPilot Ecosystem"
+      },
+      {
+        type: "paragraph",
+        content: "All EduPilot features are designed to work together. Notes can become flashcards, flashcards inform quizzes, quiz results guide the AI tutor, and everything feeds into your personalized study planner."
+      },
+      {
+        type: "heading",
+        content: "Feature Integration"
+      },
+      {
+        type: "list",
+        content: "",
+        items: [
+          "Auto-generate flashcards from AI notes",
+          "Create quizzes from flashcard decks",
+          "Tutor sessions based on quiz weaknesses",
+          "Planner adjusts based on all activity",
+          "Analytics tie everything together"
+        ]
+      },
+      {
+        type: "heading",
+        content: "Maximizing Your Results"
+      },
+      {
+        type: "paragraph",
+        content: "The key to success with EduPilot is using features consistently and in combination. Start with notes for new topics, convert key concepts to flashcards, test yourself with quizzes, and use the tutor for clarification. Let the planner keep you on track."
       }
     ]
   }
