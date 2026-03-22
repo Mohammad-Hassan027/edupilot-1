@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Bell, Search, Sparkles, Menu, X, Home, LayoutDashboard, MessageSquareText, FileText,
   Layers, HelpCircle, Calendar, BookOpen, Settings, Mic, User, CreditCard,
-  LogOut, Clock, TrendingUp, Lightbulb, Zap
+  LogOut, Clock, TrendingUp, Lightbulb, Zap, LogIn
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -70,6 +70,7 @@ export function DashboardHeader() {
   const router = useRouter()
 
   const { profile, email, subscription, credits, isLoading, fullName, error } = useUser()
+  // isGuest: loading finished and no authenticated user
   const isGuest = !isLoading && (error === "not_authenticated" || !email)
 
   const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
@@ -206,7 +207,7 @@ export function DashboardHeader() {
         <div className="hidden md:block">
           {isGuest ? (
             <h1 className="text-xl font-semibold text-foreground">
-              Welcome to <span className="text-primary">EduPilot</span>
+              Welcome to{" "}<span className="text-primary">EduPilot</span>
             </h1>
           ) : (
             <h1 className="text-xl font-semibold text-foreground">
@@ -326,9 +327,12 @@ export function DashboardHeader() {
           {/* Notifications Dropdown */}
           <NotificationsDropdown />
 
-          {/* Desktop: Sign In for guests, profile for logged-in */}
+          {/* Desktop: Sign In for guests | Profile dropdown for logged-in */}
           {isGuest ? (
-            <Link href="/login" className="hidden sm:flex items-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-all">
+            <Link
+              href="/login"
+              className="hidden sm:flex items-center gap-2 rounded-full border border-primary/50 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-all"
+            >
               <LogIn className="h-4 w-4" />
               Sign In
             </Link>
@@ -336,7 +340,38 @@ export function DashboardHeader() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="hidden sm:flex items-center gap-3 rounded-full border border-border bg-secondary py-1.5 pl-1.5 pr-4 hover:border-primary/50 hover:bg-secondary/80 transition-all cursor-pointer">
-                <Avatar className="h-8 w-8">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage
+                      src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
+                      alt={displayName}
+                    />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden text-left sm:block">
+                    <p className="text-sm font-medium leading-none text-foreground">
+                      {isLoading ? "Loading..." : displayName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{planLabel}</p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                {userMenuItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Mobile: Sign In for guests | Avatar dropdown for logged-in */}
+          {isGuest ? (
+            <Link href="/login" className="sm:hidden flex h-8 w-8 items-center justify-center rounded-full border border-primary/50 bg-primary/10 text-primary">
+              <LogIn className="h-4 w-4" />
+            </Link>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="h-8 w-8 sm:hidden cursor-pointer">
                   <AvatarImage
                     src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
                     alt={displayName}
@@ -345,37 +380,12 @@ export function DashboardHeader() {
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="hidden text-left sm:block">
-                  <p className="text-sm font-medium leading-none text-foreground">
-                    {isLoading ? "Loading..." : displayName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{planLabel}</p>
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
-              {userMenuItems}
-            </DropdownMenuContent>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                {userMenuItems}
+              </DropdownMenuContent>
             </DropdownMenu>
           )}
-
-          {/* Mobile Avatar — Sign In for guests, dropdown for logged-in */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Avatar className="h-8 w-8 sm:hidden cursor-pointer">
-                <AvatarImage
-                  src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
-                  alt={displayName}
-                />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
-              {userMenuItems}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </header>
 

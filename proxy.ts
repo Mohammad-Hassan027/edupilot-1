@@ -11,7 +11,6 @@ const PROTECTED_ROUTES = [
   "/settings",
   "/billing",
   "/analytics",
-  "/ai-tutor",
   "/time-tracking",
   "/marketplace",
 ]

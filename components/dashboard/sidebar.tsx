@@ -16,7 +16,7 @@ import { useState, useEffect } from "react"
 const navItems = [
   { icon: Home,              label: "Home",       href: "/",          external: true,  guestOk: true  },
   { icon: LayoutDashboard,   label: "Dashboard",  href: "/dashboard",                  guestOk: true  },
-  { icon: MessageSquareText, label: "AI Tutor",   href: "/ai-tutor",  highlight: true, guestOk: false },
+  { icon: MessageSquareText, label: "AI Tutor",   href: "/ai-tutor",  highlight: true, guestOk: true  },
   { icon: FileText,          label: "Notes",      href: "/notes",                      guestOk: false },
   { icon: Layers,            label: "Flashcards", href: "/flashcards",                 guestOk: false },
   { icon: Mic,               label: "AI Voice",   href: "/ai-voice",                   guestOk: false },
@@ -54,9 +54,11 @@ export function DashboardSidebar() {
   }
 
   const renderItem = (item: typeof navItems[0]) => {
-    const isActive   = pathname === item.href
-    const isLocked   = !item.guestOk && isLoggedIn === false
-    const Icon       = item.icon
+    const isActive       = pathname === item.href
+    const isLocked       = !item.guestOk && isLoggedIn === false
+    // AI Tutor is allowed for guests but shows a "Free" badge (limited access)
+    const isGuestAITutor = item.highlight && item.guestOk && isLoggedIn === false
+    const Icon           = item.icon
 
     return (
       <Tooltip key={item.label}>
@@ -79,16 +81,28 @@ export function DashboardSidebar() {
               isLocked && "opacity-50"
             )} />
             <span className="hidden lg:inline">{item.label}</span>
-            {item.highlight && !isActive && !isLocked && (
+            {/* Logged-in users: sparkle on AI Tutor */}
+            {item.highlight && !isActive && !isLocked && !isGuestAITutor && (
               <Sparkles className="ml-auto h-4 w-4 text-primary hidden lg:block" />
             )}
+            {/* Guest on AI Tutor: amber "Free" badge */}
+            {isGuestAITutor && !isActive && (
+              <span className="ml-auto hidden lg:inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-500">
+                Free
+              </span>
+            )}
+            {/* Locked items: lock icon */}
             {isLocked && (
               <Lock className="ml-auto h-3 w-3 text-muted-foreground/50 hidden lg:block" />
             )}
           </Link>
         </TooltipTrigger>
         <TooltipContent side="right" className="bg-card border-border lg:hidden">
-          {isLocked ? `${item.label} — Login required` : item.label}
+          {isLocked
+            ? `${item.label} — Login required`
+            : isGuestAITutor
+              ? `${item.label} — Limited free access`
+              : item.label}
         </TooltipContent>
       </Tooltip>
     )
