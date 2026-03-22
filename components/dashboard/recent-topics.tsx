@@ -41,7 +41,7 @@ export function RecentTopics() {
 
   useEffect(() => {
     fetch("/api/user/recent-activity")
-      .then((r) => r.json())
+      .then((r) => r.ok ? r.json() : { data: [] })
       .then((d) => setActivity(d.activity || []))
       .catch(() => setActivity([]))
       .finally(() => setIsLoading(false))

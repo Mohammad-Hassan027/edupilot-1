@@ -19,7 +19,7 @@ export function StudyAnalytics() {
 
   useEffect(() => {
     fetch("/api/user/stats")
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : null)
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setIsLoading(false))

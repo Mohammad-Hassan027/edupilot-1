@@ -21,7 +21,7 @@ export function QuickStats() {
 
   useEffect(() => {
     fetch("/api/user/stats")
-      .then((r) => r.json())
+      .then((r) => r.ok ? r.json() : null)
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setIsLoading(false))
