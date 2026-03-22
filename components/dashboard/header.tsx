@@ -70,7 +70,7 @@ export function DashboardHeader() {
   const router = useRouter()
 
   const { profile, email, subscription, credits, isLoading, fullName, error } = useUser()
-  const isGuest = error === "not_authenticated"
+  const isGuest = error === "not_authenticated" || (!isLoading && !email)
 
   const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
   const firstName = displayName.split(" ")[0]
@@ -204,13 +204,19 @@ export function DashboardHeader() {
 
         {/* Welcome Message - Desktop */}
         <div className="hidden md:block">
-          <h1 className="text-xl font-semibold text-foreground">
-            {isGuest ? (
-              <>Welcome to{" "}<span className="text-primary">EduPilot</span></>
-            ) : (
-              <>Welcome back,{" "}<span className="text-primary">{isLoading ? "..." : firstName}</span></>
-            )}
-          </h1>
+          {isGuest ? (
+            <h1 className="text-xl font-semibold text-foreground">
+              Welcome to{" "}
+              <span className="text-primary">EduPilot</span>
+            </h1>
+          ) : (
+            <h1 className="text-xl font-semibold text-foreground">
+              Welcome back,{" "}
+              <span className="text-primary">
+                {isLoading ? "..." : firstName}
+              </span>
+            </h1>
+          )}
         </div>
 
         {/* Right Section */}
@@ -323,11 +329,53 @@ export function DashboardHeader() {
           {/* Notifications Dropdown */}
           <NotificationsDropdown />
 
-          {/* Desktop User Profile Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="hidden sm:flex items-center gap-3 rounded-full border border-border bg-secondary py-1.5 pl-1.5 pr-4 hover:border-primary/50 hover:bg-secondary/80 transition-all cursor-pointer">
-                <Avatar className="h-8 w-8">
+          {/* Desktop User Profile — Sign In button for guests, dropdown for logged-in */}
+          {isGuest ? (
+            <Link
+              href="/login"
+              className="hidden sm:flex items-center gap-2 rounded-full border border-primary/50 bg-primary/10 py-1.5 px-4 hover:bg-primary/20 transition-all text-primary text-sm font-medium"
+            >
+              <LogIn className="h-4 w-4" />
+              Sign In
+            </Link>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="hidden sm:flex items-center gap-3 rounded-full border border-border bg-secondary py-1.5 pl-1.5 pr-4 hover:border-primary/50 hover:bg-secondary/80 transition-all cursor-pointer">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage
+                      src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
+                      alt={displayName}
+                    />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden text-left sm:block">
+                    <p className="text-sm font-medium leading-none text-foreground">
+                      {isLoading ? "Loading..." : displayName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{planLabel}</p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                {userMenuItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Mobile Avatar — Sign In for guests, dropdown for logged-in */}
+          {isGuest ? (
+            <Link href="/login" className="sm:hidden">
+              <button className="flex items-center justify-center h-8 w-8 rounded-full border border-primary/50 bg-primary/10 text-primary">
+                <LogIn className="h-4 w-4" />
+              </button>
+            </Link>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Avatar className="h-8 w-8 sm:hidden cursor-pointer">
                   <AvatarImage
                     src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
                     alt={displayName}
@@ -336,36 +384,12 @@ export function DashboardHeader() {
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="hidden text-left sm:block">
-                  <p className="text-sm font-medium leading-none text-foreground">
-                    {isLoading ? "Loading..." : displayName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{planLabel}</p>
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
-              {userMenuItems}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Mobile Avatar with Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Avatar className="h-8 w-8 sm:hidden cursor-pointer">
-                <AvatarImage
-                  src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
-                  alt={displayName}
-                />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
-              {userMenuItems}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
+                {userMenuItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </header>
 
