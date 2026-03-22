@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import {
   Send, MessageSquareText, Sparkles, MessageSquare, Clock, ChevronRight,
   Copy, ThumbsUp, ThumbsDown, Mic, RefreshCw, BookOpen, FileQuestion,
-  Lightbulb, Info, LogIn
+  Lightbulb
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -51,8 +51,6 @@ export default function AITutorPage() {
   const [isTyping, setIsTyping] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showCreditsModal, setShowCreditsModal] = useState(false)
-  const [isGuest, setIsGuest] = useState(false)
-  const [guestUsed, setGuestUsed] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -60,19 +58,13 @@ export default function AITutorPage() {
   useEffect(() => {
     async function init() {
       try {
-        const res = await fetch("/api/user/profile")
-        if (res.status === 401) {
-          setIsGuest(true)
-        } else if (res.ok) {
-          setIsGuest(false)
-          const historyRes = await fetch("/api/user/chat-history")
-          if (historyRes.ok) {
-            const data = await historyRes.json()
-            setChatSessions(data.sessions || [])
-          }
+        const historyRes = await fetch("/api/user/chat-history")
+        if (historyRes.ok) {
+          const data = await historyRes.json()
+          setChatSessions(data.sessions || [])
         }
       } catch {
-        setIsGuest(true)
+        // non-fatal
       } finally {
         setIsLoadingHistory(false)
       }
@@ -110,8 +102,7 @@ export default function AITutorPage() {
 
       if (!res.ok) {
         if (data.code === "GUEST_LIMIT_REACHED" || data.requiresLogin) {
-          setGuestUsed(true)
-          setShowLoginModal(true)
+                    setShowLoginModal(true)
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id))
           setInput(sentInput)
           return
@@ -122,11 +113,6 @@ export default function AITutorPage() {
         }
         throw new Error(data.error || "Failed to get AI response")
       }
-
-      if (data.isGuest && data.guestQuestionsRemaining === 0) {
-        setGuestUsed(true)
-      }
-
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -154,199 +140,6 @@ export default function AITutorPage() {
 
   return (
     <>
-      {/* Guest notification banner */}
-      {isGuest && (
-        <div className="mx-3 md:mx-6 mt-3 md:mt-4 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-          <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <span className="text-foreground">
-              💡 Save your progress for a better learning experience.{" "}
-            </span>
-            <Link href="/register" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">
-              Register
-            </Link>
-            {" "}or{" "}
-            <Link href="/login" className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80">
-              Log in
-            </Link>
-            {" "}to unlock unlimited AI chats, quizzes, flashcards and more.
-          </div>
-          <Link href="/login">
-            <Button size="sm" variant="outline" className="shrink-0 gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground">
-              <LogIn className="h-3.5 w-3.5" />
-              Sign in
-            </Button>
-          </Link>
-        </div>
-      )}
-
-      {/* Guest used-up warning */}
-      {isGuest && guestUsed && (
-        <div className="mx-3 md:mx-6 mt-2 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
-          <Info className="h-4 w-4 text-amber-500 shrink-0" />
-          <span className="text-foreground">
-            You&apos;ve used your free AI Tutor question.{" "}
-            <Link href="/register" className="font-semibold text-amber-600 underline underline-offset-2">
-              Create a free account
-            </Link>{" "}
-            to continue learning.
-          </span>
-        </div>
-      )}
-
-      <div className="flex h-[calc(100vh-4rem)] gap-3 md:gap-4 p-3 md:p-6 overflow-hidden">
-
-        {/* Chat History Sidebar — hidden for guests */}
-        {!isGuest && (
-          <Card className="hidden lg:flex w-64 xl:w-72 flex-col border-border bg-card flex-shrink-0">
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground">Chat History</h2>
-              <Button size="sm" variant="ghost" className="text-primary" onClick={handleNewChat}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-            <ScrollArea className="flex-1">
-              <div className="p-2 space-y-1">
-                {isLoadingHistory ? (
-                  <div className="flex flex-col gap-2 p-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 rounded-lg bg-secondary animate-pulse" />
-                    ))}
-                  </div>
-                ) : chatSessions.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center px-4">
-                    <MessageSquare className="h-8 w-8 text-muted-foreground mb-2 opacity-50" />
-                    <p className="text-sm text-muted-foreground">No chat history yet.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Your conversations will appear here.</p>
-                  </div>
-                ) : (
-                  chatSessions.map((chat) => (
-                    <button
-                      key={chat.id}
-                      className="w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors"
-                    >
-                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{chat.title}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>{chat.time}</span>
-                          <span>•</span>
-                          <span>{chat.messages} messages</span>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-            <div className="p-4 border-t border-border">
-              <Button className="w-full gap-2" size="sm" onClick={handleNewChat}>
-                <Sparkles className="h-4 w-4" />
-                New Chat
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-card rounded-lg md:rounded-xl border border-border overflow-hidden min-w-0">
-          <div className="flex items-center gap-3 p-3 md:p-4 border-b border-border flex-shrink-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 flex-shrink-0">
-              <MessageSquareText className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="font-semibold text-foreground text-sm md:text-base">
-                AI Study Tutor
-                {isGuest && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-                    Guest Mode
-                  </span>
-                )}
-              </h1>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                <span className="text-xs text-muted-foreground">
-                  {isGuest ? "1 free question • Sign in for unlimited" : "Online • Powered by Gemini"}
-                </span>
-              </div>
-            </div>
-            {isGuest && (
-              <Link href="/login">
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs shrink-0">
-                  <LogIn className="h-3.5 w-3.5" />
-                  Sign in
-                </Button>
-              </Link>
-            )}
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 md:p-4 min-h-0">
-            <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn("flex gap-2 md:gap-3", message.role === "user" && "flex-row-reverse justify-end")}
-                >
-                  <div
-                    className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs md:text-sm font-medium",
-                      message.role === "assistant"
-                        ? "bg-primary/20 text-primary"
-                        : "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    {message.role === "assistant" ? <MessageSquareText className="h-4 w-4" /> : "You"}
-                  </div>
-                  <div
-                    className={cn(
-                      "flex-1 space-y-2 max-w-xs md:max-w-xl lg:max-w-2xl",
-                      message.role === "user" && "flex flex-col items-end"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 break-words",
-                        message.role === "assistant"
-                          ? "bg-secondary text-foreground"
-                          : "bg-primary text-primary-foreground"
-                      )}
-                    >
-                      <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">
-                        {message.content}
-                      </p>
-                    </div>
-                    {message.role === "assistant" && (
-                      <div className="flex items-center gap-1 md:gap-2 px-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => navigator.clipboard.writeText(message.content)}
-                        >
-                          <Copy className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground hover:text-foreground"
-                        >
-                          <ThumbsUp className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground hover:text-foreground"
-                        >
-                          <ThumbsDown className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
 
               {isTyping && (
                 <div className="flex gap-2 md:gap-3">
@@ -394,7 +187,6 @@ export default function AITutorPage() {
                 <div className="relative flex-1">
                   <Input
                     placeholder={
-                      isGuest && guestUsed
                         ? "Sign in to continue asking questions..."
                         : "Ask anything you want to learn..."
                     }
@@ -402,7 +194,7 @@ export default function AITutorPage() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                     className="pr-10 bg-secondary border-border text-sm"
-                    disabled={isTyping || (isGuest && guestUsed)}
+                    disabled={isTyping}
                   />
                   <Button
                     variant="ghost"
@@ -414,7 +206,7 @@ export default function AITutorPage() {
                 </div>
                 <Button
                   onClick={handleSend}
-                  disabled={!input.trim() || isTyping || (isGuest && guestUsed)}
+                  disabled={!input.trim() || isTyping}
                   size="sm"
                   className="shrink-0"
                 >
@@ -422,9 +214,7 @@ export default function AITutorPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground text-center mt-2">
-                {isGuest
-                  ? "Guest mode: 1 free question. Sign in for unlimited access."
-                  : "AI can make mistakes. Consider checking important information."}
+                "Ask any question to your AI tutor..."
               </p>
             </div>
           </div>
