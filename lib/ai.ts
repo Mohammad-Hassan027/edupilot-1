@@ -1,4 +1,4 @@
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`
 
 async function callGemini(prompt: string): Promise<string> {
   if (!process.env.GEMINI_API_KEY) {
