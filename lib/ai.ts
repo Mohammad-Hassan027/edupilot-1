@@ -1,137 +1,384 @@
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+const GEMINI_URL =
+`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
 
-async function callGemini(prompt: string): Promise<string> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set. Please add it to your environment variables.")
-  }
+const TIMEOUT = 20000
+const MAX_RETRIES = 2
 
-  const res = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
-    }),
-  })
+async function callGemini(
+prompt:string,
+retry=0
+):Promise<string>{
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err}`)
-  }
+if(!process.env.GEMINI_API_KEY){
 
-  const data = await res.json()
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) throw new Error("Empty response from Gemini")
-  return text
+throw new Error(
+"GEMINI_API_KEY missing"
+)
+
 }
 
-// ── AI Tutor / Chat ──────────────────────────────────────────────────────────
+try{
 
-export async function generateAIResponse(message: string): Promise<string> {
-  const prompt = `You are EduPilot, an intelligent AI tutor and study assistant.
-Help students learn effectively. Be clear, educational, and encouraging.
-Format your answers with clear sections when needed. Answer step-by-step when explaining concepts.
+const controller =
+new AbortController()
 
-Student question: ${message}
+const id = setTimeout(
+()=>controller.abort(),
+TIMEOUT
+)
+
+const res = await fetch(
+GEMINI_URL,
+{
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+signal:controller.signal,
+
+body:JSON.stringify({
+
+contents:[
+{
+parts:[
+{
+text:prompt
+}
+]
+}
+],
+
+generationConfig:{
+temperature:0.7,
+maxOutputTokens:1500,
+topP:0.9,
+topK:40
+}
+
+})
+}
+)
+
+clearTimeout(id)
+
+if(res.status===429){
+
+if(retry < MAX_RETRIES){
+
+await new Promise(
+r=>setTimeout(r,2000)
+)
+
+return callGemini(
+prompt,
+retry+1
+)
+
+}
+
+throw new Error(
+"Rate limit exceeded"
+)
+
+}
+
+if(!res.ok){
+
+const err =
+await res.text()
+
+console.error(
+"Gemini error:",
+err
+)
+
+throw new Error(
+`Gemini failed ${res.status}`
+)
+
+}
+
+const data =
+await res.json()
+
+const text =
+data?.candidates?.[0]
+?.content?.parts?.[0]
+?.text
+
+if(!text){
+
+throw new Error(
+"Empty Gemini response"
+)
+
+}
+
+return text
+
+}
+
+catch(error){
+
+console.error(
+"AI error:",
+error
+)
+
+if(retry < MAX_RETRIES){
+
+await new Promise(
+r=>setTimeout(r,1500)
+)
+
+return callGemini(
+prompt,
+retry+1
+)
+
+}
+
+return
+"AI is temporarily unavailable. Please try again."
+
+}
+
+}
+
+function cleanJSON(text:string){
+
+return text
+.replace(/```json/g,"")
+.replace(/```/g,"")
+.trim()
+
+}
+
+// ── AI Tutor ─────────────────────────────────
+
+export async function generateAIResponse(
+message:string
+):Promise<string>{
+
+const prompt =
+
+`You are EduPilot AI Tutor.
+
+ROLE:
+Expert teacher helping students understand concepts deeply.
+
+RULES:
+Explain step-by-step
+Use simple language
+Give examples
+Format clearly
+Encourage learning
+If coding → show examples
+If math → show steps
+If theory → summarize
+
+Student question:
+${message}
 
 Answer:`
-  return callGemini(prompt)
+
+return callGemini(prompt)
+
 }
 
-// ── Quiz ─────────────────────────────────────────────────────────────────────
+// ── QUIZ ─────────────────────────────────
 
-export interface QuizQuestion {
-  question: string
-  options: string[]
-  answer: string
-  explanation: string
+export interface QuizQuestion{
+
+question:string
+options:string[]
+answer:string
+explanation:string
+
 }
 
-export async function generateQuiz(topic: string, count = 5): Promise<QuizQuestion[]> {
-  const prompt = `Generate exactly ${count} multiple-choice quiz questions about: "${topic}"
+export async function generateQuiz(
+topic:string,
+count=5
+):Promise<QuizQuestion[]>{
 
-Return ONLY a valid JSON array. No markdown, no backticks, no explanation before or after:
+
+const prompt =
+
+`Generate ${count} MCQ quiz questions about:
+
+${topic}
+
+Return ONLY valid JSON:
+
 [
-  {
-    "question": "Question text here?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "answer": "Option A",
-    "explanation": "Brief explanation of why this answer is correct."
-  }
+{
+"question":"",
+"options":["","","",""],
+"answer":"",
+"explanation":""
+}
 ]
 
-Requirements:
-- Each question must have exactly 4 options
-- The "answer" value must be the EXACT text of one of the options
-- Questions must be accurate and educational
-- Vary difficulty levels`
+Rules:
 
-  const raw = await callGemini(prompt)
-  const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()
+4 options exactly
+Answer must match option
+Educational quality
+No markdown
+No explanation outside JSON`
 
-  try {
-    const parsed = JSON.parse(cleaned)
-    if (!Array.isArray(parsed)) throw new Error("Response is not an array")
-    return parsed.slice(0, count).map((q: QuizQuestion) => ({
-      question: String(q.question || "Question"),
-      options: Array.isArray(q.options) && q.options.length >= 2
-        ? q.options.slice(0, 4).map(String)
-        : ["True", "False", "Maybe", "None of the above"],
-      answer: String(q.answer || q.options?.[0] || ""),
-      explanation: String(q.explanation || ""),
-    }))
-  } catch {
-    throw new Error("AI returned invalid quiz format. Please try again.")
-  }
+const raw =
+await callGemini(prompt)
+
+try{
+
+const parsed =
+JSON.parse(
+cleanJSON(raw)
+)
+
+if(!Array.isArray(parsed))
+throw new Error()
+
+return parsed
+.slice(0,count)
+.map((q:any)=>({
+
+question:
+q.question || "Question",
+
+options:
+Array.isArray(q.options)
+? q.options.slice(0,4)
+: ["A","B","C","D"],
+
+answer:
+q.answer || "",
+
+explanation:
+q.explanation || ""
+
+}))
+
+}
+catch{
+
+throw new Error(
+"Quiz generation failed"
+)
+
 }
 
-// ── Flashcards ───────────────────────────────────────────────────────────────
-
-export interface Flashcard {
-  front: string
-  back: string
 }
 
-export async function generateFlashcards(topic: string, count = 5): Promise<Flashcard[]> {
-  const prompt = `Create exactly ${count} educational flashcards about: "${topic}"
+// ── FLASHCARDS ─────────────────────────────
 
-Return ONLY a valid JSON array. No markdown, no backticks, no explanation:
+export interface Flashcard{
+
+front:string
+back:string
+
+}
+
+export async function generateFlashcards(
+
+topic:string,
+count=5
+
+):Promise<Flashcard[]>{
+
+
+const prompt =
+
+`Create ${count} flashcards about:
+
+${topic}
+
+Return ONLY JSON:
+
 [
-  {
-    "front": "Question or key term",
-    "back": "Clear, concise answer or definition"
-  }
+{
+"front":"",
+"back":""
+}
 ]
 
-Requirements:
-- Cover the most important concepts
-- Keep fronts as questions or key terms
-- Keep backs as concise, memorable answers`
+Rules:
 
-  const raw = await callGemini(prompt)
-  const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()
+Important concepts
+Clear answers
+No markdown`
 
-  try {
-    const parsed = JSON.parse(cleaned)
-    if (!Array.isArray(parsed)) throw new Error("Response is not an array")
-    return parsed.slice(0, count).map((f: Flashcard) => ({
-      front: String(f.front || "Front"),
-      back: String(f.back || "Back"),
-    }))
-  } catch {
-    throw new Error("AI returned invalid flashcard format. Please try again.")
-  }
+const raw =
+await callGemini(prompt)
+
+try{
+
+const parsed =
+JSON.parse(
+cleanJSON(raw)
+)
+
+return parsed
+.slice(0,count)
+.map((f:any)=>({
+
+front:
+f.front || "Term",
+
+back:
+f.back || "Definition"
+
+}))
+
+}
+catch{
+
+throw new Error(
+"Flashcard generation failed"
+)
+
 }
 
-// ── Study Plan ───────────────────────────────────────────────────────────────
+}
 
-export async function generateStudyPlan(subject: string, duration: string, goal: string): Promise<string> {
-  const prompt = `Create a detailed, structured study plan:
-Subject: ${subject}
-Duration: ${duration}
-Goal: ${goal}
+// ── STUDY PLAN ─────────────────────────────
 
-Include: weekly schedule, key topics to cover, study methods, resources, milestones, and success tips.
-Format clearly with headings and bullet points.`
-  return callGemini(prompt)
+export async function generateStudyPlan(
+
+subject:string,
+duration:string,
+goal:string
+
+):Promise<string>{
+
+const prompt =
+
+`Create a study plan.
+
+Subject:
+${subject}
+
+Duration:
+${duration}
+
+Goal:
+${goal}
+
+Include:
+
+Weekly roadmap
+Topics
+Study methods
+Resources
+Milestones
+Tips
+
+Format clearly.`
+
+return callGemini(prompt)
+
 }
