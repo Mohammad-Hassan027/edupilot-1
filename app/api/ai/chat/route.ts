@@ -1,51 +1,35 @@
-import Groq from "groq-sdk";
+export const dynamic = "force-dynamic"
+import { NextRequest, NextResponse } from "next/server"
+import { getUser } from "@/lib/auth-server"
+import { generateAIResponse } from "@/lib/ai"
+import { logUsage } from "@/lib/database"
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { message } = await req.json();
+    const { message } = await req.json()
 
-    if (!message) {
-      return Response.json(
-        { error: "Message required" },
-        { status: 400 }
-      );
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 })
+    }
+    if (message.length > 2000) {
+      return NextResponse.json({ error: "Message too long (max 2000 characters)" }, { status: 400 })
     }
 
-    const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
+    // Call AI — no guest limits, no credit checks
+    const aiResponse = await generateAIResponse(message.trim())
 
-    const completion =
-      await groq.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are EduPilot AI Tutor. You help students understand topics step-by-step in simple language.",
-          },
-          {
-            role: "user",
-            content: message,
-          },
-        ],
-        model: "llama3-8b-8192",
-        temperature: 0.7,
-        max_tokens: 800,
-      });
+    // Log usage for analytics (non-blocking)
+    const user = await getUser()
+    if (user) {
+      logUsage(user.id, "ai_chat", "question_asked", {
+        messageLength: message.length,
+      }).catch(() => {})
+    }
 
-    const reply =
-      completion.choices[0]?.message?.content;
-
-    return Response.json({
-      reply,
-    });
-
-  } catch (error) {
-    console.error(error);
-
-    return Response.json(
-      { error: "AI failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, reply: aiResponse })
+  } catch (err) {
+    console.error("[ai/chat] Error:", err)
+    const msg = err instanceof Error ? err.message : "AI service unavailable"
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
