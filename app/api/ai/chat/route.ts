@@ -15,10 +15,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Message too long (max 2000 characters)" }, { status: 400 })
     }
 
-    // Call Gemini — no limits, works for both guests and logged-in users
+    // Call Gemini — no guest limits, no credit checks
     const aiResponse = await generateAIResponse(message.trim())
 
-    // Log usage for authenticated users only (non-fatal)
+    // Log for analytics only (non-blocking, non-fatal)
     const user = await getUser()
     if (user) {
       logUsage(user.id, "ai_chat", "question_asked", {
@@ -26,11 +26,7 @@ export async function POST(req: NextRequest) {
       }).catch(() => {})
     }
 
-    return NextResponse.json({
-      success: true,
-      reply:   aiResponse,
-      isGuest: !user,
-    })
+    return NextResponse.json({ success: true, reply: aiResponse })
   } catch (err) {
     console.error("[ai/chat] Error:", err)
     const msg = err instanceof Error ? err.message : "AI service unavailable"
