@@ -1,94 +1,51 @@
-// export const dynamic = "force-dynamic"
-// import { NextRequest, NextResponse } from "next/server"
-// import { getUser } from "@/lib/auth-server"
-// import { generateAIResponse } from "@/lib/ai"
-// import { logUsage } from "@/lib/database"
+import Groq from "groq-sdk";
 
-// export async function POST(req: NextRequest) {
-//   try {
-//     const { message } = await req.json()
+export async function POST(req: Request) {
+  try {
+    const { message } = await req.json();
 
-//     if (!message || typeof message !== "string" || message.trim().length === 0) {
-//       return NextResponse.json({ error: "Message is required" }, { status: 400 })
-//     }
-//     if (message.length > 2000) {
-//       return NextResponse.json({ error: "Message too long (max 2000 characters)" }, { status: 400 })
-//     }
+    if (!message) {
+      return Response.json(
+        { error: "Message required" },
+        { status: 400 }
+      );
+    }
 
-//     // Call Gemini — no guest limits, no credit checks
-//     const aiResponse = await generateAIResponse(message.trim())
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
 
-//     // Log for analytics only (non-blocking, non-fatal)
-//     const user = await getUser()
-//     if (user) {
-//       logUsage(user.id, "ai_chat", "question_asked", {
-//         messageLength: message.length,
-//       }).catch(() => {})
-//     }
+    const completion =
+      await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are EduPilot AI Tutor. You help students understand topics step-by-step in simple language.",
+          },
+          {
+            role: "user",
+            content: message,
+          },
+        ],
+        model: "llama3-8b-8192",
+        temperature: 0.7,
+        max_tokens: 800,
+      });
 
-//     return NextResponse.json({ success: true, reply: aiResponse })
-//   } catch (err) {
-//     console.error("[ai/chat] Error:", err)
-//     const msg = err instanceof Error ? err.message : "AI service unavailable"
-//     return NextResponse.json({ error: msg }, { status: 500 })
-//   }
-// }
-import { generateAIResponse }
-from "@/lib/ai";
+    const reply =
+      completion.choices[0]?.message?.content;
 
-export async function POST(
-req:Request
-){
+    return Response.json({
+      reply,
+    });
 
-try{
+  } catch (error) {
+    console.error(error);
 
-const body =
-await req.json();
-
-const message =
-body?.message;
-
-if(!message){
-
-return Response.json(
-
-{
-reply:"Message required"
-},
-
-{status:400}
-
-);
-
-}
-
-const reply =
-await generateAIResponse(
-message
-);
-
-return Response.json({
-
-reply
-
-});
-
-}
-catch(error){
-
-console.error(error);
-
-return Response.json(
-
-{
-reply:
-"AI failed. Try again."
-},
-
-{status:500}
-
-);
-
-}
-
+    return Response.json(
+      { error: "AI failed" },
+      { status: 500 }
+    );
+  }
 }

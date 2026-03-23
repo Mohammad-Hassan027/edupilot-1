@@ -1,204 +1,116 @@
-const GEMINI_URL =
-`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+import Groq from "groq-sdk";
 
-const TIMEOUT = 20000
-const MAX_RETRIES = 2
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
-async function callGemini(
-prompt:string,
-retry=0
-):Promise<string>{
+async function callAI(
+prompt: string,
+retry = 0
+): Promise<string> {
 
-if(!process.env.GEMINI_API_KEY){
+try {
 
-throw new Error("GEMINI_API_KEY missing")
+const completion =
+await groq.chat.completions.create({
 
-}
+messages: [
 
-try{
-
-const controller =
-new AbortController()
-
-const timeout =
-setTimeout(
-()=>controller.abort(),
-TIMEOUT
-)
-
-const res = await fetch(
-GEMINI_URL,
 {
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
+role: "system",
+content:
+"You are EduPilot AI Tutor. You help students understand topics step-by-step in simple language.",
 },
 
-signal:controller.signal,
-
-body:JSON.stringify({
-
-contents:[
 {
-parts:[
-{
-text:prompt
+role: "user",
+content: prompt,
 }
-]
-}
+
 ],
 
-generationConfig:{
-temperature:0.7,
-maxOutputTokens:1200,
-topP:0.9,
-topK:40
-}
+model: "llama3-8b-8192",
 
-})
+temperature: 0.7,
 
-}
-)
+max_tokens: 1200
 
-clearTimeout(timeout)
-
-if(res.status===429){
-
-if(retry < MAX_RETRIES){
-
-await new Promise(
-r=>setTimeout(r,2000)
-)
-
-return callGemini(
-prompt,
-retry+1
-)
-
-}
-
-throw new Error("Rate limited")
-
-}
-
-if(!res.ok){
-
-const err =
-await res.text()
-
-console.error(err)
-
-throw new Error(
-`Gemini failed ${res.status}`
-)
-
-}
-
-const data =
-await res.json()
+});
 
 const text =
-data?.candidates?.[0]
-?.content?.parts?.[0]
-?.text
+completion.choices[0]?.message?.content;
 
-if(!text){
+if (!text)
+return "No response generated";
 
-return "No response generated"
-
-}
-
-return text
+return text;
 
 }
-catch(error){
+catch (error) {
 
-console.error(error)
+console.error(error);
 
-if(retry < MAX_RETRIES){
+if (retry < 2) {
 
 await new Promise(
-r=>setTimeout(r,1500)
-)
+r => setTimeout(r, 1500)
+);
 
-return callGemini(
+return callAI(
 prompt,
-retry+1
-)
+retry + 1
+);
 
 }
 
-return "AI temporarily unavailable"
+return "AI temporarily unavailable.";
 
 }
 
 }
 
-function cleanJSON(text:string){
-
-return text
-.replace(/```json/g,"")
-.replace(/```/g,"")
-.trim()
-
-}
-
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 //// AI TUTOR
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 
 export async function generateAIResponse(
-message:string
-):Promise<string>{
+message: string
+): Promise<string> {
 
-const prompt =
-
-`You are EduPilot AI Tutor.
-
-Explain clearly.
-Be educational.
-Give examples.
-Answer step-by-step.
-
-Question:
+const prompt = `Explain clearly:
 
 ${message}
 
-Answer:`
+Give:
+• simple explanation
+• example
+• step explanation if needed`;
 
-return callGemini(prompt)
+return callAI(prompt);
 
 }
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 //// QUIZ
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 
-export interface QuizQuestion{
+export interface QuizQuestion {
 
-question:string
-options:string[]
-answer:string
-explanation:string
+question: string;
+options: string[];
+answer: string;
+explanation: string;
 
 }
 
 export async function generateQuiz(
+topic: string,
+count = 5
+): Promise<QuizQuestion[]> {
 
-topic:string,
-count=5
+const prompt = `Generate ${count} MCQ questions about ${topic}.
 
-):Promise<QuizQuestion[]>{
-
-const prompt =
-
-`Generate ${count} MCQ questions about:
-
-${topic}
-
-Return ONLY JSON:
+Return JSON only:
 
 [
 {
@@ -207,147 +119,117 @@ Return ONLY JSON:
 "answer":"",
 "explanation":""
 }
-]`
+]`;
 
 const raw =
-await callGemini(prompt)
+await callAI(prompt);
 
-try{
+try {
+
+const cleaned =
+raw
+.replace(/```json/g,"")
+.replace(/```/g,"")
+.trim();
 
 const parsed =
-JSON.parse(
-cleanJSON(raw)
-)
+JSON.parse(cleaned);
 
-return parsed
-.slice(0,count)
-.map((q:any)=>({
-
-question:
-q.question || "Question",
-
-options:
-Array.isArray(q.options)
-? q.options.slice(0,4)
-: ["A","B","C","D"],
-
-answer:
-q.answer || "",
-
-explanation:
-q.explanation || ""
-
-}))
+return parsed.slice(0,count);
 
 }
-catch{
+catch {
 
 throw new Error(
-"Quiz format invalid"
-)
+"Quiz generation failed"
+);
 
 }
 
 }
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 //// FLASHCARDS
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 
-export interface Flashcard{
+export interface Flashcard {
 
-front:string
-back:string
+front: string;
+back: string;
 
 }
 
 export async function generateFlashcards(
 
-topic:string,
-count=5
+topic: string,
+count = 5
 
-):Promise<Flashcard[]>{
+): Promise<Flashcard[]> {
 
-const prompt =
+const prompt = `Create ${count} flashcards about ${topic}.
 
-`Create ${count} flashcards about:
-
-${topic}
-
-Return ONLY JSON:
+Return JSON only:
 
 [
 {
 "front":"",
 "back":""
 }
-]`
+]`;
 
 const raw =
-await callGemini(prompt)
+await callAI(prompt);
 
-try{
+try {
+
+const cleaned =
+raw
+.replace(/```json/g,"")
+.replace(/```/g,"")
+.trim();
 
 const parsed =
-JSON.parse(
-cleanJSON(raw)
-)
+JSON.parse(cleaned);
 
-return parsed
-.slice(0,count)
-.map((f:any)=>({
-
-front:
-f.front || "Term",
-
-back:
-f.back || "Definition"
-
-}))
+return parsed.slice(0,count);
 
 }
-catch{
+catch {
 
 throw new Error(
-"Flashcard format invalid"
-)
+"Flashcard generation failed"
+);
 
 }
 
 }
 
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 //// STUDY PLAN
-//////////////////////////////////////////////////
+////////////////////////////////////////////////////
 
 export async function generateStudyPlan(
 
-subject:string,
-duration:string,
-goal:string
+subject: string,
+duration: string,
+goal: string
 
-):Promise<string>{
+): Promise<string> {
 
-const prompt =
+const prompt = `Create a study plan.
 
-`Create study plan.
+Subject: ${subject}
 
-Subject:
-${subject}
+Duration: ${duration}
 
-Duration:
-${duration}
-
-Goal:
-${goal}
+Goal: ${goal}
 
 Include:
+weekly topics
+study methods
+resources
+tips`;
 
-Topics
-Schedule
-Resources
-Tips`
-
-return callGemini(prompt)
+return callAI(prompt);
 
 }
