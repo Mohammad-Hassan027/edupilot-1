@@ -9,9 +9,11 @@ import {
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Logo } from "@/components/logo"
-import { getSupabaseBrowserClient } from "@/lib/supabase-client"
-import { useState, useEffect } from "react"
+import { useUser } from "@/hooks/use-user"
 
+// ─── Nav items ────────────────────────────────────────────────────────────────
+// guestOk: true  → always accessible (no lock)
+// guestOk: false → locked for guests, unlocked for logged-in users
 const navItems = [
   { icon: Home,              label: "Home",       href: "/",           external: true,  guestOk: true  },
   { icon: LayoutDashboard,   label: "Dashboard",  href: "/dashboard",                   guestOk: true  },
@@ -31,31 +33,20 @@ const bottomItems = [
 ]
 
 export function DashboardSidebar() {
-  const pathname    = usePathname()
-  const router      = useRouter()
-  // null = still loading, true = logged in, false = confirmed guest
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const pathname = usePathname()
+  const router   = useRouter()
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient()
+  // Use the SAME hook the header uses — this is proven to work correctly.
+  // isLoading=true  → still checking  → don't lock anything yet
+  // email != null   → logged in       → don't lock anything
+  // error = "not_authenticated" → confirmed guest → lock guestOk:false items
+  const { email, isLoading, error } = useUser()
 
-    // Read from local storage first — instant, no network
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session?.user)
-    })
-
-    // Also listen for auth state changes (login / logout events)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session?.user)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
+  // isGuest is only true when we have a CONFIRMED answer that the user is not logged in
+  const isGuest = !isLoading && (error === "not_authenticated" || !email)
 
   const handleNavClick = (item: typeof navItems[0], e: React.MouseEvent) => {
-    // Only block if we have CONFIRMED the user is a guest (isLoggedIn === false)
-    // null means still loading — let them through
-    if (!item.guestOk && isLoggedIn === false) {
+    if (!item.guestOk && isGuest) {
       e.preventDefault()
       router.push("/login")
     }
@@ -63,8 +54,8 @@ export function DashboardSidebar() {
 
   const renderItem = (item: typeof navItems[0]) => {
     const isActive = pathname === item.href
-    // Show lock ONLY when confirmed guest (false), NOT when loading (null)
-    const isLocked = !item.guestOk && isLoggedIn === false
+    // Lock only when confirmed guest — never while loading
+    const isLocked = !item.guestOk && isGuest
     const Icon     = item.icon
 
     return (
