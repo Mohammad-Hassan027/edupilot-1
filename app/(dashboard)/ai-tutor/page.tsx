@@ -12,18 +12,19 @@ import {
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
+import { MarkdownRenderer } from "@/components/markdown-renderer"
 
 interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
+  id:        string
+  role:      "user" | "assistant"
+  content:   string
   timestamp: Date
 }
 
 interface ChatSession {
-  id: string
-  title: string
-  time: string
+  id:       string
+  title:    string
+  time:     string
   messages: number
 }
 
@@ -36,20 +37,20 @@ const examplePrompts = [
 
 const initialMessages: Message[] = [
   {
-    id: "1",
-    role: "assistant",
-    content: "Hello! I'm your EduPilot AI Tutor. I can help you understand complex topics, create quizzes, explain concepts, and much more. What would you like to learn today?",
+    id:        "1",
+    role:      "assistant",
+    content:   "Hello! I'm your **EduPilot AI Tutor**. I can help you understand complex topics, create quizzes, explain concepts, and much more.\n\nWhat would you like to learn today?",
     timestamp: new Date(),
   },
 ]
 
 export default function AITutorPage() {
-  const [messages, setMessages]           = useState<Message[]>(initialMessages)
-  const [input, setInput]                 = useState("")
-  const [isTyping, setIsTyping]           = useState(false)
+  const [messages, setMessages]         = useState<Message[]>(initialMessages)
+  const [input, setInput]               = useState("")
+  const [isTyping, setIsTyping]         = useState(false)
   const [showLoginModal, setShowLoginModal]     = useState(false)
   const [showCreditsModal, setShowCreditsModal] = useState(false)
-  const [chatSessions, setChatSessions]   = useState<ChatSession[]>([])
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -81,25 +82,16 @@ export default function AITutorPage() {
     setIsTyping(true)
 
     try {
-      const res = await fetch("/api/ai/chat", {
+      const res  = await fetch("/api/ai/chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ message: sentInput }),
       })
-
       const data = await res.json()
 
       if (!res.ok) {
-        if (data.requiresLogin) {
-          setShowLoginModal(true)
-          setMessages(prev => prev.filter(m => m.id !== userMessage.id))
-          setInput(sentInput)
-          return
-        }
-        if (data.requiresUpgrade) {
-          setShowCreditsModal(true)
-          return
-        }
+        if (data.requiresLogin)   { setShowLoginModal(true);   setMessages(p => p.filter(m => m.id !== userMessage.id)); setInput(sentInput); return }
+        if (data.requiresUpgrade) { setShowCreditsModal(true); return }
         throw new Error(data.error || "Failed to get AI response")
       }
 
@@ -121,10 +113,7 @@ export default function AITutorPage() {
     }
   }
 
-  const handleNewChat = () => {
-    setMessages(initialMessages)
-    setInput("")
-  }
+  const handleNewChat = () => { setMessages(initialMessages); setInput("") }
 
   return (
     <>
@@ -201,25 +190,42 @@ export default function AITutorPage() {
             <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
               {messages.map(message => (
                 <div key={message.id} className={cn("flex gap-2 md:gap-3", message.role === "user" && "flex-row-reverse justify-end")}>
+
+                  {/* Avatar */}
                   <div className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs md:text-sm font-medium",
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-medium",
                     message.role === "assistant" ? "bg-primary/20 text-primary" : "bg-primary text-primary-foreground"
                   )}>
                     {message.role === "assistant" ? <MessageSquareText className="h-4 w-4" /> : "You"}
                   </div>
+
+                  {/* Bubble */}
                   <div className={cn(
                     "flex-1 space-y-2 max-w-xs md:max-w-xl lg:max-w-2xl",
                     message.role === "user" && "flex flex-col items-end"
                   )}>
                     <div className={cn(
                       "rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 break-words",
-                      message.role === "assistant" ? "bg-secondary text-foreground" : "bg-primary text-primary-foreground"
+                      message.role === "assistant"
+                        ? "bg-secondary text-foreground"
+                        : "bg-primary text-primary-foreground"
                     )}>
-                      <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        // ── Rendered markdown for AI responses ──────────────
+                        <MarkdownRenderer content={message.content} />
+                      ) : (
+                        // ── Plain text for user messages ─────────────────────
+                        <p className="text-sm md:text-base leading-relaxed">
+                          {message.content}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Action buttons */}
                     {message.role === "assistant" && (
                       <div className="flex items-center gap-1 md:gap-2 px-2">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        <Button variant="ghost" size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           onClick={() => navigator.clipboard.writeText(message.content)}>
                           <Copy className="h-3.5 w-3.5" />
                         </Button>
@@ -235,16 +241,17 @@ export default function AITutorPage() {
                 </div>
               ))}
 
+              {/* Typing indicator */}
               {isTyping && (
                 <div className="flex gap-2 md:gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
                     <MessageSquareText className="h-4 w-4 text-primary" />
                   </div>
-                  <div className="rounded-lg md:rounded-xl bg-secondary px-3 md:px-4 py-2 md:py-3">
-                    <div className="flex gap-1">
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <div className="rounded-lg md:rounded-xl bg-secondary px-4 py-3">
+                    <div className="flex gap-1 items-center h-4">
+                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
                   </div>
                 </div>
@@ -271,7 +278,7 @@ export default function AITutorPage() {
             </div>
           )}
 
-          {/* Input area */}
+          {/* Input */}
           <div className="p-3 md:p-4 border-t border-border flex-shrink-0">
             <div className="max-w-4xl mx-auto">
               <div className="relative flex items-center gap-2">
