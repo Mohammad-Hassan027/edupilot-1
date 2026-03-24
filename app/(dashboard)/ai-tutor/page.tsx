@@ -728,6 +728,7 @@ import {
   Clock,
   ChevronRight,
   Copy,
+  Check,
   ThumbsUp,
   ThumbsDown,
   Mic,
@@ -735,17 +736,27 @@ import {
   BookOpen,
   FileQuestion,
   Lightbulb,
+  X,
+  ExternalLink,
+  PanelRightOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 
+interface ResourceLink {
+  title: string
+  url: string
+  source: string
+}
+
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
+  sources?: ResourceLink[]
 }
 
 interface ChatSession {
@@ -754,6 +765,8 @@ interface ChatSession {
   time: string
   messages: number
 }
+
+type FeedbackType = "like" | "dislike" | null
 
 const examplePrompts = [
   { icon: BookOpen, label: "Explain a concept", prompt: "Explain the concept of REST APIs in simple terms" },
@@ -769,6 +782,7 @@ const initialMessages: Message[] = [
     content:
       "Hello! I'm your **EduPilot AI Tutor**. I can help you understand complex topics, create quizzes, explain concepts, and much more.\n\nWhat would you like to learn today?",
     timestamp: new Date(),
+    sources: [],
   },
 ]
 
@@ -785,6 +799,17 @@ function AITutorContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [isOpeningSession, setIsOpeningSession] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, FeedbackType>>({})
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null)
+  const [feedbackText, setFeedbackText] = useState("")
+
+  const [showSourcesSidebar, setShowSourcesSidebar] = useState(false)
+  const [activeSources, setActiveSources] = useState<ResourceLink[]>([])
+  const [activeSourceTitle, setActiveSourceTitle] = useState("Sources")
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const loadChatHistory = useCallback(async () => {
@@ -814,6 +839,7 @@ function AITutorContent() {
         role: m.role,
         content: m.content,
         timestamp: new Date(m.timestamp),
+        sources: m.sources || [],
       }))
 
       if (loadedMessages.length > 0) {
@@ -883,6 +909,7 @@ function AITutorContent() {
           id: (Date.now() + 1).toString(),
           role: "assistant",
           content: data.reply,
+          sources: data.sources || [],
           timestamp: new Date(),
         },
       ])
@@ -898,6 +925,7 @@ function AITutorContent() {
             err instanceof Error
               ? err.message
               : "Something went wrong. Please try again.",
+          sources: [],
           timestamp: new Date(),
         },
       ])
@@ -910,6 +938,52 @@ function AITutorContent() {
     setActiveSessionId(null)
     setMessages(initialMessages)
     setInput("")
+    setShowSourcesSidebar(false)
+    setActiveSources([])
+  }
+
+  const handleCopy = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedMessageId(messageId)
+      setTimeout(() => setCopiedMessageId(null), 1800)
+    } catch (error) {
+      console.error("Copy failed:", error)
+    }
+  }
+
+  const handleLike = (messageId: string) => {
+    setMessageFeedback((prev) => ({
+      ...prev,
+      [messageId]: "like",
+    }))
+  }
+
+  const handleDislike = (messageId: string) => {
+    setMessageFeedback((prev) => ({
+      ...prev,
+      [messageId]: "dislike",
+    }))
+    setFeedbackMessageId(messageId)
+    setShowFeedbackModal(true)
+  }
+
+  const handleOpenSources = (message: Message) => {
+    setActiveSources(message.sources || [])
+    setActiveSourceTitle("Sources")
+    setShowSourcesSidebar(true)
+  }
+
+  const submitFeedback = () => {
+    console.log("Feedback submitted", {
+      messageId: feedbackMessageId,
+      feedback: feedbackText,
+      type: "dislike",
+    })
+
+    setFeedbackText("")
+    setFeedbackMessageId(null)
+    setShowFeedbackModal(false)
   }
 
   return (
@@ -973,99 +1047,210 @@ function AITutorContent() {
         </Card>
 
         <div className="flex-1 flex flex-col bg-card rounded-lg md:rounded-xl border border-border overflow-hidden min-w-0">
-          <div className="flex items-center gap-3 p-3 md:p-4 border-b border-border flex-shrink-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 flex-shrink-0">
-              <MessageSquareText className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="font-semibold text-foreground text-sm md:text-base">AI Study Tutor</h1>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                <span className="text-xs text-muted-foreground">
-                  {isOpeningSession ? "Opening chat..." : "Online • Ready to help"}
-                </span>
+          <div className="flex items-center justify-between gap-3 p-3 md:p-4 border-b border-border flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 flex-shrink-0">
+                <MessageSquareText className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="font-semibold text-foreground text-sm md:text-base">AI Study Tutor</h1>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground">
+                    {isOpeningSession ? "Opening chat..." : "Online • Ready to help"}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {showSourcesSidebar && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSourcesSidebar(false)}
+                className="gap-2"
+              >
+                <PanelRightOpen className="h-4 w-4" />
+                Hide Sources
+              </Button>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 md:p-4 min-h-0">
-            <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn("flex gap-2 md:gap-3", message.role === "user" && "flex-row-reverse justify-end")}
-                >
-                  <div
-                    className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-medium",
-                      message.role === "assistant"
-                        ? "bg-primary/20 text-primary"
-                        : "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    {message.role === "assistant" ? <MessageSquareText className="h-4 w-4" /> : "You"}
-                  </div>
+          <div className="flex flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto p-3 md:p-4 min-h-0">
+              <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
+                {messages.map((message) => {
+                  const feedback = messageFeedback[message.id]
+                  const hasSources = message.role === "assistant" && (message.sources?.length || 0) > 0
 
-                  <div
-                    className={cn(
-                      "flex-1 space-y-2 max-w-xs md:max-w-xl lg:max-w-2xl",
-                      message.role === "user" && "flex flex-col items-end"
-                    )}
-                  >
+                  return (
                     <div
-                      className={cn(
-                        "rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 break-words",
-                        message.role === "assistant"
-                          ? "bg-secondary text-foreground"
-                          : "bg-primary text-primary-foreground"
-                      )}
+                      key={message.id}
+                      className={cn("flex gap-2 md:gap-3", message.role === "user" && "flex-row-reverse justify-end")}
                     >
-                      {message.role === "assistant" ? (
-                        <MarkdownRenderer content={message.content} />
-                      ) : (
-                        <p className="text-sm md:text-base leading-relaxed">{message.content}</p>
-                      )}
-                    </div>
-
-                    {message.role === "assistant" && (
-                      <div className="flex items-center gap-1 md:gap-2 px-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => navigator.clipboard.writeText(message.content)}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                          <ThumbsUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                          <ThumbsDown className="h-3.5 w-3.5" />
-                        </Button>
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-medium",
+                          message.role === "assistant"
+                            ? "bg-primary/20 text-primary"
+                            : "bg-primary text-primary-foreground"
+                        )}
+                      >
+                        {message.role === "assistant" ? <MessageSquareText className="h-4 w-4" /> : "You"}
                       </div>
+
+                      <div
+                        className={cn(
+                          "flex-1 space-y-2 max-w-xs md:max-w-xl lg:max-w-2xl",
+                          message.role === "user" && "flex flex-col items-end"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "rounded-lg md:rounded-xl px-3 md:px-4 py-2 md:py-3 break-words",
+                            message.role === "assistant"
+                              ? "bg-secondary text-foreground"
+                              : "bg-primary text-primary-foreground"
+                          )}
+                        >
+                          {message.role === "assistant" ? (
+                            <MarkdownRenderer content={message.content} />
+                          ) : (
+                            <p className="text-sm md:text-base leading-relaxed">{message.content}</p>
+                          )}
+                        </div>
+
+                        {hasSources && (
+                          <div className="px-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() => handleOpenSources(message)}
+                            >
+                              Sources
+                            </Button>
+                          </div>
+                        )}
+
+                        {message.role === "assistant" && (
+                          <div className="flex items-center gap-1 md:gap-2 px-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-7 w-7",
+                                copiedMessageId === message.id
+                                  ? "text-emerald-400"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                              onClick={() => handleCopy(message.id, message.content)}
+                              title={copiedMessageId === message.id ? "Done" : "Copy"}
+                            >
+                              {copiedMessageId === message.id ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-7 w-7",
+                                feedback === "like"
+                                  ? "text-emerald-400"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                              onClick={() => handleLike(message.id)}
+                            >
+                              <ThumbsUp className="h-3.5 w-3.5" />
+                            </Button>
+
+                            {feedback !== "like" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-7 w-7",
+                                  feedback === "dislike"
+                                    ? "text-red-400"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={() => handleDislike(message.id)}
+                              >
+                                <ThumbsDown className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {isTyping && (
+                  <div className="flex gap-2 md:gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
+                      <MessageSquareText className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="rounded-lg md:rounded-xl bg-secondary px-4 py-3">
+                      <div className="flex gap-1 items-center h-4">
+                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {showSourcesSidebar && (
+              <aside className="hidden xl:flex w-[340px] border-l border-border bg-card/80 backdrop-blur-sm flex-col">
+                <div className="flex items-center justify-between p-4 border-b border-border">
+                  <h3 className="font-semibold text-foreground">{activeSourceTitle}</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setShowSourcesSidebar(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-3">
+                    {activeSources.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No references available.</p>
+                    ) : (
+                      activeSources.map((link, index) => (
+                        <a
+                          key={`${link.url}-${index}`}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded-xl border border-border bg-secondary/40 p-3 hover:bg-secondary transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground break-words">{link.title}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{link.source}</p>
+                            </div>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          </div>
+                        </a>
+                      ))
                     )}
                   </div>
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="flex gap-2 md:gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20">
-                    <MessageSquareText className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="rounded-lg md:rounded-xl bg-secondary px-4 py-3">
-                    <div className="flex gap-1 items-center h-4">
-                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+                </ScrollArea>
+              </aside>
+            )}
           </div>
 
           {messages.length <= 1 && (
@@ -1119,6 +1304,67 @@ function AITutorContent() {
           </div>
         </div>
       </div>
+
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-2xl font-semibold text-foreground">Share feedback</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-xl"
+                onClick={() => setShowFeedbackModal(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <p className="text-sm text-muted-foreground">
+                Share your feedback so we can improve the response.
+              </p>
+
+              <div className="flex flex-wrap gap-3">
+                {[
+                  "Incorrect or incomplete",
+                  "Not what I asked for",
+                  "Slow or buggy",
+                  "Style or tone",
+                  "Safety or legal concern",
+                  "Other",
+                ].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setFeedbackText((prev) => (prev ? `${prev}\n${tag}` : tag))
+                    }
+                    className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="Share details (optional)"
+                className="w-full min-h-[120px] rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary resize-none"
+              />
+
+              <div className="rounded-xl bg-secondary/70 px-4 py-3 text-sm text-muted-foreground">
+                Your conversation will be included with your feedback to help improve the response.
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={submitFeedback}>Submit</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="AI Tutor" />
       <CreditsExhaustedModal open={showCreditsModal} onOpenChange={setShowCreditsModal} feature="AI chat" />

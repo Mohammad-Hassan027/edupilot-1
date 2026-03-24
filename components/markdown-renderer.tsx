@@ -5,10 +5,39 @@ import { cn } from "@/lib/utils"
 // Renders AI markdown responses beautifully without any external dependencies.
 // Handles: ## headings, **bold**, `code`, ```code blocks```, - bullet lists,
 // numbered lists, > blockquotes, --- horizontal rules, and plain paragraphs.
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+
+interface MarkdownRendererProps {
+  content: string
+}
 
 interface Props {
   content: string
   className?: string
+}
+export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+  return (
+    <div className="prose prose-invert max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline underline-offset-4 break-all hover:opacity-80"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
 }
 
 export function MarkdownRenderer({ content, className }: Props) {
