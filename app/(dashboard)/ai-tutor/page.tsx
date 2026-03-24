@@ -714,15 +714,27 @@
 // }
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { Suspense, useState, useRef, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card } from "@/components/ui/card"
 import {
-  Send, MessageSquareText, Sparkles, MessageSquare, Clock, ChevronRight,
-  Copy, ThumbsUp, ThumbsDown, Mic, RefreshCw, BookOpen, FileQuestion, Lightbulb
+  Send,
+  MessageSquareText,
+  Sparkles,
+  MessageSquare,
+  Clock,
+  ChevronRight,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  Mic,
+  RefreshCw,
+  BookOpen,
+  FileQuestion,
+  Lightbulb,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -760,7 +772,7 @@ const initialMessages: Message[] = [
   },
 ]
 
-export default function AITutorPage() {
+function AITutorContent() {
   const searchParams = useSearchParams()
   const targetSessionId = searchParams.get("session")
 
@@ -858,18 +870,6 @@ export default function AITutorPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        if (data.requiresLogin) {
-          setShowLoginModal(true)
-          setMessages((p) => p.filter((m) => m.id !== userMessage.id))
-          setInput(sentInput)
-          return
-        }
-
-        if (data.requiresUpgrade) {
-          setShowCreditsModal(true)
-          return
-        }
-
         throw new Error(data.error || "Failed to get AI response")
       }
 
@@ -1123,5 +1123,19 @@ export default function AITutorPage() {
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="AI Tutor" />
       <CreditsExhaustedModal open={showCreditsModal} onOpenChange={setShowCreditsModal} feature="AI chat" />
     </>
+  )
+}
+
+export default function AITutorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center p-6 text-sm text-muted-foreground">
+          Loading AI Tutor...
+        </div>
+      }
+    >
+      <AITutorContent />
+    </Suspense>
   )
 }
