@@ -109,6 +109,12 @@ const modeLabels: Record<ToolMode, string> = {
   image_generation: "Image generation",
 }
 
+const chatSuggestions = [
+  "Explain this topic in simple terms with examples",
+  "Summarize this concept in short bullet points",
+  "Create 5 quiz questions from this topic",
+]
+
 const webSearchSuggestions = [
   "Find the latest updates on AI in education and summarize them simply",
   "Search the web for the best free resources to learn React in 2026",
@@ -287,6 +293,12 @@ function AITutorContent() {
     if (mode === "file_upload") {
       setActiveHint("file_upload")
       openFilePicker()
+      return
+    }
+
+    if (mode === "chat") {
+      setActiveHint(null)
+      setActiveMode("chat")
       return
     }
 
@@ -595,8 +607,10 @@ function AITutorContent() {
                       >
                         <div
                           className={cn(
-                            "rounded-lg px-3 py-2 break-words md:rounded-xl md:px-4 md:py-3",
-                            message.role === "assistant" ? "bg-secondary text-foreground" : "bg-primary text-primary-foreground"
+                            "break-words rounded-lg px-3 py-2 md:rounded-xl md:px-4 md:py-3",
+                            message.role === "assistant"
+                              ? "border border-white/5 bg-gradient-to-br from-secondary via-secondary to-secondary/80 text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
+                              : "bg-primary text-primary-foreground"
                           )}
                         >
                           {message.role === "assistant" ? (
@@ -802,8 +816,29 @@ function AITutorContent() {
 
           <div className="flex-shrink-0 border-t border-border p-3 md:p-4">
             <div className="mx-auto max-w-4xl space-y-3">
-              {(activeHint === "web_search" || activeHint === "file_upload" || selectedFiles.length > 0) && (
+              {(activeMode === "chat" || activeHint === "web_search" || activeHint === "file_upload" || selectedFiles.length > 0) && (
                 <div className="rounded-2xl border border-border bg-secondary/40 p-3">
+                  {activeMode === "chat" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <MessageSquare className="h-4 w-4 text-primary" />
+                        Chat prompts
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {chatSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => setInput(suggestion)}
+                            className="rounded-full border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-secondary"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {activeHint === "web_search" && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -887,7 +922,11 @@ function AITutorContent() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuContent align="start" className="w-60">
+                      <DropdownMenuItem onClick={() => handleToolSelect("chat")} className="gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Chat
+                      </DropdownMenuItem>
                       <DropdownMenuItem disabled className="gap-2 opacity-60">
                         <ImageIcon className="h-4 w-4" />
                         <div className="flex items-center gap-2">
