@@ -127,10 +127,10 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
       <aside
         className={cn(
           "fixed left-0 top-0 z-40 h-screen border-r border-border bg-card/50 backdrop-blur-xl transition-all duration-300 hidden md:flex flex-col",
-          collapsed ? "w-[88px]" : "w-64"
+          collapsed ? "w-[92px]" : "w-64"
         )}
       >
-      <div className="flex h-20 items-center border-b border-border px-4 overflow-hidden">
+      {/* <div className="flex h-20 items-center border-b border-border px-4 overflow-hidden">
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <Logo
             size="sm"
@@ -155,6 +155,47 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
             <PanelLeftClose className="h-4 w-4" />
           )}
         </Button>
+      </div> */}
+      <div className="h-20 border-b border-border">
+        {collapsed ? (
+          <div className="flex h-full items-center justify-center relative">
+            <Logo
+              size="sm"
+              showText={false}
+              href="/dashboard"
+              className="!gap-0"
+            />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggle}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0 text-foreground hover:bg-secondary"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-between px-4 overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <Logo
+                size="sm"
+                showText={true}
+                href="/dashboard"
+                className="shrink-0"
+              />
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggle}
+              className="ml-2 shrink-0 text-foreground hover:bg-secondary"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
