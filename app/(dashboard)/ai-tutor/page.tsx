@@ -82,6 +82,7 @@ interface ChatSession {
 
 type FeedbackType = "like" | "dislike" | null
 type ToolMode = "chat" | "web_search" | "image_generation"
+type ToolHint = "file_upload" | "web_search" | null
 
 const examplePrompts = [
   { icon: BookOpen, label: "Explain a concept", prompt: "Explain the concept of REST APIs in simple terms" },
@@ -95,7 +96,7 @@ const initialMessages: Message[] = [
     id: "1",
     role: "assistant",
     content:
-      "Hello! I'm your **EduPilot AI Tutor**. I can help you understand complex topics, create quizzes, explain concepts, search the web, and generate media.\n\nWhat would you like to learn today?",
+      "Hello! I'm your **EduPilot AI Tutor**. I can help you understand complex topics, create quizzes, explain concepts, search the web, and review uploaded files.\n\nWhat would you like to learn today?",
     timestamp: new Date(),
     sources: [],
     mode: "chat",
@@ -107,6 +108,17 @@ const modeLabels: Record<ToolMode, string> = {
   web_search: "Web search",
   image_generation: "Image generation",
 }
+
+const webSearchSuggestions = [
+  "Find the latest updates on AI in education and summarize them simply",
+  "Search the web for the best free resources to learn React in 2026",
+  "Compare Next.js and React based on recent web sources",
+]
+
+const fileUploadSuggestions = [
+  "Upload PDF, TXT, MD, CSV, JSON, code files, images, or ZIP files.",
+  "After uploading, ask: Summarize this file, explain this code, or create quiz questions from it.",
+]
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -128,6 +140,7 @@ function AITutorContent() {
   const [isOpeningSession, setIsOpeningSession] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [activeMode, setActiveMode] = useState<ToolMode>("chat")
+  const [activeHint, setActiveHint] = useState<ToolHint>(null)
   const [selectedFiles, setSelectedFiles] = useState<UploadedFile[]>([])
   const [isUploadingFiles, setIsUploadingFiles] = useState(false)
 
@@ -272,8 +285,15 @@ function AITutorContent() {
 
   const handleToolSelect = (mode: ToolMode | "file_upload") => {
     if (mode === "file_upload") {
+      setActiveHint("file_upload")
       openFilePicker()
       return
+    }
+
+    if (mode === "web_search") {
+      setActiveHint("web_search")
+    } else {
+      setActiveHint(null)
     }
 
     setActiveMode(mode)
@@ -392,6 +412,7 @@ function AITutorContent() {
     setInput("")
     setSelectedFiles([])
     setActiveMode("chat")
+    setActiveHint(null)
     setShowSourcesSidebar(false)
     setActiveSources([])
   }
@@ -781,6 +802,45 @@ function AITutorContent() {
 
           <div className="flex-shrink-0 border-t border-border p-3 md:p-4">
             <div className="mx-auto max-w-4xl space-y-3">
+              {(activeHint === "web_search" || activeHint === "file_upload" || selectedFiles.length > 0) && (
+                <div className="rounded-2xl border border-border bg-secondary/40 p-3">
+                  {activeHint === "web_search" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Globe className="h-4 w-4 text-primary" />
+                        Web Search demo prompts
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {webSearchSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => setInput(suggestion)}
+                            className="rounded-full border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-secondary"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(activeHint === "file_upload" || selectedFiles.length > 0) && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Paperclip className="h-4 w-4 text-primary" />
+                        File Upload guide
+                      </div>
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        {fileUploadSuggestions.map((item) => (
+                          <p key={item}>{item}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {selectedFiles.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selectedFiles.map((file, index) => (
@@ -804,7 +864,7 @@ function AITutorContent() {
                   <Input
                     placeholder={
                       activeMode === "image_generation"
-                        ? "Describe the image you want to create..."
+                        ? "Image generation is coming soon..."
                         : activeMode === "web_search"
                             ? "Search the web and ask EduPilot to explain..."
                             : "Ask anything you want to learn..."
@@ -828,9 +888,12 @@ function AITutorContent() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-56">
-                      <DropdownMenuItem onClick={() => handleToolSelect("image_generation")} className="gap-2">
+                      <DropdownMenuItem disabled className="gap-2 opacity-60">
                         <ImageIcon className="h-4 w-4" />
-                        Image generation
+                        <div className="flex items-center gap-2">
+                          <span>Image generation</span>
+                          <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px]">Coming Soon</Badge>
+                        </div>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToolSelect("file_upload")} className="gap-2">
                         <Paperclip className="h-4 w-4" />
@@ -867,7 +930,13 @@ function AITutorContent() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Mode: {modeLabels[activeMode]}</Badge>
                   {activeMode !== "chat" && (
-                    <button className="hover:text-foreground" onClick={() => setActiveMode("chat")}>
+                    <button
+                      className="hover:text-foreground"
+                      onClick={() => {
+                        setActiveMode("chat")
+                        setActiveHint(null)
+                      }}
+                    >
                       Reset to chat
                     </button>
                   )}
