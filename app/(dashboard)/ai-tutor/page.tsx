@@ -132,6 +132,14 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function getAudioExtension(mimeType: string) {
+  if (mimeType.includes("webm")) return "webm"
+  if (mimeType.includes("ogg")) return "ogg"
+  if (mimeType.includes("mp4") || mimeType.includes("mpeg") || mimeType.includes("mpga")) return "mp3"
+  if (mimeType.includes("wav")) return "wav"
+  return "webm"
+}
+
 function AITutorContent() {
   const searchParams = useSearchParams()
   const targetSessionId = searchParams.get("session")
@@ -149,6 +157,8 @@ function AITutorContent() {
   const [activeHint, setActiveHint] = useState<ToolHint>(null)
   const [selectedFiles, setSelectedFiles] = useState<UploadedFile[]>([])
   const [isUploadingFiles, setIsUploadingFiles] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [messageFeedback, setMessageFeedback] = useState<Record<string, FeedbackType>>({})
@@ -162,6 +172,9 @@ function AITutorContent() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -223,6 +236,15 @@ function AITutorContent() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current = null
+      audioChunksRef.current = []
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+      mediaStreamRef.current = null
+    }
+  }, [])
 
   const openFilePicker = () => {
     fileInputRef.current?.click()
@@ -324,8 +346,116 @@ function AITutorContent() {
     ])
   }
 
+  const releaseAudioResources = () => {
+    mediaRecorderRef.current = null
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+    mediaStreamRef.current = null
+  }
+
+  const stopVoiceRecording = () => {
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop()
+    }
+  }
+
+  const startVoiceRecording = async () => {
+    if (typeof window === "undefined") return
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      pushAssistantError("Voice recording is not supported in this browser.")
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const supportedMimeTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]
+      const mimeType = supportedMimeTypes.find((type) => MediaRecorder.isTypeSupported(type))
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+
+      mediaStreamRef.current = stream
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = () => {
+        setIsRecording(false)
+        releaseAudioResources()
+        pushAssistantError("Voice recording failed. Please try again.")
+      }
+
+      recorder.onstop = async () => {
+        const recordedMimeType = recorder.mimeType || "audio/webm"
+        const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType })
+        audioChunksRef.current = []
+        setIsRecording(false)
+        releaseAudioResources()
+
+        if (!audioBlob.size) {
+          pushAssistantError("No voice was captured. Please try again.")
+          return
+        }
+
+        setIsTranscribing(true)
+
+        try {
+          const formData = new FormData()
+          const extension = getAudioExtension(recordedMimeType)
+          formData.append("file", new File([audioBlob], `edupilot-voice.${extension}`, { type: recordedMimeType }))
+
+          const response = await fetch("/api/ai/transcribe", {
+            method: "POST",
+            body: formData,
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            throw new Error(data.error || "Failed to transcribe voice")
+          }
+
+          const transcript = typeof data.text === "string" ? data.text.trim() : ""
+
+          if (!transcript) {
+            throw new Error("No speech was detected. Please try again.")
+          }
+
+          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
+        } catch (error) {
+          pushAssistantError(error instanceof Error ? error.message : "Voice transcription failed. Please try again.")
+        } finally {
+          setIsTranscribing(false)
+        }
+      }
+
+      recorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      releaseAudioResources()
+      setIsRecording(false)
+      const message = error instanceof Error ? error.message : "Microphone permission was denied."
+      pushAssistantError(message.includes("denied") ? "Microphone permission was denied." : message)
+    }
+  }
+
+  const handleMicClick = async () => {
+    if (isTyping || isUploadingFiles || isTranscribing) return
+
+    if (isRecording) {
+      stopVoiceRecording()
+      return
+    }
+
+    await startVoiceRecording()
+  }
+
   const handleSend = async () => {
-    if ((!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles)) return
+    if ((!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles || isRecording || isTranscribing)) return
 
     const messageText = input.trim()
     const pendingFiles = [...selectedFiles]
@@ -419,6 +549,10 @@ function AITutorContent() {
   }
 
   const handleNewChat = () => {
+    if (isRecording) {
+      stopVoiceRecording()
+    }
+
     setActiveSessionId(null)
     setMessages(initialMessages)
     setInput("")
@@ -908,7 +1042,7 @@ function AITutorContent() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                     className="border-border bg-secondary pl-12 pr-10 text-sm"
-                    disabled={isTyping || isUploadingFiles}
+                    disabled={isTyping || isUploadingFiles || isRecording || isTranscribing}
                   />
 
                   <DropdownMenu>
@@ -917,7 +1051,7 @@ function AITutorContent() {
                         variant="ghost"
                         size="icon"
                         className="absolute left-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground"
-                        disabled={isTyping || isUploadingFiles}
+                        disabled={isTyping || isUploadingFiles || isRecording || isTranscribing}
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
@@ -946,22 +1080,28 @@ function AITutorContent() {
                   </DropdownMenu>
 
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    disabled
+                    onClick={handleMicClick}
+                    className={cn(
+                      "absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2",
+                      isRecording ? "text-rose-400 hover:text-rose-300" : "text-muted-foreground hover:text-foreground"
+                    )}
+                    disabled={isTyping || isUploadingFiles || isTranscribing}
+                    title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Record your question"}
                   >
-                    <Mic className="h-4 w-4" />
+                    {isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />}
                   </Button>
                 </div>
 
                 <Button
                   onClick={handleSend}
-                  disabled={(!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles)}
+                  disabled={(!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles || isRecording || isTranscribing)}
                   size="sm"
                   className="shrink-0"
                 >
-                  {isTyping || isUploadingFiles ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isTyping || isUploadingFiles || isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
 
@@ -979,6 +1119,8 @@ function AITutorContent() {
                       Reset to chat
                     </button>
                   )}
+                  {isRecording && <span className="text-rose-400">Recording your question...</span>}
+                  {isTranscribing && <span>Converting voice to text...</span>}
                 </div>
                 <p>AI can make mistakes. Consider checking important information.</p>
               </div>
