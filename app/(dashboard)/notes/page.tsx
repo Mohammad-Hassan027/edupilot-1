@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -92,7 +91,6 @@ const promptOptions: Array<{ id: PromptType; label: string; helper: string }> = 
 ]
 
 export default function NotesPage() {
-  const searchParams = useSearchParams()
   const [sourceMode, setSourceMode] = useState<SourceMode>("pdf")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState("")
@@ -114,7 +112,8 @@ export default function NotesPage() {
   }, [])
 
   useEffect(() => {
-    const savedId = searchParams.get("saved")
+    if (typeof window === "undefined") return
+    const savedId = new URLSearchParams(window.location.search).get("saved")
     if (!savedId || !history.length) return
     const match = history.find((item) => item.id === savedId)
     if (!match) return
@@ -122,7 +121,7 @@ export default function NotesPage() {
     setGeneratedNotes(match.tabs)
     setSourceHint(match.source_hint || match.source_label || "")
     setSourceMode(match.source_type)
-  }, [history, searchParams])
+  }, [history])
 
   async function loadHistory() {
     try {
