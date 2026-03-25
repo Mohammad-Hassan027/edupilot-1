@@ -108,7 +108,13 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
         </TooltipTrigger>
 
         {collapsed && (
-          <TooltipContent side="right" className="bg-card border-border">
+          // <TooltipContent side="right" className="bg-card border-border">
+          //   {isLocked ? `${item.label} — Login required` : item.label}
+          // </TooltipContent>
+          <TooltipContent
+            side="right"
+            className="bg-[#111827] text-white border border-white/10 shadow-xl px-3 py-1.5"
+          >
             {isLocked ? `${item.label} — Login required` : item.label}
           </TooltipContent>
         )}
@@ -124,7 +130,7 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
           collapsed ? "w-[88px]" : "w-64"
         )}
       >
-        <div className="flex h-16 items-center justify-between border-b border-border px-4">
+        {/* <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <div className="min-w-0">
             {collapsed ? (
               <Logo size="sm" showText={false} href="/dashboard" />
@@ -145,8 +151,30 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
               <PanelLeftClose className="h-4 w-4" />
             )}
           </Button>
-        </div>
+        </div> */}
 
+        <div className="flex h-16 items-center justify-between border-b border-border px-3">
+          <div className="flex items-center justify-center w-10 h-10 shrink-0">
+            {collapsed ? (
+              <Logo size="sm" showText={false} href="/dashboard" className="!w-10 !h-10 object-contain" />
+            ) : (
+              <Logo size="sm" href="/dashboard" className="object-contain" />
+            )}
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            className="shrink-0 text-foreground hover:bg-secondary"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map(renderItem)}
         </nav>

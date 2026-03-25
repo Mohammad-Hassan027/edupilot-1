@@ -824,9 +824,38 @@ function AITutorContent() {
     }
   }, [])
 
+  // const handleOpenSession = useCallback(async (sessionId: string) => {
+  //   try {
+  //     setIsOpeningSession(true)
+
+  //     const res = await fetch(`/api/user/chat-history/${sessionId}`, {
+  //       cache: "no-store",
+  //     })
+
+  //     const data = res.ok ? await res.json() : { messages: [] }
+
+  //     const loadedMessages: Message[] = (data.messages || []).map((m: any) => ({
+  //       id: m.id,
+  //       role: m.role,
+  //       content: m.content,
+  //       timestamp: new Date(m.timestamp),
+  //       sources: m.sources || [],
+  //     }))
+
+  //     if (loadedMessages.length > 0) {
+  //       setMessages(loadedMessages)
+  //       setActiveSessionId(sessionId)
+  //     }
+  //   } catch (err) {
+  //     console.error(err)
+  //   } finally {
+  //     setIsOpeningSession(false)
+  //   }
+  // }, [])
   const handleOpenSession = useCallback(async (sessionId: string) => {
     try {
       setIsOpeningSession(true)
+      setActiveSessionId(sessionId)
 
       const res = await fetch(`/api/user/chat-history/${sessionId}`, {
         cache: "no-store",
@@ -834,7 +863,7 @@ function AITutorContent() {
 
       const data = res.ok ? await res.json() : { messages: [] }
 
-      const loadedMessages: Message[] = (data.messages || []).map((m: any) => ({
+      const loadedMessages = (data.messages || []).map((m: any) => ({
         id: m.id,
         role: m.role,
         content: m.content,
@@ -844,7 +873,6 @@ function AITutorContent() {
 
       if (loadedMessages.length > 0) {
         setMessages(loadedMessages)
-        setActiveSessionId(sessionId)
       }
     } catch (err) {
       console.error(err)
@@ -990,7 +1018,7 @@ function AITutorContent() {
     <>
       <div className="flex h-[calc(100vh-4rem)] gap-3 md:gap-4 p-3 md:p-6 overflow-hidden">
         {/* <Card className="hidden lg:flex w-64 xl:w-72 flex-col border-border bg-card flex-shrink-0"> */}
-        <Card className="hidden lg:flex w-72 xl:w-80 flex-col border-border bg-card flex-shrink-0 overflow-hidden">  
+        <Card className="hidden lg:flex w-72 xl:w-80 flex-col border-border bg-card flex-shrink-0 overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <h2 className="font-semibold text-foreground">Chat History</h2>
             <Button size="sm" variant="ghost" className="text-primary" onClick={handleNewChat}>
@@ -1036,16 +1064,27 @@ function AITutorContent() {
                   // </button>
                   <button
                     key={chat.id}
-                    className="w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors overflow-hidden"
+                    onClick={() => handleOpenSession(chat.id)}
+                    className={cn(
+                      "w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors overflow-hidden",
+                      activeSessionId === chat.id && "bg-secondary"
+                    )}
                   >
-                    <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                    <MessageSquare className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />
 
                     <div className="flex-1 min-w-0 overflow-hidden">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p
+                        className="text-sm font-medium text-foreground leading-5 overflow-hidden"
+                        style={{
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
                         {chat.title}
                       </p>
 
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0 overflow-hidden">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 overflow-hidden">
                         <Clock className="h-3 w-3 shrink-0" />
                         <span className="shrink-0">{chat.time}</span>
                         <span className="shrink-0">•</span>
@@ -1053,7 +1092,7 @@ function AITutorContent() {
                       </div>
                     </div>
 
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
                   </button>
                 ))
               )}

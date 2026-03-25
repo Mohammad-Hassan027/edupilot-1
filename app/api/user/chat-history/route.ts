@@ -81,18 +81,13 @@ function formatTimeLabel(dateStr: string) {
   if (diffDays === 0) return "Today"
   if (diffDays === 1) return "Yesterday"
   if (diffDays < 7) return `${diffDays} days ago`
-
   return date.toLocaleDateString()
 }
 
 export async function GET() {
   try {
     const user = await getUser()
-
-    // Guests should not see saved history
-    if (!user) {
-      return NextResponse.json({ sessions: [] }, { status: 200 })
-    }
+    if (!user) return NextResponse.json({ sessions: [] })
 
     const admin = await getSupabaseAdmin()
 
@@ -101,7 +96,6 @@ export async function GET() {
       .select("id, title, topic, updated_at, last_message_at")
       .eq("user_id", user.id)
       .order("last_message_at", { ascending: false })
-      .limit(20)
 
     if (error) {
       console.error("[user/chat-history] Error:", error)
@@ -110,7 +104,7 @@ export async function GET() {
 
     const sessionIds = (sessions || []).map((s) => s.id)
 
-    let messageCounts: Record<string, number> = {}
+    let counts: Record<string, number> = {}
 
     if (sessionIds.length > 0) {
       const { data: messages } = await admin
@@ -118,20 +112,20 @@ export async function GET() {
         .select("session_id")
         .in("session_id", sessionIds)
 
-      messageCounts = (messages || []).reduce((acc: Record<string, number>, msg) => {
-        acc[msg.session_id] = (acc[msg.session_id] || 0) + 1
+      counts = (messages || []).reduce((acc: Record<string, number>, item) => {
+        acc[item.session_id] = (acc[item.session_id] || 0) + 1
         return acc
       }, {})
     }
 
-    const formatted = (sessions || []).map((session) => ({
-      id: session.id,
-      title: session.title || session.topic || "New Chat",
-      time: formatTimeLabel(session.last_message_at || session.updated_at),
-      messages: messageCounts[session.id] || 0,
-    }))
-
-    return NextResponse.json({ sessions: formatted })
+    return NextResponse.json({
+      sessions: (sessions || []).map((session) => ({
+        id: session.id,
+        title: session.title || session.topic || "New Chat",
+        time: formatTimeLabel(session.last_message_at || session.updated_at),
+        messages: counts[session.id] || 0,
+      })),
+    })
   } catch (err) {
     console.error("[user/chat-history] Error:", err)
     return NextResponse.json({ sessions: [] })

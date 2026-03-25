@@ -14,11 +14,17 @@ export function Logo({ className, showText = true, size = "md", href = "/" }: Lo
 
   return (
     <Link href={href} className={cn("flex items-center gap-2.5 group", className)}>
-      <div className={cn(
-        "relative flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",
+      {/* <div className={cn(
+        "relative shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",
         sizeClasses[size]
-      )}>
-        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary to-accent opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-50" />
+      )}> */}
+      <div
+        className={cn(
+          "relative shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",
+          sizeClasses[size]
+        )}
+      >
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary to-accent opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-50" />
         <svg viewBox="0 0 24 24" fill="none" className="relative z-10 h-1/2 w-1/2"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2L12 6"              className="text-primary-foreground" />
