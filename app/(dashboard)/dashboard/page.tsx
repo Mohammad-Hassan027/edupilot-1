@@ -3,6 +3,7 @@ import { RecentTopics } from "@/components/dashboard/recent-topics"
 import { StudyAnalytics } from "@/components/dashboard/study-analytics"
 import { QuizScores } from "@/components/dashboard/quiz-scores"
 import { CreditStatus } from "@/components/dashboard/credit-status"
+import { SavedNotesCard } from "@/components/dashboard/saved-notes-card"
 
 export default function DashboardPage() {
   return (
@@ -20,6 +21,9 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-1">
           <QuizScores />
+        </div>
+        <div className="lg:col-span-2 xl:col-span-1">
+          <SavedNotesCard />
         </div>
       </div>
     </div>

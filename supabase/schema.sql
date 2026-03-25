@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+
+-- ─── saved_notes ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.saved_notes (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL CHECK (source_type IN ('pdf','spreadsheet','video')),
+  source_title TEXT NOT NULL,
+  source_label TEXT,
+  source_hint TEXT,
+  tabs        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─── feature_access ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.feature_access (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -94,6 +108,7 @@ ALTER TABLE public.credits        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_logs     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_notes    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feature_access ENABLE ROW LEVEL SECURITY;
 
 -- profiles: users can read/update their own
@@ -116,6 +131,10 @@ CREATE POLICY "payments_select_own" ON public.payments
 
 -- usage_logs: users can read their own
 CREATE POLICY "usage_logs_select_own" ON public.usage_logs
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- saved_notes: users can read their own
+CREATE POLICY "saved_notes_select_own" ON public.saved_notes
   FOR SELECT USING (auth.uid() = user_id);
 
 -- feature_access: users can read their own
@@ -150,6 +169,10 @@ CREATE TRIGGER payments_updated_at
   BEFORE UPDATE ON public.payments
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+CREATE TRIGGER saved_notes_updated_at
+  BEFORE UPDATE ON public.saved_notes
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
 -- ============================================================
 -- Indexes for performance
 -- ============================================================
@@ -161,3 +184,5 @@ CREATE INDEX IF NOT EXISTS idx_payments_user_id        ON public.payments(user_i
 CREATE INDEX IF NOT EXISTS idx_usage_logs_user_id      ON public.usage_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_feature      ON public.usage_logs(feature);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at   ON public.usage_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_notes_user_id      ON public.saved_notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_notes_created_at   ON public.saved_notes(created_at DESC);

@@ -2,6 +2,25 @@ import { getSupabaseAdmin } from "@/lib/supabase-server"
 import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
 import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
 
+export type SavedNoteTab = {
+  type: "summary" | "concepts" | "bullets" | "revision"
+  title: string
+  content: string
+}
+
+export type SavedNoteRecord = {
+  id: string
+  user_id: string
+  source_type: string
+  source_title: string
+  source_label: string | null
+  source_hint: string | null
+  tabs: SavedNoteTab[]
+  created_at: string
+  updated_at: string
+}
+
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
@@ -248,4 +267,50 @@ export async function updatePaymentRecord(
     .eq("razorpay_order_id", razorpayOrderId)
 
   if (error) throw new Error(`Payment update failed: ${error.message}`)
+}
+
+
+// ─── Saved Notes ───────────────────────────────────────────────────────────
+
+export async function saveGeneratedNote(
+  userId: string,
+  payload: {
+    sourceType: string
+    sourceTitle: string
+    sourceLabel?: string | null
+    sourceHint?: string | null
+    tabs: SavedNoteTab[]
+  }
+) {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("saved_notes")
+    .insert({
+      user_id: userId,
+      source_type: payload.sourceType,
+      source_title: payload.sourceTitle,
+      source_label: payload.sourceLabel ?? null,
+      source_hint: payload.sourceHint ?? null,
+      tabs: payload.tabs,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single()
+
+  if (error) throw new Error(`Saved note creation failed: ${error.message}`)
+  return data as SavedNoteRecord
+}
+
+export async function getSavedNotes(userId: string, limit = 5) {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("saved_notes")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) return []
+  return (data || []) as SavedNoteRecord[]
 }

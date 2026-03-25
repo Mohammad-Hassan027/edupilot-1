@@ -1,252 +1,317 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-  FileText, 
-  Upload, 
-  Type, 
-  Presentation, 
-  Sparkles, 
+import { Badge } from "@/components/ui/badge"
+import { MarkdownRenderer } from "@/components/markdown-renderer"
+import {
+  FileText,
+  Video,
+  Table2,
+  Sparkles,
   Download,
   Copy,
-  BookOpen,
-  List,
-  Lightbulb,
   RefreshCw,
   FileUp,
-  CheckCircle
+  CheckCircle,
+  Lightbulb,
+  Link2,
+  BookOpen,
+  History,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const uploadOptions = [
+type SourceMode = "pdf" | "video" | "spreadsheet"
+type PromptType = "summary" | "explanation" | "concepts" | "bullets" | "revision"
+type NoteTab = { type: "summary" | "concepts" | "bullets" | "revision"; title: string; content: string }
+type SavedNote = {
+  id: string
+  source_type: SourceMode
+  source_title: string
+  source_label: string | null
+  source_hint: string | null
+  tabs: NoteTab[]
+  created_at: string
+}
+
+const sourceOptions: Array<{
+  id: SourceMode
+  icon: typeof FileText
+  title: string
+  description: string
+  accept?: string
+  hints: string[]
+}> = [
   {
     id: "pdf",
     icon: FileText,
-    title: "Upload PDF",
-    description: "Extract and summarize PDF documents",
+    title: "PDF",
+    description: "Upload a PDF and turn it into study notes.",
     accept: ".pdf",
+    hints: [
+      "Use chapter PDFs, lecture notes, handouts, or scanned text-based PDFs.",
+      "After upload, choose what you want: summary, explanation, concepts, bullet notes, or revision notes.",
+      "Best results come from clean PDFs under 18 MB.",
+    ],
   },
   {
-    id: "text",
-    icon: Type,
-    title: "Paste Text",
-    description: "Paste your notes or text content",
-    accept: null,
+    id: "video",
+    icon: Video,
+    title: "Video Link",
+    description: "Paste a YouTube or public video link.",
+    hints: [
+      "Paste a YouTube link or another public video URL.",
+      "If a transcript is available, EduPilot will use it. Otherwise it will use public information about the video.",
+      "Good for lectures, tutorials, and concept explainers.",
+    ],
   },
   {
-    id: "slides",
-    icon: Presentation,
-    title: "Upload Slides",
-    description: "Process PowerPoint or Google Slides",
-    accept: ".pptx,.ppt",
+    id: "spreadsheet",
+    icon: Table2,
+    title: "Spreadsheet",
+    description: "Upload CSV, XLS, or XLSX files and study the data.",
+    accept: ".csv,.xls,.xlsx",
+    hints: [
+      "Upload CSV or Excel sheets with tabular study data.",
+      "Great for marksheets, experiment logs, finance tables, and research summaries.",
+      "After upload, select a prompt like concepts or bullet notes to shape the output.",
+    ],
   },
 ]
 
-interface GeneratedNote {
-  type: "summary" | "concepts" | "bullets" | "revision"
-  title: string
-  content: string
-  icon: string
-}
-
+const promptOptions: Array<{ id: PromptType; label: string; helper: string }> = [
+  { id: "summary", label: "Summary", helper: "Short overview of the material." },
+  { id: "explanation", label: "Topic Explanation", helper: "Tutor-style explanation in simple words." },
+  { id: "concepts", label: "Concept Breakdown", helper: "Important concepts with explanations." },
+  { id: "bullets", label: "Bullet Points", helper: "Exam-friendly bullet notes." },
+  { id: "revision", label: "Revision Notes", helper: "Quick review notes and questions." },
+]
 
 export default function NotesPage() {
-  const [selectedUpload, setSelectedUpload] = useState<string>("text")
-  const [inputText, setInputText] = useState("")
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedNotes, setGeneratedNotes] = useState<GeneratedNote[] | null>(null)
+  const searchParams = useSearchParams()
+  const [sourceMode, setSourceMode] = useState<SourceMode>("pdf")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-
+  const [videoUrl, setVideoUrl] = useState("")
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptType>("summary")
+  const [isGenerating, setIsGenerating] = useState(false)
   const [generateError, setGenerateError] = useState("")
+  const [generatedNotes, setGeneratedNotes] = useState<NoteTab[] | null>(null)
+  const [generatedTitle, setGeneratedTitle] = useState("Generated Notes")
+  const [sourceHint, setSourceHint] = useState("")
+  const [history, setHistory] = useState<SavedNote[]>([])
 
-  const handleGenerate = async () => {
-    if (selectedUpload === "text" && !inputText.trim()) return
+  const selectedOption = useMemo(
+    () => sourceOptions.find((option) => option.id === sourceMode) || sourceOptions[0],
+    [sourceMode]
+  )
+
+  useEffect(() => {
+    void loadHistory()
+  }, [])
+
+  useEffect(() => {
+    const savedId = searchParams.get("saved")
+    if (!savedId || !history.length) return
+    const match = history.find((item) => item.id === savedId)
+    if (!match) return
+    setGeneratedTitle(match.source_title)
+    setGeneratedNotes(match.tabs)
+    setSourceHint(match.source_hint || match.source_label || "")
+    setSourceMode(match.source_type)
+  }, [history, searchParams])
+
+  async function loadHistory() {
+    try {
+      const response = await fetch("/api/ai/notes", { cache: "no-store" })
+      const data = await response.json()
+      if (response.ok) setHistory(data.notes || [])
+    } catch {
+      // ignore history errors in UI
+    }
+  }
+
+  function resetSourceInputs(nextSource: SourceMode) {
+    setSourceMode(nextSource)
+    setUploadedFile(null)
+    setVideoUrl("")
+    setGenerateError("")
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      setUploadedFile(file)
+      setGenerateError("")
+    }
+  }
+
+  async function uploadCurrentFile() {
+    if (!uploadedFile) throw new Error("Please upload a file first.")
+    const formData = new FormData()
+    formData.append("files", uploadedFile)
+
+    const response = await fetch("/api/ai/upload", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || "Failed to upload file")
+    return data.files?.[0]
+  }
+
+  async function handleGenerate() {
+    if ((sourceMode === "pdf" || sourceMode === "spreadsheet") && !uploadedFile) return
+    if (sourceMode === "video" && !videoUrl.trim()) return
+
     setIsGenerating(true)
     setGenerateError("")
+
     try {
-      const prompt = selectedUpload === "text"
-        ? `You are an expert study notes creator. Convert the following content into comprehensive study notes.
+      const files =
+        sourceMode === "video"
+          ? []
+          : uploadedFile
+            ? [await uploadCurrentFile()]
+            : []
 
-Content:
-${inputText}
-
-Create 4 types of notes:
-1. SUMMARY: A concise 3-4 sentence summary of the key points
-2. KEY CONCEPTS: List the 5-7 most important concepts with brief explanations
-3. BULLET POINTS: Create organized bullet point notes covering all major topics
-4. REVISION QUESTIONS: Generate 5 questions for self-testing
-
-Format each section clearly with its label.`
-        : `Generate comprehensive study notes about the uploaded ${selectedUpload} content. Include summary, key concepts, bullet points, and revision questions.`
-
-      const res = await fetch("/api/ai/chat", {
+      const response = await fetch("/api/ai/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt }),
+        body: JSON.stringify({
+          sourceMode,
+          promptType: selectedPrompt,
+          videoUrl,
+          files,
+        }),
       })
-      const data = await res.json()
 
-      if (!res.ok) {
-        if (data.requiresLogin) { setGenerateError("Please log in to use the Notes Generator."); return }
-        if (data.requiresUpgrade) { setGenerateError("No credits left. Activate your trial to continue."); return }
-        setGenerateError(data.error || "Failed to generate notes")
-        return
-      }
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to generate notes")
 
-      const rawText: string = data.reply || ""
-      const parsed: GeneratedNote[] = [
-        {
-          type: "summary",
-          title: "Summary",
-          content: extractSection(rawText, ["SUMMARY", "Summary"]) || rawText.slice(0, 500),
-          icon: "summary",
-        },
-        {
-          type: "concepts",
-          title: "Key Concepts",
-          content: extractSection(rawText, ["KEY CONCEPTS", "Key Concepts"]) || "",
-          icon: "concepts",
-        },
-        {
-          type: "bullets",
-          title: "Bullet Points",
-          content: extractSection(rawText, ["BULLET POINTS", "Bullet Points"]) || "",
-          icon: "bullets",
-        },
-        {
-          type: "revision",
-          title: "Revision Questions",
-          content: extractSection(rawText, ["REVISION QUESTIONS", "Revision Questions"]) || "",
-          icon: "revision",
-        },
-      ].filter(n => n.content.trim().length > 0)
-
-      setGeneratedNotes(parsed.length > 0 ? parsed : [{ type: "summary", title: "Notes", content: rawText, icon: "summary" }])
-    } catch {
-      setGenerateError("Network error. Please check your connection.")
+      setGeneratedTitle(data.title || "Generated Notes")
+      setGeneratedNotes(data.tabs || [])
+      setSourceHint(data.sourceHint || "")
+      await loadHistory()
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Failed to generate notes")
     } finally {
       setIsGenerating(false)
     }
   }
 
-  function extractSection(text: string, headings: string[]): string {
-    for (const heading of headings) {
-      const idx = text.indexOf(heading)
-      if (idx === -1) continue
-      const start = idx + heading.length
-      // Find next heading or end
-      const remaining = text.slice(start)
-      const nextMatch = remaining.search(/\n[A-Z][A-Z ]+:/)
-      const end = nextMatch === -1 ? undefined : start + nextMatch
-      return text.slice(start, end).replace(/^[:.\s\n]+/, "").trim()
-    }
-    return ""
+  function copyTabContent(content: string) {
+    void navigator.clipboard.writeText(content)
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setUploadedFile(file)
-    }
+  function downloadNotes() {
+    if (!generatedNotes) return
+    const text = [`# ${generatedTitle}`, sourceHint ? `> ${sourceHint}` : "", "", ...generatedNotes.map((tab) => `## ${tab.title}\n\n${tab.content}`)].join("\n")
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${generatedTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "notes"}.md`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">AI Notes Generator</h1>
-        <p className="text-muted-foreground">Upload content and let AI create comprehensive study notes</p>
+        <p className="text-muted-foreground">Create smart notes from PDFs, public video links, and spreadsheets.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Input Section */}
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
-          {/* Upload Options */}
           <div className="grid grid-cols-3 gap-3">
-            {uploadOptions.map((option) => (
+            {sourceOptions.map((option) => (
               <button
                 key={option.id}
-                onClick={() => setSelectedUpload(option.id)}
+                onClick={() => resetSourceInputs(option.id)}
                 className={cn(
-                  "flex flex-col items-center gap-2 p-4 rounded-xl border text-center transition-all",
-                  selectedUpload === option.id
+                  "flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all",
+                  sourceMode === option.id
                     ? "border-primary bg-primary/5"
                     : "border-border bg-card hover:border-primary/50"
                 )}
               >
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-lg",
-                    selectedUpload === option.id ? "bg-primary/20" : "bg-secondary"
-                  )}
-                >
-                  <option.icon
-                    className={cn(
-                      "h-5 w-5",
-                      selectedUpload === option.id ? "text-primary" : "text-muted-foreground"
-                    )}
-                  />
+                <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", sourceMode === option.id ? "bg-primary/20" : "bg-secondary")}>
+                  <option.icon className={cn("h-5 w-5", sourceMode === option.id ? "text-primary" : "text-muted-foreground")} />
                 </div>
                 <span className="text-sm font-medium text-foreground">{option.title}</span>
+                <span className="text-xs text-muted-foreground">{option.description}</span>
               </button>
             ))}
           </div>
 
-          {/* Input Area */}
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Lightbulb className="h-5 w-5 text-primary" />
+                How to use {selectedOption.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {selectedOption.hints.map((hint, index) => (
+                <div key={index} className="flex gap-3 rounded-xl bg-secondary/60 px-3 py-3 text-sm text-foreground">
+                  <Badge variant="secondary" className="mt-0.5 h-5 min-w-5 justify-center rounded-full px-1.5">{index + 1}</Badge>
+                  <span>{hint}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
           <Card className="border-border bg-card">
             <CardContent className="p-4">
-              {selectedUpload === "text" ? (
-                <div className="space-y-3">
-                  <Textarea
-                    placeholder="Paste your notes, lecture content, or any text you want to convert into study notes..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    className="min-h-[300px] resize-none bg-secondary border-border"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {inputText.length} characters
-                  </p>
+              {sourceMode === "video" ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Link2 className="h-4 w-4 text-primary" />
+                      Paste your video link
+                    </label>
+                    <Input
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="bg-background"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Best support: YouTube links with captions. Other public video links use whatever public context is available.
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-border rounded-lg hover:border-primary/50 transition-colors">
+                <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center transition-colors hover:border-primary/50">
                   {uploadedFile ? (
-                    <div className="text-center space-y-3">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto">
+                    <div className="space-y-3">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                         <CheckCircle className="h-8 w-8 text-primary" />
                       </div>
                       <div>
                         <p className="font-medium text-foreground">{uploadedFile.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {(uploadedFile.size / 1024).toFixed(1)} KB
-                        </p>
+                        <p className="text-sm text-muted-foreground">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => setUploadedFile(null)}>
                         Remove
                       </Button>
                     </div>
                   ) : (
-                    <label className="cursor-pointer text-center space-y-3 p-6">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary mx-auto">
+                    <label className="cursor-pointer space-y-3">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
                         <FileUp className="h-8 w-8 text-muted-foreground" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">
-                          Drop your file here or click to browse
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Supports {selectedUpload === "pdf" ? "PDF files" : "PPTX files"}
-                        </p>
+                        <p className="font-medium text-foreground">Drop your file here or click to browse</p>
+                        <p className="text-sm text-muted-foreground">Supports {selectedOption.accept?.replaceAll(",", ", ")}</p>
                       </div>
-                      <input
-                        type="file"
-                        accept={uploadOptions.find((o) => o.id === selectedUpload)?.accept || ""}
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
+                      <input type="file" accept={selectedOption.accept} onChange={handleFileUpload} className="hidden" />
                     </label>
                   )}
                 </div>
@@ -254,12 +319,36 @@ Format each section clearly with its label.`
             </CardContent>
           </Card>
 
-          {/* Generate Button */}
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Choose what you want from it</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {promptOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => setSelectedPrompt(option.id)}
+                    className={cn(
+                      "rounded-xl border px-4 py-3 text-left transition-all",
+                      selectedPrompt === option.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-secondary/30 hover:border-primary/40"
+                    )}
+                  >
+                    <p className="font-medium text-foreground">{option.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{option.helper}</p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <Button
             className="w-full gap-2"
             size="lg"
             onClick={handleGenerate}
-            disabled={isGenerating || (selectedUpload === "text" ? !inputText.trim() : !uploadedFile)}
+            disabled={isGenerating || ((sourceMode === "video" && !videoUrl.trim()) || (sourceMode !== "video" && !uploadedFile))}
           >
             {isGenerating ? (
               <>
@@ -273,72 +362,96 @@ Format each section clearly with its label.`
               </>
             )}
           </Button>
-          {generateError && (
-            <div className="mt-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-              {generateError}
-            </div>
-          )}
+          {generateError ? <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{generateError}</div> : null}
         </div>
 
-        {/* Output Section */}
         <div className="space-y-4">
           {generatedNotes ? (
-            <Tabs defaultValue="summary" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-secondary">
-                <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="concepts">Concepts</TabsTrigger>
-                <TabsTrigger value="bullets">Bullets</TabsTrigger>
-                <TabsTrigger value="revision">Revision</TabsTrigger>
-              </TabsList>
-              {generatedNotes.map((note) => (
-                <TabsContent key={note.type} value={note.type} className="mt-4">
-                  <Card className="border-border bg-card">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <div className="flex items-center gap-2">
-                        <note.icon className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-lg">{note.title}</CardTitle>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8">
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <pre className="whitespace-pre-wrap font-sans text-sm text-foreground bg-transparent p-0 m-0">
-                          {note.content}
-                        </pre>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              ))}
-            </Tabs>
+            <>
+              <Card className="border-border bg-card">
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-xl">{generatedTitle}</CardTitle>
+                      {sourceHint ? <p className="mt-1 text-sm text-muted-foreground">{sourceHint}</p> : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="icon" className="h-9 w-9" onClick={downloadNotes}>
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue={generatedNotes[0]?.type || "summary"} className="w-full">
+                    <TabsList className="grid w-full grid-cols-4 bg-secondary">
+                      {generatedNotes.map((tab) => (
+                        <TabsTrigger key={tab.type} value={tab.type}>{tab.title}</TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {generatedNotes.map((tab) => (
+                      <TabsContent key={tab.type} value={tab.type} className="mt-4">
+                        <div className="rounded-2xl border border-border/80 bg-background/40 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <h3 className="font-semibold text-foreground">{tab.title}</h3>
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => copyTabContent(tab.content)}>
+                              <Copy className="h-4 w-4" />
+                              Copy
+                            </Button>
+                          </div>
+                          <MarkdownRenderer content={tab.content} className="text-sm" />
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              {history.length ? (
+                <Card className="border-border bg-card">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <History className="h-5 w-5 text-primary" />
+                      Saved Notes History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {history.slice(0, 6).map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setGeneratedTitle(item.source_title)
+                          setGeneratedNotes(item.tabs)
+                          setSourceHint(item.source_hint || item.source_label || "")
+                          setSourceMode(item.source_type)
+                        }}
+                        className="w-full rounded-xl border border-border/80 bg-background/40 px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate font-medium text-foreground">{item.source_title}</p>
+                          <Badge variant="secondary" className="capitalize">{item.source_type}</Badge>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{item.source_hint || item.source_label || "Saved note"}</p>
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
+            </>
           ) : (
-            <Card className="border-border bg-card h-full min-h-[400px] flex items-center justify-center">
-              <div className="text-center space-y-4 p-6">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary mx-auto">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">No notes generated yet</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm">
-                    Upload a file or paste text, then click generate to create AI-powered study notes
+            <Card className="border-border bg-card min-h-[420px]">
+              <CardContent className="flex h-full min-h-[420px] items-center justify-center p-6">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+                    <BookOpen className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground">No notes generated yet</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Choose PDF, Video Link, or Spreadsheet, then pick the type of notes you want to generate.
                   </p>
                 </div>
-              </div>
+              </CardContent>
             </Card>
-          )}
-
-          {generatedNotes && (
-            <Button variant="outline" className="w-full gap-2">
-              <Download className="h-4 w-4" />
-              Download All Notes
-            </Button>
           )}
         </div>
       </div>
