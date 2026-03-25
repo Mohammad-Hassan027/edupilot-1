@@ -171,12 +171,7 @@ export default function NotesPage() {
     setGenerateError("")
 
     try {
-      const files =
-        sourceMode === "video"
-          ? []
-          : uploadedFile
-            ? [await uploadCurrentFile()]
-            : []
+      const files = sourceMode === "video" ? [] : uploadedFile ? [await uploadCurrentFile()] : []
 
       const response = await fetch("/api/ai/notes", {
         method: "POST",
@@ -219,240 +214,269 @@ export default function NotesPage() {
     URL.revokeObjectURL(url)
   }
 
+  const canGenerate = !isGenerating && ((sourceMode === "video" && !!videoUrl.trim()) || (sourceMode !== "video" && !!uploadedFile))
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">AI Notes Generator</h1>
         <p className="text-muted-foreground">Create smart notes from PDFs, public video links, and spreadsheets.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            {sourceOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => resetSourceInputs(option.id)}
-                className={cn(
-                  "flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all",
-                  sourceMode === option.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-primary/50"
+      <div className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-3">
+          {sourceOptions.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => resetSourceInputs(option.id)}
+              className={cn(
+                "flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all",
+                sourceMode === option.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50"
+              )}
+            >
+              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", sourceMode === option.id ? "bg-primary/20" : "bg-secondary")}>
+                <option.icon className={cn("h-5 w-5", sourceMode === option.id ? "text-primary" : "text-muted-foreground")} />
+              </div>
+              <span className="text-sm font-medium text-foreground">{option.title}</span>
+              <span className="text-xs text-muted-foreground">{option.description}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Lightbulb className="h-5 w-5 text-primary" />
+                  How to use {selectedOption.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {selectedOption.hints.map((hint, index) => (
+                  <div key={index} className="flex gap-3 rounded-xl bg-secondary/60 px-3 py-3 text-sm text-foreground">
+                    <Badge variant="secondary" className="mt-0.5 h-5 min-w-5 justify-center rounded-full px-1.5">
+                      {index + 1}
+                    </Badge>
+                    <span>{hint}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardContent className="p-4">
+                {sourceMode === "video" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                      <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Link2 className="h-4 w-4 text-primary" />
+                        Paste your video link
+                      </label>
+                      <Input
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="bg-background"
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Best support: YouTube links with captions. Other public video links use whatever public context is available.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center transition-colors hover:border-primary/50">
+                    {uploadedFile ? (
+                      <div className="space-y-3">
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                          <CheckCircle className="h-8 w-8 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{uploadedFile.name}</p>
+                          <p className="text-sm text-muted-foreground">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setUploadedFile(null)}>
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer space-y-3">
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+                          <FileUp className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Drop your file here or click to browse</p>
+                          <p className="text-sm text-muted-foreground">Supports {selectedOption.accept?.replaceAll(",", ", ")}</p>
+                        </div>
+                        <input type="file" accept={selectedOption.accept} onChange={handleFileUpload} className="hidden" />
+                      </label>
+                    )}
+                  </div>
                 )}
-              >
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", sourceMode === option.id ? "bg-primary/20" : "bg-secondary")}>
-                  <option.icon className={cn("h-5 w-5", sourceMode === option.id ? "text-primary" : "text-muted-foreground")} />
-                </div>
-                <span className="text-sm font-medium text-foreground">{option.title}</span>
-                <span className="text-xs text-muted-foreground">{option.description}</span>
-              </button>
-            ))}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-3">
+              <Button className="w-full gap-2" size="lg" onClick={handleGenerate} disabled={!canGenerate}>
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Generating Notes...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate Study Notes
+                  </>
+                )}
+              </Button>
+              {generateError ? <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{generateError}</div> : null}
+            </div>
           </div>
 
+          <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Choose what you want from it</CardTitle>
+                <p className="text-sm text-muted-foreground">Pick the note format before generating.</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  {promptOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => setSelectedPrompt(option.id)}
+                      className={cn(
+                        "rounded-xl border px-4 py-3 text-left transition-all",
+                        selectedPrompt === option.id ? "border-primary bg-primary/10" : "border-border bg-secondary/30 hover:border-primary/40"
+                      )}
+                    >
+                      <p className="font-medium text-foreground">{option.label}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{option.helper}</p>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardContent className="p-4">
+                <div className="rounded-xl border border-border/70 bg-background/40 p-4">
+                  <p className="text-sm font-medium text-foreground">Current setup</p>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Source</span>
+                      <Badge variant="secondary">{selectedOption.title}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Output</span>
+                      <Badge variant="secondary">{promptOptions.find((item) => item.id === selectedPrompt)?.label}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Status</span>
+                      <Badge variant={sourceMode === "video" ? "outline" : uploadedFile ? "secondary" : "outline"}>
+                        {sourceMode === "video" ? (videoUrl.trim() ? "Link added" : "Waiting") : uploadedFile ? "File added" : "Waiting"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {generatedNotes ? (
+          <Card className="border-border bg-card">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-xl">{generatedTitle}</CardTitle>
+                  {sourceHint ? <p className="mt-1 text-sm text-muted-foreground">{sourceHint}</p> : null}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="icon" className="h-9 w-9" onClick={downloadNotes}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue={generatedNotes[0]?.type || "summary"} className="w-full">
+                <TabsList className="grid w-full grid-cols-4 bg-secondary">
+                  {generatedNotes.map((tab) => (
+                    <TabsTrigger key={tab.type} value={tab.type}>
+                      {tab.title}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {generatedNotes.map((tab) => (
+                  <TabsContent key={tab.type} value={tab.type} className="mt-4">
+                    <div className="rounded-2xl border border-border/80 bg-background/40 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-foreground">{tab.title}</h3>
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => copyTabContent(tab.content)}>
+                          <Copy className="h-4 w-4" />
+                          Copy
+                        </Button>
+                      </div>
+                      <MarkdownRenderer content={tab.content} className="text-sm" />
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="min-h-[320px] border-border bg-card">
+            <CardContent className="flex h-full min-h-[320px] items-center justify-center p-6">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
+                  <BookOpen className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">No notes generated yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Select a source, review the tips, choose the output style on the side, and generate your notes.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {history.length ? (
           <Card className="border-border bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Lightbulb className="h-5 w-5 text-primary" />
-                How to use {selectedOption.title}
+                <History className="h-5 w-5 text-primary" />
+                Saved Notes History
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {selectedOption.hints.map((hint, index) => (
-                <div key={index} className="flex gap-3 rounded-xl bg-secondary/60 px-3 py-3 text-sm text-foreground">
-                  <Badge variant="secondary" className="mt-0.5 h-5 min-w-5 justify-center rounded-full px-1.5">{index + 1}</Badge>
-                  <span>{hint}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              {sourceMode === "video" ? (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-border bg-secondary/40 p-4">
-                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Link2 className="h-4 w-4 text-primary" />
-                      Paste your video link
-                    </label>
-                    <Input
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="https://www.youtube.com/watch?v=..."
-                      className="bg-background"
-                    />
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Best support: YouTube links with captions. Other public video links use whatever public context is available.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center transition-colors hover:border-primary/50">
-                  {uploadedFile ? (
-                    <div className="space-y-3">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                        <CheckCircle className="h-8 w-8 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{uploadedFile.name}</p>
-                        <p className="text-sm text-muted-foreground">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => setUploadedFile(null)}>
-                        Remove
-                      </Button>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer space-y-3">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-                        <FileUp className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">Drop your file here or click to browse</p>
-                        <p className="text-sm text-muted-foreground">Supports {selectedOption.accept?.replaceAll(",", ", ")}</p>
-                      </div>
-                      <input type="file" accept={selectedOption.accept} onChange={handleFileUpload} className="hidden" />
-                    </label>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Choose what you want from it</CardTitle>
+              <p className="text-sm text-muted-foreground">Your recently generated notes appear here for quick access.</p>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {promptOptions.map((option) => (
+                {history.slice(0, 6).map((item) => (
                   <button
-                    key={option.id}
-                    onClick={() => setSelectedPrompt(option.id)}
-                    className={cn(
-                      "rounded-xl border px-4 py-3 text-left transition-all",
-                      selectedPrompt === option.id
-                        ? "border-primary bg-primary/10"
-                        : "border-border bg-secondary/30 hover:border-primary/40"
-                    )}
+                    key={item.id}
+                    onClick={() => {
+                      setGeneratedTitle(item.source_title)
+                      setGeneratedNotes(item.tabs)
+                      setSourceHint(item.source_hint || item.source_label || "")
+                      setSourceMode(item.source_type)
+                    }}
+                    className="w-full rounded-xl border border-border/80 bg-background/40 px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
                   >
-                    <p className="font-medium text-foreground">{option.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{option.helper}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate font-medium text-foreground">{item.source_title}</p>
+                      <Badge variant="secondary" className="capitalize">
+                        {item.source_type}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{item.source_hint || item.source_label || "Saved note"}</p>
                   </button>
                 ))}
               </div>
             </CardContent>
           </Card>
-
-          <Button
-            className="w-full gap-2"
-            size="lg"
-            onClick={handleGenerate}
-            disabled={isGenerating || ((sourceMode === "video" && !videoUrl.trim()) || (sourceMode !== "video" && !uploadedFile))}
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Generating Notes...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Generate Study Notes
-              </>
-            )}
-          </Button>
-          {generateError ? <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{generateError}</div> : null}
-        </div>
-
-        <div className="space-y-4">
-          {generatedNotes ? (
-            <>
-              <Card className="border-border bg-card">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-xl">{generatedTitle}</CardTitle>
-                      {sourceHint ? <p className="mt-1 text-sm text-muted-foreground">{sourceHint}</p> : null}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="icon" className="h-9 w-9" onClick={downloadNotes}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue={generatedNotes[0]?.type || "summary"} className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 bg-secondary">
-                      {generatedNotes.map((tab) => (
-                        <TabsTrigger key={tab.type} value={tab.type}>{tab.title}</TabsTrigger>
-                      ))}
-                    </TabsList>
-                    {generatedNotes.map((tab) => (
-                      <TabsContent key={tab.type} value={tab.type} className="mt-4">
-                        <div className="rounded-2xl border border-border/80 bg-background/40 p-4">
-                          <div className="mb-3 flex items-center justify-between gap-2">
-                            <h3 className="font-semibold text-foreground">{tab.title}</h3>
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => copyTabContent(tab.content)}>
-                              <Copy className="h-4 w-4" />
-                              Copy
-                            </Button>
-                          </div>
-                          <MarkdownRenderer content={tab.content} className="text-sm" />
-                        </div>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                </CardContent>
-              </Card>
-
-              {history.length ? (
-                <Card className="border-border bg-card">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <History className="h-5 w-5 text-primary" />
-                      Saved Notes History
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {history.slice(0, 6).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setGeneratedTitle(item.source_title)
-                          setGeneratedNotes(item.tabs)
-                          setSourceHint(item.source_hint || item.source_label || "")
-                          setSourceMode(item.source_type)
-                        }}
-                        className="w-full rounded-xl border border-border/80 bg-background/40 px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate font-medium text-foreground">{item.source_title}</p>
-                          <Badge variant="secondary" className="capitalize">{item.source_type}</Badge>
-                        </div>
-                        <p className="mt-1 truncate text-xs text-muted-foreground">{item.source_hint || item.source_label || "Saved note"}</p>
-                      </button>
-                    ))}
-                  </CardContent>
-                </Card>
-              ) : null}
-            </>
-          ) : (
-            <Card className="border-border bg-card min-h-[420px]">
-              <CardContent className="flex h-full min-h-[420px] items-center justify-center p-6">
-                <div className="max-w-sm text-center">
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-                    <BookOpen className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground">No notes generated yet</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Choose PDF, Video Link, or Spreadsheet, then pick the type of notes you want to generate.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        ) : null}
       </div>
     </div>
   )
