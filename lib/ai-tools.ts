@@ -12,24 +12,46 @@ export interface TavilySearchResult {
   source: string
 }
 
-function getPollinationsToken() {
+function getPollinationsKey() {
   return process.env.POLLINATIONS_API_KEY?.trim() || ""
 }
 
-export function buildPollinationsImageUrl(prompt: string) {
+function buildPollinationsMediaUrl(prompt: string, params: Record<string, string>) {
   const encodedPrompt = encodeURIComponent(prompt.trim())
-  const token = getPollinationsToken()
-  const params = new URLSearchParams({ width: "1024", height: "1024", model: "flux" })
-  if (token) params.set("token", token)
-  return `https://image.pollinations.ai/prompt/${encodedPrompt}?${params.toString()}`
+  const searchParams = new URLSearchParams(params)
+  const key = getPollinationsKey()
+
+  if (key) {
+    searchParams.set("key", key)
+  }
+
+  return `https://gen.pollinations.ai/image/${encodedPrompt}?${searchParams.toString()}`
+}
+
+export function buildPollinationsImageUrl(prompt: string) {
+  return buildPollinationsMediaUrl(prompt, {
+    model: "flux",
+    width: "1024",
+    height: "1024",
+    enhance: "true",
+    safe: "false",
+    nologo: "true",
+    seed: "-1",
+  })
 }
 
 export function buildPollinationsVideoUrl(prompt: string) {
-  const encodedPrompt = encodeURIComponent(prompt.trim())
-  const token = getPollinationsToken()
-  const params = new URLSearchParams({ model: "video", width: "1024", height: "576" })
-  if (token) params.set("token", token)
-  return `https://pollinations.ai/p/${encodedPrompt}?${params.toString()}`
+  return buildPollinationsMediaUrl(prompt, {
+    model: "wan-fast",
+    width: "832",
+    height: "480",
+    duration: "5",
+    aspectRatio: "16:9",
+    enhance: "true",
+    safe: "false",
+    nologo: "true",
+    seed: "-1",
+  })
 }
 
 export function summarizeAttachments(attachments: UploadedAttachment[]) {

@@ -640,12 +640,32 @@ function AITutorContent() {
                                 alt="Generated image"
                                 className="h-auto w-full rounded-lg"
                               />
+                              <div className="mt-2 flex justify-end">
+                                <a
+                                  href={message.media.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                >
+                                  Open image <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
                             </div>
                           ) : null}
 
                           {message.media?.type === "video" ? (
                             <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-background/40 p-2">
-                              <video src={message.media.url} controls className="w-full rounded-lg" />
+                              <video src={message.media.url} controls playsInline preload="metadata" className="w-full rounded-lg" />
+                              <div className="mt-2 flex justify-end">
+                                <a
+                                  href={message.media.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                >
+                                  Open video <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
                             </div>
                           ) : null}
                         </div>
