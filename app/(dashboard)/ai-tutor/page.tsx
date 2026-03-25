@@ -989,7 +989,8 @@ function AITutorContent() {
   return (
     <>
       <div className="flex h-[calc(100vh-4rem)] gap-3 md:gap-4 p-3 md:p-6 overflow-hidden">
-        <Card className="hidden lg:flex w-64 xl:w-72 flex-col border-border bg-card flex-shrink-0">
+        {/* <Card className="hidden lg:flex w-64 xl:w-72 flex-col border-border bg-card flex-shrink-0"> */}
+        <Card className="hidden lg:flex w-72 xl:w-80 flex-col border-border bg-card flex-shrink-0 overflow-hidden">  
           <div className="flex items-center justify-between p-4 border-b border-border">
             <h2 className="font-semibold text-foreground">Chat History</h2>
             <Button size="sm" variant="ghost" className="text-primary" onClick={handleNewChat}>
@@ -1013,24 +1014,45 @@ function AITutorContent() {
                 </div>
               ) : (
                 chatSessions.map((chat) => (
+                  // <button
+                  //   key={chat.id}
+                  //   onClick={() => handleOpenSession(chat.id)}
+                  //   className={cn(
+                  //     "w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors",
+                  //     activeSessionId === chat.id && "bg-secondary"
+                  //   )}
+                  // >
+                  //   <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  //   <div className="flex-1 min-w-0">
+                  //     <p className="text-sm font-medium text-foreground truncate">{chat.title}</p>
+                  //     <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  //       <Clock className="h-3 w-3" />
+                  //       <span>{chat.time}</span>
+                  //       <span>•</span>
+                  //       <span>{chat.messages} messages</span>
+                  //     </div>
+                  //   </div>
+                  //   <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  // </button>
                   <button
                     key={chat.id}
-                    onClick={() => handleOpenSession(chat.id)}
-                    className={cn(
-                      "w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors",
-                      activeSessionId === chat.id && "bg-secondary"
-                    )}
+                    className="w-full flex items-start gap-3 p-3 rounded-lg text-left hover:bg-secondary transition-colors overflow-hidden"
                   >
                     <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{chat.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{chat.time}</span>
-                        <span>•</span>
-                        <span>{chat.messages} messages</span>
+
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {chat.title}
+                      </p>
+
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0 overflow-hidden">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span className="shrink-0">{chat.time}</span>
+                        <span className="shrink-0">•</span>
+                        <span className="truncate">{chat.messages} messages</span>
                       </div>
                     </div>
+
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </button>
                 ))

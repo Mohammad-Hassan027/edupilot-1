@@ -93,15 +93,21 @@ export function RecentTopics() {
           </div>
         ) : (
           <div className="space-y-1">
-            {activity.map((entry) => {
+            {activity.slice(0, 5).map((entry) => {
               const cfg = featureConfig[entry.feature] ?? featureConfig.ai_chat
               const Icon = cfg.icon
               const meta = entry.metadata as Record<string, unknown> | null
               const topic =
                 (meta?.topic as string) ||
                 (entry.action === "question_asked" ? "AI Chat Session" : entry.action.replace(/_/g, " "))
+
+              const href =
+                entry.feature === "ai_chat"
+                  ? `/ai-tutor?session=${entry.id}`
+                  : cfg.href
+
               return (
-                <Link href={cfg.href} key={entry.id}>
+                <Link href={href} key={entry.id}>
                   <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary transition-colors group cursor-pointer">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary group-hover:bg-background transition-colors shrink-0">
                       <Icon className={`h-4 w-4 ${cfg.color}`} />

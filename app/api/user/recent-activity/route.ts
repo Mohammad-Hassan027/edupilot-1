@@ -39,12 +39,18 @@ export async function GET() {
 
     const admin = await getSupabaseAdmin()
 
+    // const { data: sessions, error } = await admin
+    //   .from("chat_sessions")
+    //   .select("id, topic, title, last_message_at")
+    //   .eq("user_id", user.id)
+    //   .order("last_message_at", { ascending: false })
+    //   .limit(5)
     const { data: sessions, error } = await admin
       .from("chat_sessions")
       .select("id, topic, title, last_message_at")
       .eq("user_id", user.id)
       .order("last_message_at", { ascending: false })
-      .limit(10)
+      .limit(5)
 
     if (error) {
       console.error("[user/recent-activity]", error)
