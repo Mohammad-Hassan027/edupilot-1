@@ -140,6 +140,45 @@ function getAudioExtension(mimeType: string) {
   return "webm"
 }
 
+declare global {
+  interface Window {
+    SpeechRecognition?: {
+      new (): SpeechRecognition
+    }
+    webkitSpeechRecognition?: {
+      new (): SpeechRecognition
+    }
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+  start(): void
+  stop(): void
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number
+  results: {
+    [index: number]: {
+      isFinal: boolean
+      0: {
+        transcript: string
+      }
+    }
+    length: number
+  }
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string
+}
+
 function AITutorContent() {
   const searchParams = useSearchParams()
   const targetSessionId = searchParams.get("session")
@@ -175,6 +214,8 @@ function AITutorContent() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null)
+  const speechTranscriptRef = useRef("")
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -239,6 +280,8 @@ function AITutorContent() {
 
   useEffect(() => {
     return () => {
+      speechRecognitionRef.current?.stop()
+      speechRecognitionRef.current = null
       mediaRecorderRef.current = null
       audioChunksRef.current = []
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
@@ -353,14 +396,119 @@ function AITutorContent() {
   }
 
   const stopVoiceRecording = () => {
+    const recognition = speechRecognitionRef.current
+    if (recognition) {
+      recognition.stop()
+      return
+    }
+
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== "inactive") {
       recorder.stop()
     }
   }
 
+  const transcribeRecordedAudio = async (audioBlob: Blob, recordedMimeType: string) => {
+    if (!audioBlob.size) {
+      throw new Error("No voice was captured. Please try again.")
+    }
+
+    const formData = new FormData()
+    const extension = getAudioExtension(recordedMimeType)
+    formData.append("file", new File([audioBlob], `edupilot-voice.${extension}`, { type: recordedMimeType }))
+
+    const response = await fetch("/api/ai/transcribe", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to transcribe voice")
+    }
+
+    const transcript = typeof data.text === "string" ? data.text.trim() : ""
+
+    if (!transcript || /^thank you[.! ]*$/i.test(transcript)) {
+      throw new Error("I could not clearly hear your voice. Please speak closer to the microphone and try again.")
+    }
+
+    setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
+  }
+
+  const startBrowserSpeechRecognition = () => {
+    const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognitionConstructor) {
+      return false
+    }
+
+    const recognition = new SpeechRecognitionConstructor()
+    speechRecognitionRef.current = recognition
+    speechTranscriptRef.current = ""
+
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = "en-US"
+
+    recognition.onresult = (event) => {
+      let finalTranscript = ""
+      let interimTranscript = ""
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i]
+        const transcript = result[0]?.transcript?.trim() || ""
+
+        if (result.isFinal) {
+          finalTranscript += `${transcript} `
+        } else {
+          interimTranscript += `${transcript} `
+        }
+      }
+
+      const combinedTranscript = `${speechTranscriptRef.current} ${finalTranscript} ${interimTranscript}`.trim()
+      if (combinedTranscript) {
+        setInput(combinedTranscript)
+      }
+
+      if (finalTranscript.trim()) {
+        speechTranscriptRef.current = `${speechTranscriptRef.current} ${finalTranscript}`.trim()
+      }
+    }
+
+    recognition.onerror = (event) => {
+      speechRecognitionRef.current = null
+      setIsRecording(false)
+
+      if (event.error !== "no-speech" && event.error !== "aborted") {
+        pushAssistantError("Voice recognition failed. Please check microphone permission and try again.")
+      }
+    }
+
+    recognition.onend = () => {
+      speechRecognitionRef.current = null
+      setIsRecording(false)
+
+      const cleanedTranscript = speechTranscriptRef.current.trim() || input.trim()
+      if (!cleanedTranscript) {
+        pushAssistantError("I could not hear anything. Please try speaking again.")
+        return
+      }
+
+      setInput(cleanedTranscript)
+    }
+
+    recognition.start()
+    setIsRecording(true)
+    return true
+  }
+
   const startVoiceRecording = async () => {
     if (typeof window === "undefined") return
+
+    if (startBrowserSpeechRecognition()) {
+      return
+    }
 
     if (!navigator.mediaDevices?.getUserMedia) {
       pushAssistantError("Voice recording is not supported in this browser.")
@@ -396,36 +544,9 @@ function AITutorContent() {
         setIsRecording(false)
         releaseAudioResources()
 
-        if (!audioBlob.size) {
-          pushAssistantError("No voice was captured. Please try again.")
-          return
-        }
-
         setIsTranscribing(true)
-
         try {
-          const formData = new FormData()
-          const extension = getAudioExtension(recordedMimeType)
-          formData.append("file", new File([audioBlob], `edupilot-voice.${extension}`, { type: recordedMimeType }))
-
-          const response = await fetch("/api/ai/transcribe", {
-            method: "POST",
-            body: formData,
-          })
-
-          const data = await response.json()
-
-          if (!response.ok) {
-            throw new Error(data.error || "Failed to transcribe voice")
-          }
-
-          const transcript = typeof data.text === "string" ? data.text.trim() : ""
-
-          if (!transcript) {
-            throw new Error("No speech was detected. Please try again.")
-          }
-
-          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript))
+          await transcribeRecordedAudio(audioBlob, recordedMimeType)
         } catch (error) {
           pushAssistantError(error instanceof Error ? error.message : "Voice transcription failed. Please try again.")
         } finally {
@@ -433,7 +554,7 @@ function AITutorContent() {
         }
       }
 
-      recorder.start()
+      recorder.start(250)
       setIsRecording(true)
     } catch (error) {
       releaseAudioResources()
