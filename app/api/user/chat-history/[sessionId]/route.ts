@@ -73,7 +73,7 @@ export async function GET(
 
     const { data: messages, error } = await admin
       .from("chat_messages")
-      .select("id, role, content, created_at, sources")
+      .select("id, role, content, created_at")
       .eq("session_id", sessionId)
       .eq("user_id", user.id)
       .order("created_at", { ascending: true })
@@ -89,7 +89,6 @@ export async function GET(
         role: m.role,
         content: m.content,
         timestamp: m.created_at,
-        sources: m.sources || [],
       })),
     })
   } catch (err) {

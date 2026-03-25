@@ -13,11 +13,7 @@ export function Logo({ className, showText = true, size = "md", href = "/" }: Lo
   const textSizeClasses = { sm: "text-lg",   md: "text-xl",   lg: "text-2xl"  }
 
   return (
-    <Link href={href} className={cn("flex items-center gap-2.5 group", className)}>
-      {/* <div className={cn(
-        "relative shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",
-        sizeClasses[size]
-      )}> */}
+    <Link href={href} className={cn("flex items-center gap-2.5 group shrink-0 min-w-0", className)}>
       <div
         className={cn(
           "relative shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",

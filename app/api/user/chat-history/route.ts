@@ -103,7 +103,6 @@ export async function GET() {
     }
 
     const sessionIds = (sessions || []).map((s) => s.id)
-
     let counts: Record<string, number> = {}
 
     if (sessionIds.length > 0) {
