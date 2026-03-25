@@ -35,14 +35,38 @@ async function callGroq(prompt: string): Promise<string> {
 
 // ── AI Tutor / Chat ──────────────────────────────────────────────────────────
 
-export async function generateAIResponse(message: string): Promise<string> {
+export interface GenerateAIResponseOptions {
+  mode?: "chat" | "web_search"
+  webContext?: string
+  attachmentContext?: string
+}
+
+export async function generateAIResponse(
+  message: string,
+  options: GenerateAIResponseOptions = {}
+): Promise<string> {
+  const extraSections = [
+    options.mode === "web_search" && options.webContext
+      ? `Use these web search notes to answer accurately and cite the source names naturally when useful:
+${options.webContext}`
+      : "",
+    options.attachmentContext
+      ? `The user uploaded these files:
+${options.attachmentContext}
+Use them as context when relevant.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+
   const prompt = `You are EduPilot, an intelligent AI tutor and study assistant.
 Help students learn effectively. Be clear, educational, and encouraging.
 Format your answers with clear sections when needed. Answer step-by-step when explaining concepts.
 
-Student question: ${message}
+${extraSections ? `${extraSections}\n\n` : ""}Student question: ${message}
 
 Answer:`
+
   return callGroq(prompt)
 }
 
