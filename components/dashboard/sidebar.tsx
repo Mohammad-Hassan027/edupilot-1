@@ -108,9 +108,6 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
         </TooltipTrigger>
 
         {collapsed && (
-          // <TooltipContent side="right" className="bg-card border-border">
-          //   {isLocked ? `${item.label} — Login required` : item.label}
-          // </TooltipContent>
           <TooltipContent
             side="right"
             className="bg-[#111827] text-white border border-white/10 shadow-xl px-3 py-1.5"
