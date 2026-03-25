@@ -130,49 +130,52 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
           collapsed ? "w-[92px]" : "w-64"
         )}
       >
-      {/* <div className="flex h-20 items-center border-b border-border px-4 overflow-hidden">
-        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-          <Logo
-            size="sm"
-            showText={!collapsed}
-            href="/dashboard"
-            className={cn(
-              "shrink-0 transition-all duration-300",
-              collapsed ? "w-10 justify-center" : "w-auto"
-            )}
-          />
-        </div>
+      <div className="h-20 border-b border-border">
+        {collapsed ? (
+          <div className="grid h-full grid-cols-[40px_1fr] items-center px-3">
+            <div className="flex items-center justify-center">
+              <Logo
+                size="sm"
+                showText={false}
+                href="/dashboard"
+                className="!gap-0"
+              />
+            </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="ml-2 shrink-0 text-foreground hover:bg-secondary"
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
-        </Button>
-      </div> */}
-      <div className="flex h-full items-center justify-start relative px-4">
-        <Logo
-          size="sm"
-          showText={false}
-          href="/dashboard"
-          className="!gap-0 shrink-0"
-        />
+            <div className="flex items-center justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggle}
+                className="h-8 w-8 shrink-0 text-foreground hover:bg-secondary"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-between px-4 overflow-hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <Logo
+                size="sm"
+                showText={true}
+                href="/dashboard"
+                className="shrink-0"
+              />
+            </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0 text-foreground hover:bg-secondary"
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-        </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggle}
+              className="ml-2 shrink-0 text-foreground hover:bg-secondary"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
+
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map(renderItem)}
         </nav>
