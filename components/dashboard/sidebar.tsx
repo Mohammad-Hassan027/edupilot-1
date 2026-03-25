@@ -130,43 +130,21 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
           collapsed ? "w-[88px]" : "w-64"
         )}
       >
-        {/* <div className="flex h-16 items-center justify-between border-b border-border px-4">
-          <div className="min-w-0">
-            {collapsed ? (
-              <Logo size="sm" showText={false} href="/dashboard" />
-            ) : (
-              <Logo size="sm" href="/dashboard" />
-            )}
+        <div className="flex h-16 items-center border-b border-border px-4">
+          <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+            <Logo
+              size="sm"
+              showText={!collapsed}
+              href="/dashboard"
+              className="shrink-0"
+            />
           </div>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            className="shrink-0"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </Button>
-        </div> */}
-
-        <div className="flex h-16 items-center justify-between border-b border-border px-3">
-          <div className="flex items-center justify-center w-10 h-10 shrink-0">
-            {collapsed ? (
-              <Logo size="sm" showText={false} href="/dashboard" className="!w-10 !h-10 object-contain" />
-            ) : (
-              <Logo size="sm" href="/dashboard" className="object-contain" />
-            )}
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className="shrink-0 text-foreground hover:bg-secondary"
+            className="ml-2 shrink-0"
           >
             {collapsed ? (
               <PanelLeftOpen className="h-4 w-4" />
@@ -175,6 +153,7 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
             )}
           </Button>
         </div>
+
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map(renderItem)}
         </nav>
