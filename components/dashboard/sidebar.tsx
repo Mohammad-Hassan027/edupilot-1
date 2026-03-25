@@ -130,29 +130,32 @@ export function DashboardSidebar({ collapsed, onToggle }: Props) {
           collapsed ? "w-[88px]" : "w-64"
         )}
       >
-        <div className="flex h-16 items-center border-b border-border px-4">
-          <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-            <Logo
-              size="sm"
-              showText={!collapsed}
-              href="/dashboard"
-              className="shrink-0"
-            />
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className="ml-2 shrink-0"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
+      <div className="flex h-20 items-center border-b border-border px-4 overflow-hidden">
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+          <Logo
+            size="sm"
+            showText={!collapsed}
+            href="/dashboard"
+            className={cn(
+              "shrink-0 transition-all duration-300",
+              collapsed ? "w-10 justify-center" : "w-auto"
             )}
-          </Button>
+          />
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="ml-2 shrink-0 text-foreground hover:bg-secondary"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map(renderItem)}

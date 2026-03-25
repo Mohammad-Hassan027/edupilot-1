@@ -13,7 +13,7 @@ export function Logo({ className, showText = true, size = "md", href = "/" }: Lo
   const textSizeClasses = { sm: "text-lg",   md: "text-xl",   lg: "text-2xl"  }
 
   return (
-    <Link href={href} className={cn("flex items-center gap-2.5 group min-w-0 shrink-0", className)}>  
+    <Link href={href} className={cn("flex items-center gap-2.5 group shrink-0 min-w-0 overflow-hidden", className)}>
       <div
         className={cn(
           "relative shrink-0 flex items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary to-accent shadow-lg transition-all duration-300 group-hover:shadow-primary/25 group-hover:scale-105",
@@ -34,7 +34,7 @@ export function Logo({ className, showText = true, size = "md", href = "/" }: Lo
         </svg>
       </div>
       {showText && (
-        <div className={cn("min-w-0 flex items-center gap-0.5 font-bold", textSizeClasses[size])}>
+        <div className={cn("flex min-w-0 items-center gap-0.5 font-bold", textSizeClasses[size])}>
           <span className="text-foreground">Edu</span>
           <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Pilot</span>
         </div>

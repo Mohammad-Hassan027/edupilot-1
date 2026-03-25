@@ -315,8 +315,11 @@ export function DashboardHeader() {
                   Ask AI
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-card border-border">
-                <p>Open AI Tutor</p>
+              <TooltipContent
+                side="bottom"
+                className="bg-[#111827] text-white border border-white/10 shadow-xl px-3 py-1.5"
+              >
+                Open AI Tutor
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
