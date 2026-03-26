@@ -302,6 +302,20 @@ export async function saveGeneratedNote(
   return data as SavedNoteRecord
 }
 
+
+export async function getSavedNoteById(userId: string, noteId: string) {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("saved_notes")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", noteId)
+    .single()
+
+  if (error) return null
+  return data as SavedNoteRecord
+}
+
 export async function getSavedNotes(userId: string, limit = 5) {
   const admin = await getSupabaseAdmin()
   const { data, error } = await admin

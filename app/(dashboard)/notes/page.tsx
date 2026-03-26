@@ -21,6 +21,8 @@ import {
   Link2,
   BookOpen,
   History,
+  Plus,
+  Eye,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -211,6 +213,7 @@ export default function NotesPage() {
   const [generatedTitle, setGeneratedTitle] = useState("Generated Notes")
   const [sourceHint, setSourceHint] = useState("")
   const [history, setHistory] = useState<SavedNote[]>([])
+  const [currentSavedId, setCurrentSavedId] = useState<string | null>(null)
   const [copiedTab, setCopiedTab] = useState<NoteTab["type"] | null>(null)
   const copiedTimerRef = useRef<number | null>(null)
 
@@ -226,21 +229,15 @@ export default function NotesPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     const savedId = new URLSearchParams(window.location.search).get("saved")
-    if (!savedId || !history.length) return
+    if (!savedId) return
 
     const match = history.find((item) => item.id === savedId)
-    if (!match) return
+    if (match) {
+      openSavedNote(match)
+      return
+    }
 
-    const normalizedTabs = match.tabs.map((tab) => ({
-      ...tab,
-      content: normalizeNoteContent(tab.content, tab.title),
-    }))
-
-    setGeneratedTitle(match.source_title)
-    setGeneratedNotes(normalizedTabs)
-    setSourceHint(match.source_hint || match.source_label || "")
-    setSourceMode(match.source_type)
-    setActiveTab(normalizedTabs[0]?.type || "summary")
+    void loadSavedNote(savedId)
   }, [history])
 
   useEffect(() => {
@@ -260,7 +257,56 @@ export default function NotesPage() {
         setHistory(data.notes || [])
       }
     } catch {
-        //
+      //
+    }
+  }
+
+  function openSavedNote(note: SavedNote) {
+    const normalizedTabs = note.tabs.map((tab) => ({
+      ...tab,
+      content: normalizeNoteContent(tab.content, tab.title),
+    }))
+
+    setCurrentSavedId(note.id)
+    setGeneratedTitle(note.source_title)
+    setGeneratedNotes(normalizedTabs)
+    setSourceHint(note.source_hint || note.source_label || "")
+    setSourceMode(note.source_type)
+    setActiveTab(normalizedTabs[0]?.type || "summary")
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("saved", note.id)
+      window.history.replaceState({}, "", url.toString())
+    }
+  }
+
+  async function loadSavedNote(noteId: string) {
+    try {
+      const response = await fetch(`/api/ai/notes/${noteId}`, { cache: "no-store" })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok || !data.note) return
+
+      const note = data.note as SavedNote
+      setHistory((prev) => (prev.some((item) => item.id === note.id) ? prev : [note, ...prev]))
+      openSavedNote(note)
+    } catch {
+      //
+    }
+  }
+
+  function resetGeneratedView() {
+    setCurrentSavedId(null)
+    setGeneratedNotes(null)
+    setGeneratedTitle("Generated Notes")
+    setSourceHint("")
+    setActiveTab("summary")
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.delete("saved")
+      window.history.replaceState({}, "", url.toString())
     }
   }
 
@@ -362,11 +408,22 @@ export default function NotesPage() {
           }))
         : []
 
+      setCurrentSavedId(data.savedNote?.id || null)
       setGeneratedTitle(data.title || "Generated Notes")
       setGeneratedNotes(tabs)
       setSourceHint(data.sourceHint || "")
       setActiveTab(tabs[0]?.type || "summary")
-      await loadHistory()
+
+      if (data.savedNote) {
+        setHistory((prev) => [data.savedNote as SavedNote, ...prev.filter((item) => item.id !== data.savedNote.id)].slice(0, 12))
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href)
+          url.searchParams.set("saved", data.savedNote.id)
+          window.history.replaceState({}, "", url.toString())
+        }
+      } else {
+        await loadHistory()
+      }
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : "Failed to generate notes")
     } finally {
@@ -387,13 +444,17 @@ export default function NotesPage() {
     }, 1800)
   }
 
-  function downloadNotes() {
-    if (!generatedNotes) return
+  function downloadNotes(customNote?: { title: string; sourceHint?: string | null; tabs: NoteTab[] }) {
+    const noteTitle = customNote?.title || generatedTitle
+    const noteSourceHint = customNote?.sourceHint || sourceHint
+    const noteTabs = customNote?.tabs || generatedNotes
+
+    if (!noteTabs) return
 
     const printWindow = window.open("", "_blank", "width=1200,height=900")
     if (!printWindow) return
 
-    const tabsHtml = generatedNotes
+    const tabsHtml = noteTabs
       .map(
         (tab, index) => `
           <section class="section-card ${index > 0 ? "page-break" : ""}">
@@ -416,7 +477,7 @@ export default function NotesPage() {
       <html>
         <head>
           <meta charset="UTF-8" />
-          <title>${escapeHtml(generatedTitle)}</title>
+          <title>${escapeHtml(noteTitle)}</title>
           <style>
             :root { color-scheme: dark; }
             * { box-sizing: border-box; }
@@ -551,8 +612,8 @@ export default function NotesPage() {
             <section class="hero">
               <div class="hero-inner">
                 <div class="eyebrow">EduPilot Notes Export</div>
-                <h1>${escapeHtml(generatedTitle)}</h1>
-                <p class="hint">${escapeHtml(sourceHint || "Smart notes generated from your selected study material.")}</p>
+                <h1>${escapeHtml(noteTitle)}</h1>
+                <p class="hint">${escapeHtml(noteSourceHint || "Smart notes generated from your selected study material.")}</p>
               </div>
             </section>
             ${tabsHtml}
@@ -753,33 +814,68 @@ export default function NotesPage() {
               <CardContent>
                 {history.length ? (
                   <div className="space-y-3">
-                    {history.slice(0, 8).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          const normalizedTabs = item.tabs.map((tab) => ({
-                            ...tab,
-                            content: normalizeNoteContent(tab.content, tab.title),
-                          }))
-                          setGeneratedTitle(item.source_title)
-                          setGeneratedNotes(normalizedTabs)
-                          setSourceHint(item.source_hint || item.source_label || "")
-                          setSourceMode(item.source_type)
-                          setActiveTab(normalizedTabs[0]?.type || "summary")
-                        }}
-                        className="w-full rounded-xl border border-border/80 bg-background/40 px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate font-medium text-foreground">{item.source_title}</p>
-                          <Badge variant="secondary" className="capitalize">
-                            {item.source_type}
-                          </Badge>
+                    {history.slice(0, 8).map((item) => {
+                      const isActive = currentSavedId === item.id
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            "rounded-xl border bg-background/40 px-4 py-3 transition-colors",
+                            isActive
+                              ? "border-primary/60 bg-primary/10"
+                              : "border-border/80 hover:border-primary/40 hover:bg-primary/5"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="truncate font-medium text-foreground">{item.source_title}</p>
+                                <Badge variant="secondary" className="capitalize">
+                                  {item.source_type}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {item.source_hint || item.source_label || "Saved note"}
+                              </p>
+                              <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+                                {new Date(item.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <Button
+                              variant={isActive ? "default" : "outline"}
+                              size="sm"
+                              className="gap-2 rounded-lg"
+                              onClick={() => openSavedNote(item)}
+                            >
+                              <Eye className="h-4 w-4" />
+                              Open
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2 rounded-lg"
+                              onClick={() =>
+                                downloadNotes({
+                                  title: item.source_title,
+                                  sourceHint: item.source_hint || item.source_label || "",
+                                  tabs: item.tabs.map((tab) => ({
+                                    ...tab,
+                                    content: normalizeNoteContent(tab.content, tab.title),
+                                  })),
+                                })
+                              }
+                            >
+                              <Download className="h-4 w-4" />
+                              Download
+                            </Button>
+                          </div>
                         </div>
-                        <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {item.source_hint || item.source_label || "Saved note"}
-                        </p>
-                      </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/70 bg-background/30 px-4 py-5 text-sm text-muted-foreground">
@@ -831,9 +927,15 @@ export default function NotesPage() {
                     <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">{sourceHint}</p>
                   ) : null}
                 </div>
-                <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={downloadNotes}>
-                  <Download className="h-5 w-5" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" className="gap-2" onClick={resetGeneratedView}>
+                    <Plus className="h-4 w-4" />
+                    Add New
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => downloadNotes()}>
+                    <Download className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>

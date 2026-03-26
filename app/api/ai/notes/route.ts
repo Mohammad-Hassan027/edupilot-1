@@ -240,14 +240,16 @@ export async function POST(req: NextRequest) {
     })
 
     const user = await getUser()
+    let savedNote = null
+
     if (user) {
-      await saveGeneratedNote(user.id, {
+      savedNote = await saveGeneratedNote(user.id, {
         sourceType: sourceMode,
         sourceTitle: generated.title || sourceTitle,
         sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
         sourceHint: generated.sourceHint || sourceHint,
         tabs: generated.tabs,
-      }).catch(() => null)
+      })
     }
 
     return NextResponse.json({
@@ -255,6 +257,7 @@ export async function POST(req: NextRequest) {
       title: generated.title || sourceTitle,
       sourceHint: generated.sourceHint || sourceHint,
       tabs: generated.tabs,
+      savedNote,
     })
   } catch (error) {
     console.error("[ai/notes] Error:", error)
