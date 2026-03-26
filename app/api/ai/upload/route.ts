@@ -5,7 +5,7 @@ import { getUser } from "@/lib/auth-server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 
 const BUCKET_NAME = "ai-tutor-uploads"
-const MAX_FILE_BYTES = 18 * 1024 * 1024
+const MAX_FILE_BYTES = 5 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!bucketExists) {
       const { error: createBucketError } = await admin.storage.createBucket(BUCKET_NAME, {
         public: true,
-        fileSizeLimit: "18MB",
+        fileSizeLimit: "5MB",
       })
 
       if (createBucketError && !createBucketError.message.toLowerCase().includes("already")) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     for (const file of files) {
       if (file.size > MAX_FILE_BYTES) {
         return NextResponse.json(
-          { error: `${file.name} is too large. Please upload files under 18 MB.` },
+          { error: `${file.name} is too large. Please upload files under 5 MB.` },
           { status: 400 }
         )
       }

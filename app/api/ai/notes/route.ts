@@ -10,11 +10,8 @@ import {
 } from "@/lib/ai-tools"
 import { getSavedNotes, saveGeneratedNote } from "@/lib/database"
 
-const NOTE_TYPES = ["summary", "concepts", "bullets", "revision"] as const
-
 type SourceMode = "pdf" | "video" | "spreadsheet"
-type PromptType = "summary" | "explanation" | "concepts" | "bullets" | "revision"
-type NoteType = (typeof NOTE_TYPES)[number]
+type NoteType = "summary" | "concepts" | "bullets" | "revision"
 
 type NoteTab = {
   type: NoteType
@@ -28,9 +25,7 @@ function cleanText(value: unknown) {
 
 function getGeminiKey() {
   const key = process.env.GEMINI_API_KEY?.trim()
-  if (!key) {
-    throw new Error("GEMINI_API_KEY is not set")
-  }
+  if (!key) throw new Error("GEMINI_API_KEY is not set")
   return key
 }
 
@@ -46,11 +41,7 @@ async function callGeminiJson(prompt: string) {
         "x-goog-api-key": key,
       },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
+        contents: [{ parts: [{ text: prompt }] }],
       }),
     }
   )
@@ -67,78 +58,49 @@ async function callGeminiJson(prompt: string) {
       .join("\n")
       .trim() || ""
 
-  if (!text) {
-    throw new Error("Gemini returned an empty response")
-  }
+  if (!text) throw new Error("Gemini returned an empty response")
 
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```/g, "").trim()
-
-  try {
-    return JSON.parse(cleaned)
-  } catch {
-    throw new Error("Gemini returned invalid notes format. Please try again.")
-  }
-}
-
-function getSourceLabel(sourceMode: SourceMode) {
-  if (sourceMode === "pdf") return "PDF"
-  if (sourceMode === "spreadsheet") return "Spreadsheet"
-  return "Video Link"
+  return JSON.parse(cleaned)
 }
 
 function extractYouTubeId(url: string) {
   try {
     const parsed = new URL(url)
-
     if (parsed.hostname.includes("youtu.be")) {
       return parsed.pathname.replace(/^\/+/, "")
     }
-
     if (parsed.hostname.includes("youtube.com")) {
       return parsed.searchParams.get("v") || ""
     }
-
     return ""
   } catch {
     return ""
   }
 }
 
-function buildVideoSearchQuery(videoUrl: string, promptType: PromptType) {
+function buildVideoSearchQuery(videoUrl: string) {
   const youtubeId = extractYouTubeId(videoUrl)
-
   if (youtubeId) {
-    return `${videoUrl} ${youtubeId} ${promptType} lecture tutorial concepts summary notes`
+    return `${videoUrl} ${youtubeId} lecture tutorial concepts summary notes`
   }
-
-  return `${videoUrl} ${promptType} summary concepts notes`
+  return `${videoUrl} summary concepts notes`
 }
 
 async function generateStructuredNotes(params: {
   sourceMode: SourceMode
-  promptType: PromptType
   sourceLabel: string
   sourceHint: string
   studyMaterial: string
 }) {
-  const promptFocusMap: Record<PromptType, string> = {
-    summary: "Make the summary especially strong and concise.",
-    explanation: "Make the explanation especially clear and simple for students.",
-    concepts: "Make the concept breakdown especially detailed and well organized.",
-    bullets: "Make the bullet points especially exam-friendly and quick to scan.",
-    revision: "Make the revision notes especially useful for last-minute revision.",
-  }
-
   const prompt = `
 You are EduPilot, an AI study notes assistant.
 
-Create polished notes for a student from the material below.
+Create professional student notes from the material below.
 
 Source type: ${params.sourceMode}
 Source label: ${params.sourceLabel}
 Source hint: ${params.sourceHint || "N/A"}
-Preferred focus: ${params.promptType}
-${promptFocusMap[params.promptType]}
 
 Study material:
 ${params.studyMaterial}
@@ -148,24 +110,24 @@ Return ONLY valid JSON in this exact shape:
   "title": "Short title",
   "sourceHint": "One short line about the source",
   "tabs": [
-    { "type": "summary", "title": "Summary", "content": "markdown content" },
-    { "type": "concepts", "title": "Concept Breakdown", "content": "markdown content" },
-    { "type": "bullets", "title": "Bullet Points", "content": "markdown content" },
-    { "type": "revision", "title": "Revision Notes", "content": "markdown content" }
+    { "type": "summary", "title": "Summary", "content": "clean markdown content" },
+    { "type": "concepts", "title": "Concept Breakdown", "content": "clean markdown content" },
+    { "type": "bullets", "title": "Bullet Points", "content": "clean markdown content" },
+    { "type": "revision", "title": "Revision Notes", "content": "clean markdown content" }
   ]
 }
 
 Rules:
 - Do not wrap JSON in markdown fences
-- Keep the language student-friendly and professional
-- Use clean markdown inside each content field
-- Do not start sections with raw labels like "## Summary" or repeat the tab title
-- Use short intro paragraphs, horizontal dividers (---), and clear H2/H3 subheadings where helpful
-- Avoid cluttered symbols or unnecessary markdown noise
-- The summary tab should be short and clear
-- The concepts tab should explain key ideas with well-structured sub-sections
-- The bullet points tab should be concise, scannable, and exam-friendly
-- The revision tab should include quick review notes plus 3 to 5 practice questions
+- Generate all 4 tabs every time
+- Do not start content with raw labels like ## Summary or ## Bullet Points
+- Use clean headings only where useful
+- Use divider lines with ---
+- Use short paragraphs
+- Make the content professional, readable, and student-friendly
+- In Concept Breakdown, use clear sub-sections
+- In Bullet Points, make the content concise and exam-friendly
+- In Revision Notes, include quick review notes and 3 to 5 practice questions
 `.trim()
 
   const parsed = (await callGeminiJson(prompt)) as {
@@ -181,23 +143,16 @@ Rules:
     revision: "Revision Notes",
   }
 
-  const tabMap = new Map<NoteType, { title: string; content: string }>()
+  const requiredTypes: NoteType[] = ["summary", "concepts", "bullets", "revision"]
 
-  for (const tab of parsed.tabs || []) {
-    const type = tab?.type as NoteType | undefined
-    if (!type || !NOTE_TYPES.includes(type)) continue
-
-    tabMap.set(type, {
-      title: cleanText(tab.title) || fallbackTitles[type],
-      content: cleanText(tab.content) || "No content generated for this section.",
-    })
-  }
-
-  const tabs: NoteTab[] = NOTE_TYPES.map((type) => ({
-    type,
-    title: tabMap.get(type)?.title || fallbackTitles[type],
-    content: tabMap.get(type)?.content || "No content generated for this section.",
-  }))
+  const tabs: NoteTab[] = requiredTypes.map((type) => {
+    const match = parsed.tabs?.find((tab) => tab.type === type)
+    return {
+      type,
+      title: cleanText(match?.title) || fallbackTitles[type],
+      content: cleanText(match?.content) || "No content generated for this section.",
+    }
+  })
 
   return {
     title: cleanText(parsed.title) || `${params.sourceLabel} Notes`,
@@ -209,10 +164,7 @@ Rules:
 export async function GET() {
   try {
     const user = await getUser()
-
-    if (!user) {
-      return NextResponse.json({ notes: [] })
-    }
+    if (!user) return NextResponse.json({ notes: [] })
 
     const notes = await getSavedNotes(user.id, 12)
     return NextResponse.json({ notes })
@@ -227,16 +179,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
 
     const sourceMode = body?.sourceMode as SourceMode
-    const promptType = body?.promptType as PromptType
     const videoUrl = cleanText(body?.videoUrl)
     const files = (Array.isArray(body?.files) ? body.files : []) as UploadedAttachment[]
 
     if (!["pdf", "video", "spreadsheet"].includes(sourceMode)) {
       return NextResponse.json({ error: "Invalid source mode." }, { status: 400 })
-    }
-
-    if (!["summary", "explanation", "concepts", "bullets", "revision"].includes(promptType)) {
-      return NextResponse.json({ error: "Invalid notes format selection." }, { status: 400 })
     }
 
     if (sourceMode === "video") {
@@ -259,8 +206,7 @@ export async function POST(req: NextRequest) {
     let sourceHint = ""
 
     if (sourceMode === "video") {
-      const results = await searchWithTavily(buildVideoSearchQuery(videoUrl, promptType)).catch(() => [])
-
+      const results = await searchWithTavily(buildVideoSearchQuery(videoUrl)).catch(() => [])
       const publicContext = results.length
         ? results
             .map(
@@ -270,53 +216,35 @@ export async function POST(req: NextRequest) {
             .join("\n\n")
         : `Public video URL: ${videoUrl}`
 
-      studyMaterial = `
-Video URL:
-${videoUrl}
-
-Public context:
-${publicContext}
-`.trim()
-
+      studyMaterial = `Video URL:\n${videoUrl}\n\nPublic context:\n${publicContext}`
       sourceTitle = "Video Study Notes"
       sourceHint = videoUrl
     } else {
       const filesSummary = summarizeAttachments(files)
 
       const analysis = await analyzeAttachmentsWithGemini({
-        message: `Generate ${promptType} study notes from these uploaded ${
-          sourceMode === "pdf" ? "PDF" : "spreadsheet"
-        } files.`,
+        message: `Generate complete study notes from these uploaded ${sourceMode === "pdf" ? "PDF" : "spreadsheet"} files.`,
         attachments: files,
       })
 
-      studyMaterial = `
-Uploaded files:
-${filesSummary}
-
-AI file analysis:
-${analysis}
-`.trim()
-
-      sourceTitle = files[0]?.name || `${getSourceLabel(sourceMode)} Notes`
+      studyMaterial = `Uploaded files:\n${filesSummary}\n\nAI file analysis:\n${analysis}`
+      sourceTitle = files[0]?.name || `${sourceMode === "pdf" ? "PDF" : "Spreadsheet"} Notes`
       sourceHint = filesSummary
     }
 
     const generated = await generateStructuredNotes({
       sourceMode,
-      promptType,
-      sourceLabel: getSourceLabel(sourceMode),
+      sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
       sourceHint,
       studyMaterial,
     })
 
     const user = await getUser()
-
     if (user) {
       await saveGeneratedNote(user.id, {
         sourceType: sourceMode,
         sourceTitle: generated.title || sourceTitle,
-        sourceLabel: getSourceLabel(sourceMode),
+        sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
         sourceHint: generated.sourceHint || sourceHint,
         tabs: generated.tabs,
       }).catch(() => null)
@@ -333,4 +261,4 @@ ${analysis}
     const message = error instanceof Error ? error.message : "Failed to generate notes"
     return NextResponse.json({ error: message }, { status: 500 })
   }
-} 
+}

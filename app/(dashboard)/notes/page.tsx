@@ -1,587 +1,3 @@
-// "use client"
-
-// import { useEffect, useMemo, useState } from "react"
-// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Button } from "@/components/ui/button"
-// import { Input } from "@/components/ui/input"
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// import { Badge } from "@/components/ui/badge"
-// import { MarkdownRenderer } from "@/components/markdown-renderer"
-// import {
-//   FileText,
-//   Video,
-//   Table2,
-//   Sparkles,
-//   Download,
-//   Copy,
-//   RefreshCw,
-//   FileUp,
-//   CheckCircle,
-//   Lightbulb,
-//   Link2,
-//   BookOpen,
-//   History,
-// } from "lucide-react"
-// import { cn } from "@/lib/utils"
-
-// type SourceMode = "pdf" | "video" | "spreadsheet"
-// type PromptType = "summary" | "explanation" | "concepts" | "bullets" | "revision"
-// type NoteTab = { type: "summary" | "concepts" | "bullets" | "revision"; title: string; content: string }
-
-// type SavedNote = {
-//   id: string
-//   source_type: SourceMode
-//   source_title: string
-//   source_label: string | null
-//   source_hint: string | null
-//   tabs: NoteTab[]
-//   created_at: string
-// }
-
-// const MAX_FILE_BYTES = 18 * 1024 * 1024
-
-// const sourceOptions: Array<{
-//   id: SourceMode
-//   icon: typeof FileText
-//   title: string
-//   description: string
-//   accept?: string
-//   hints: string[]
-// }> = [
-//   {
-//     id: "pdf",
-//     icon: FileText,
-//     title: "PDF",
-//     description: "Upload a PDF and turn it into study notes.",
-//     accept: ".pdf",
-//     hints: [
-//       "Use chapter PDFs, lecture notes, handouts, or scanned text-based PDFs.",
-//       "After upload, choose what you want: summary, explanation, concepts, bullet notes, or revision notes.",
-//       "Best results come from clean PDFs under 18 MB.",
-//     ],
-//   },
-//   {
-//     id: "video",
-//     icon: Video,
-//     title: "Video Link",
-//     description: "Paste a YouTube or public video link.",
-//     hints: [
-//       "Paste a YouTube link or another public video URL.",
-//       "If a transcript is available, EduPilot will use it. Otherwise it will use public information about the video.",
-//       "Good for lectures, tutorials, and concept explainers.",
-//     ],
-//   },
-//   {
-//     id: "spreadsheet",
-//     icon: Table2,
-//     title: "Spreadsheet",
-//     description: "Upload CSV, XLS, or XLSX files and study the data.",
-//     accept: ".csv,.xls,.xlsx",
-//     hints: [
-//       "Upload CSV or Excel sheets with tabular study data.",
-//       "Great for marksheets, experiment logs, finance tables, and research summaries.",
-//       "After upload, select a prompt like concepts or bullet notes to shape the output.",
-//     ],
-//   },
-// ]
-
-// const promptOptions: Array<{ id: PromptType; label: string; helper: string }> = [
-//   { id: "summary", label: "Summary", helper: "Short overview of the material." },
-//   { id: "explanation", label: "Topic Explanation", helper: "Tutor-style explanation in simple words." },
-//   { id: "concepts", label: "Concept Breakdown", helper: "Important concepts with explanations." },
-//   { id: "bullets", label: "Bullet Points", helper: "Exam-friendly bullet notes." },
-//   { id: "revision", label: "Revision Notes", helper: "Quick review notes and questions." },
-// ]
-
-// export default function NotesPage() {
-//   const [sourceMode, setSourceMode] = useState<SourceMode>("pdf")
-//   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-//   const [videoUrl, setVideoUrl] = useState("")
-//   const [selectedPrompt, setSelectedPrompt] = useState<PromptType>("summary")
-//   const [isGenerating, setIsGenerating] = useState(false)
-//   const [generateError, setGenerateError] = useState("")
-//   const [generatedNotes, setGeneratedNotes] = useState<NoteTab[] | null>(null)
-//   const [generatedTitle, setGeneratedTitle] = useState("Generated Notes")
-//   const [sourceHint, setSourceHint] = useState("")
-//   const [history, setHistory] = useState<SavedNote[]>([])
-
-//   const selectedOption = useMemo(
-//     () => sourceOptions.find((option) => option.id === sourceMode) || sourceOptions[0],
-//     [sourceMode]
-//   )
-
-//   useEffect(() => {
-//     void loadHistory()
-//   }, [])
-
-//   useEffect(() => {
-//     if (typeof window === "undefined") return
-//     const savedId = new URLSearchParams(window.location.search).get("saved")
-//     if (!savedId || !history.length) return
-
-//     const match = history.find((item) => item.id === savedId)
-//     if (!match) return
-
-//     setGeneratedTitle(match.source_title)
-//     setGeneratedNotes(match.tabs)
-//     setSourceHint(match.source_hint || match.source_label || "")
-//     setSourceMode(match.source_type)
-//   }, [history])
-
-//   async function loadHistory() {
-//     try {
-//       const response = await fetch("/api/ai/notes", { cache: "no-store" })
-//       const data = await response.json().catch(() => ({ notes: [] }))
-
-//       if (response.ok) {
-//         setHistory(data.notes || [])
-//       }
-//     } catch {
-//       // ignore UI history errors
-//     }
-//   }
-
-//   function resetSourceInputs(nextSource: SourceMode) {
-//     setSourceMode(nextSource)
-//     setUploadedFile(null)
-//     setVideoUrl("")
-//     setGenerateError("")
-//   }
-
-//   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-//     const file = e.target.files?.[0]
-//     if (!file) return
-
-//     if (file.size > MAX_FILE_BYTES) {
-//       setUploadedFile(null)
-//       setGenerateError("Please upload a file under 18 MB.")
-//       e.target.value = ""
-//       return
-//     }
-
-//     setUploadedFile(file)
-//     setGenerateError("")
-//   }
-
-//   async function uploadCurrentFile() {
-//     if (!uploadedFile) throw new Error("Please upload a file first.")
-
-//     const formData = new FormData()
-//     formData.append("files", uploadedFile)
-
-//     const response = await fetch("/api/ai/upload", {
-//       method: "POST",
-//       body: formData,
-//     })
-
-//     const data = await response.json().catch(() => ({}))
-
-//     if (!response.ok) {
-//       throw new Error(data.error || "Failed to upload file")
-//     }
-
-//     return data.files?.[0]
-//   }
-
-//   async function handleGenerate() {
-//     if ((sourceMode === "pdf" || sourceMode === "spreadsheet") && !uploadedFile) return
-//     if (sourceMode === "video" && !videoUrl.trim()) return
-
-//     setIsGenerating(true)
-//     setGenerateError("")
-
-//     try {
-//       const files = sourceMode === "video" ? [] : uploadedFile ? [await uploadCurrentFile()] : []
-
-//       const response = await fetch("/api/ai/notes", {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({
-//           sourceMode,
-//           promptType: selectedPrompt,
-//           videoUrl,
-//           files,
-//         }),
-//       })
-
-//       const data = await response.json().catch(async () => ({
-//         error: response.ok ? "Failed to generate notes" : await response.text(),
-//       }))
-
-//       if (!response.ok) {
-//         throw new Error(data.error || "Failed to generate notes")
-//       }
-
-//       setGeneratedTitle(data.title || "Generated Notes")
-//       setGeneratedNotes(data.tabs || [])
-//       setSourceHint(data.sourceHint || "")
-//       await loadHistory()
-//     } catch (error) {
-//       setGenerateError(error instanceof Error ? error.message : "Failed to generate notes")
-//     } finally {
-//       setIsGenerating(false)
-//     }
-//   }
-
-//   function copyTabContent(content: string) {
-//     void navigator.clipboard.writeText(content)
-//   }
-
-//   function downloadNotes() {
-//     if (!generatedNotes) return
-
-//     const text = [
-//       `# ${generatedTitle}`,
-//       sourceHint ? `> ${sourceHint}` : "",
-//       "",
-//       ...generatedNotes.map((tab) => `## ${tab.title}\n\n${tab.content}`),
-//     ].join("\n")
-
-//     const blob = new Blob([text], { type: "text/markdown;charset=utf-8" })
-//     const url = URL.createObjectURL(blob)
-//     const a = document.createElement("a")
-//     a.href = url
-//     a.download = `${generatedTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "notes"}.md`
-//     a.click()
-//     URL.revokeObjectURL(url)
-//   }
-
-//   const canGenerate =
-//     !isGenerating &&
-//     ((sourceMode === "video" && !!videoUrl.trim()) ||
-//       (sourceMode !== "video" && !!uploadedFile && uploadedFile.size <= MAX_FILE_BYTES))
-
-//   return (
-//     <div className="space-y-6 p-4 md:p-6">
-//       <div>
-//         <h1 className="text-2xl font-bold text-foreground">AI Notes Generator</h1>
-//         <p className="text-muted-foreground">
-//           Create smart notes from PDFs, public video links, and spreadsheets.
-//         </p>
-//       </div>
-
-//       <div className="space-y-6">
-//         <div className="grid gap-3 md:grid-cols-3">
-//           {sourceOptions.map((option) => (
-//             <button
-//               key={option.id}
-//               onClick={() => resetSourceInputs(option.id)}
-//               className={cn(
-//                 "flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all",
-//                 sourceMode === option.id
-//                   ? "border-primary bg-primary/5"
-//                   : "border-border bg-card hover:border-primary/50"
-//               )}
-//             >
-//               <div
-//                 className={cn(
-//                   "flex h-10 w-10 items-center justify-center rounded-lg",
-//                   sourceMode === option.id ? "bg-primary/20" : "bg-secondary"
-//                 )}
-//               >
-//                 <option.icon
-//                   className={cn(
-//                     "h-5 w-5",
-//                     sourceMode === option.id ? "text-primary" : "text-muted-foreground"
-//                   )}
-//                 />
-//               </div>
-//               <span className="text-sm font-medium text-foreground">{option.title}</span>
-//               <span className="text-xs text-muted-foreground">{option.description}</span>
-//             </button>
-//           ))}
-//         </div>
-
-//         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-//           <div className="space-y-4">
-//             <Card className="border-border bg-card">
-//               <CardHeader className="pb-3">
-//                 <CardTitle className="flex items-center gap-2 text-lg">
-//                   <Lightbulb className="h-5 w-5 text-primary" />
-//                   How to use {selectedOption.title}
-//                 </CardTitle>
-//               </CardHeader>
-//               <CardContent className="space-y-3">
-//                 {selectedOption.hints.map((hint, index) => (
-//                   <div
-//                     key={index}
-//                     className="flex gap-3 rounded-xl bg-secondary/60 px-3 py-3 text-sm text-foreground"
-//                   >
-//                     <Badge
-//                       variant="secondary"
-//                       className="mt-0.5 h-5 min-w-5 justify-center rounded-full px-1.5"
-//                     >
-//                       {index + 1}
-//                     </Badge>
-//                     <span>{hint}</span>
-//                   </div>
-//                 ))}
-//               </CardContent>
-//             </Card>
-
-//             <Card className="border-border bg-card">
-//               <CardContent className="p-4">
-//                 {sourceMode === "video" ? (
-//                   <div className="space-y-4">
-//                     <div className="rounded-xl border border-border bg-secondary/40 p-4">
-//                       <label className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-//                         <Link2 className="h-4 w-4 text-primary" />
-//                         Paste your video link
-//                       </label>
-//                       <Input
-//                         value={videoUrl}
-//                         onChange={(e) => setVideoUrl(e.target.value)}
-//                         placeholder="https://www.youtube.com/watch?v=..."
-//                         className="bg-background"
-//                       />
-//                       <p className="mt-2 text-xs text-muted-foreground">
-//                         Best support: YouTube links with captions. Other public video links use
-//                         whatever public context is available.
-//                       </p>
-//                     </div>
-//                   </div>
-//                 ) : (
-//                   <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center transition-colors hover:border-primary/50">
-//                     {uploadedFile ? (
-//                       <div className="space-y-3">
-//                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-//                           <CheckCircle className="h-8 w-8 text-primary" />
-//                         </div>
-//                         <div>
-//                           <p className="font-medium text-foreground">{uploadedFile.name}</p>
-//                           <p className="text-sm text-muted-foreground">
-//                             {uploadedFile.size > 1024 * 1024
-//                               ? `${(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB`
-//                               : `${(uploadedFile.size / 1024).toFixed(1)} KB`}
-//                           </p>
-//                         </div>
-//                         <Button variant="outline" size="sm" onClick={() => setUploadedFile(null)}>
-//                           Remove
-//                         </Button>
-//                       </div>
-//                     ) : (
-//                       <label className="cursor-pointer space-y-3">
-//                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-//                           <FileUp className="h-8 w-8 text-muted-foreground" />
-//                         </div>
-//                         <div>
-//                           <p className="font-medium text-foreground">
-//                             Drop your file here or click to browse
-//                           </p>
-//                           <p className="text-sm text-muted-foreground">
-//                             Supports {selectedOption.accept?.replaceAll(",", ", ")}
-//                           </p>
-//                           <p className="text-xs text-muted-foreground">Maximum file size: 18 MB</p>
-//                         </div>
-//                         <input
-//                           type="file"
-//                           accept={selectedOption.accept}
-//                           onChange={handleFileUpload}
-//                           className="hidden"
-//                         />
-//                       </label>
-//                     )}
-//                   </div>
-//                 )}
-//               </CardContent>
-//             </Card>
-
-//             <div className="space-y-3">
-//               <Button className="w-full gap-2" size="lg" onClick={handleGenerate} disabled={!canGenerate}>
-//                 {isGenerating ? (
-//                   <>
-//                     <RefreshCw className="h-4 w-4 animate-spin" />
-//                     Generating Notes...
-//                   </>
-//                 ) : (
-//                   <>
-//                     <Sparkles className="h-4 w-4" />
-//                     Generate Study Notes
-//                   </>
-//                 )}
-//               </Button>
-
-//               {generateError ? (
-//                 <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-//                   {generateError}
-//                 </div>
-//               ) : null}
-//             </div>
-//           </div>
-
-//           <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-//             <Card className="border-border bg-card">
-//               <CardHeader className="pb-3">
-//                 <CardTitle className="text-lg">Choose what you want from it</CardTitle>
-//                 <p className="text-sm text-muted-foreground">
-//                   Pick the note format before generating.
-//                 </p>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-//                   {promptOptions.map((option) => (
-//                     <button
-//                       key={option.id}
-//                       onClick={() => setSelectedPrompt(option.id)}
-//                       className={cn(
-//                         "rounded-xl border px-4 py-3 text-left transition-all",
-//                         selectedPrompt === option.id
-//                           ? "border-primary bg-primary/10"
-//                           : "border-border bg-secondary/30 hover:border-primary/40"
-//                       )}
-//                     >
-//                       <p className="font-medium text-foreground">{option.label}</p>
-//                       <p className="mt-1 text-xs text-muted-foreground">{option.helper}</p>
-//                     </button>
-//                   ))}
-//                 </div>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="border-border bg-card">
-//               <CardContent className="p-4">
-//                 <div className="rounded-xl border border-border/70 bg-background/40 p-4">
-//                   <p className="text-sm font-medium text-foreground">Current setup</p>
-//                   <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-//                     <div className="flex items-center justify-between gap-3">
-//                       <span>Source</span>
-//                       <Badge variant="secondary">{selectedOption.title}</Badge>
-//                     </div>
-//                     <div className="flex items-center justify-between gap-3">
-//                       <span>Output</span>
-//                       <Badge variant="secondary">
-//                         {promptOptions.find((item) => item.id === selectedPrompt)?.label}
-//                       </Badge>
-//                     </div>
-//                     <div className="flex items-center justify-between gap-3">
-//                       <span>Status</span>
-//                       <Badge
-//                         variant={sourceMode === "video" ? "outline" : uploadedFile ? "secondary" : "outline"}
-//                       >
-//                         {sourceMode === "video"
-//                           ? videoUrl.trim()
-//                             ? "Link added"
-//                             : "Waiting"
-//                           : uploadedFile
-//                           ? "File added"
-//                           : "Waiting"}
-//                       </Badge>
-//                     </div>
-//                   </div>
-//                 </div>
-//               </CardContent>
-//             </Card>
-//           </div>
-//         </div>
-
-//         {generatedNotes ? (
-//           <Card className="border-border bg-card">
-//             <CardHeader className="pb-2">
-//               <div className="flex items-start justify-between gap-3">
-//                 <div>
-//                   <CardTitle className="text-xl">{generatedTitle}</CardTitle>
-//                   {sourceHint ? (
-//                     <p className="mt-1 text-sm text-muted-foreground">{sourceHint}</p>
-//                   ) : null}
-//                 </div>
-//                 <div className="flex gap-2">
-//                   <Button variant="outline" size="icon" className="h-9 w-9" onClick={downloadNotes}>
-//                     <Download className="h-4 w-4" />
-//                   </Button>
-//                 </div>
-//               </div>
-//             </CardHeader>
-//             <CardContent>
-//               <Tabs defaultValue={generatedNotes[0]?.type || "summary"} className="w-full">
-//                 <TabsList className="grid w-full grid-cols-4 bg-secondary">
-//                   {generatedNotes.map((tab) => (
-//                     <TabsTrigger key={tab.type} value={tab.type}>
-//                       {tab.title}
-//                     </TabsTrigger>
-//                   ))}
-//                 </TabsList>
-
-//                 {generatedNotes.map((tab) => (
-//                   <TabsContent key={tab.type} value={tab.type} className="mt-4">
-//                     <div className="rounded-2xl border border-border/80 bg-background/40 p-4">
-//                       <div className="mb-3 flex items-center justify-between gap-2">
-//                         <h3 className="font-semibold text-foreground">{tab.title}</h3>
-//                         <Button
-//                           variant="outline"
-//                           size="sm"
-//                           className="gap-2"
-//                           onClick={() => copyTabContent(tab.content)}
-//                         >
-//                           <Copy className="h-4 w-4" />
-//                           Copy
-//                         </Button>
-//                       </div>
-//                       <MarkdownRenderer content={tab.content} className="text-sm" />
-//                     </div>
-//                   </TabsContent>
-//                 ))}
-//               </Tabs>
-//             </CardContent>
-//           </Card>
-//         ) : (
-//           <Card className="min-h-[320px] border-border bg-card">
-//             <CardContent className="flex h-full min-h-[320px] items-center justify-center p-6">
-//               <div className="max-w-sm text-center">
-//                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-//                   <BookOpen className="h-8 w-8 text-muted-foreground" />
-//                 </div>
-//                 <h3 className="text-lg font-semibold text-foreground">No notes generated yet</h3>
-//                 <p className="mt-2 text-sm text-muted-foreground">
-//                   Select a source, review the tips, choose the output style on the side, and generate your notes.
-//                 </p>
-//               </div>
-//             </CardContent>
-//           </Card>
-//         )}
-
-//         {history.length ? (
-//           <Card className="border-border bg-card">
-//             <CardHeader className="pb-3">
-//               <CardTitle className="flex items-center gap-2 text-lg">
-//                 <History className="h-5 w-5 text-primary" />
-//                 Saved Notes History
-//               </CardTitle>
-//               <p className="text-sm text-muted-foreground">
-//                 Your recently generated notes appear here for quick access.
-//               </p>
-//             </CardHeader>
-//             <CardContent>
-//               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-//                 {history.slice(0, 6).map((item) => (
-//                   <button
-//                     key={item.id}
-//                     onClick={() => {
-//                       setGeneratedTitle(item.source_title)
-//                       setGeneratedNotes(item.tabs)
-//                       setSourceHint(item.source_hint || item.source_label || "")
-//                       setSourceMode(item.source_type)
-//                     }}
-//                     className="w-full rounded-xl border border-border/80 bg-background/40 px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-//                   >
-//                     <div className="flex items-center justify-between gap-2">
-//                       <p className="truncate font-medium text-foreground">{item.source_title}</p>
-//                       <Badge variant="secondary" className="capitalize">
-//                         {item.source_type}
-//                       </Badge>
-//                     </div>
-//                     <p className="mt-1 truncate text-xs text-muted-foreground">
-//                       {item.source_hint || item.source_label || "Saved note"}
-//                     </p>
-//                   </button>
-//                 ))}
-//               </div>
-//             </CardContent>
-//           </Card>
-//         ) : null}
-//       </div>
-//     </div>
-//   )
-// }
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -609,7 +25,6 @@ import {
 import { cn } from "@/lib/utils"
 
 type SourceMode = "pdf" | "video" | "spreadsheet"
-type PromptType = "summary" | "explanation" | "concepts" | "bullets" | "revision"
 type NoteTab = { type: "summary" | "concepts" | "bullets" | "revision"; title: string; content: string }
 
 type SavedNote = {
@@ -629,7 +44,7 @@ type UploadedFileMeta = {
   size: number
 }
 
-const MAX_FILE_BYTES = 18 * 1024 * 1024
+const MAX_FILE_BYTES = 5 * 1024 * 1024
 
 const sourceOptions: Array<{
   id: SourceMode
@@ -647,8 +62,8 @@ const sourceOptions: Array<{
     accept: ".pdf",
     hints: [
       "Use chapter PDFs, lecture notes, handouts, or scanned text-based PDFs.",
-      "After upload, choose what you want: summary, explanation, concepts, bullet notes, or revision notes.",
-      "Best results come from clean PDFs under 18 MB.",
+      "EduPilot will automatically generate Summary, Concept Breakdown, Bullet Points, and Revision Notes.",
+      "Please upload files under 5 MB for best speed and reliability.",
     ],
   },
   {
@@ -659,7 +74,7 @@ const sourceOptions: Array<{
     hints: [
       "Paste a YouTube link or another public video URL.",
       "If a transcript is available, EduPilot will use it. Otherwise it will use public information about the video.",
-      "Good for lectures, tutorials, and concept explainers.",
+      "EduPilot will automatically generate all note sections for the video.",
     ],
   },
   {
@@ -670,18 +85,10 @@ const sourceOptions: Array<{
     accept: ".csv,.xls,.xlsx",
     hints: [
       "Upload CSV or Excel sheets with tabular study data.",
-      "Great for marksheets, experiment logs, finance tables, and research summaries.",
-      "After upload, select a prompt like concepts or bullet notes to shape the output.",
+      "EduPilot will automatically create Summary, Concept Breakdown, Bullet Points, and Revision Notes.",
+      "Please upload files under 5 MB.",
     ],
   },
-]
-
-const promptOptions: Array<{ id: PromptType; label: string; helper: string }> = [
-  { id: "summary", label: "Summary", helper: "Short overview of the material." },
-  { id: "explanation", label: "Topic Explanation", helper: "Tutor-style explanation in simple words." },
-  { id: "concepts", label: "Concept Breakdown", helper: "Important concepts with explanations." },
-  { id: "bullets", label: "Bullet Points", helper: "Exam-friendly bullet notes." },
-  { id: "revision", label: "Revision Notes", helper: "Quick review notes and questions." },
 ]
 
 function formatFileSize(size: number) {
@@ -691,26 +98,15 @@ function formatFileSize(size: number) {
 function normalizeNoteContent(content: string, tabTitle: string) {
   const cleaned = content
     .replace(/\r\n/g, "\n")
-    .replace(/^\s*#*\s*summary\s*$/gim, "")
-    .replace(/^\s*#*\s*concept breakdown\s*$/gim, "")
-    .replace(/^\s*#*\s*bullet points\s*$/gim, "")
-    .replace(/^\s*#*\s*revision notes\s*$/gim, "")
-    .replace(/^\s*\*\*(.*?)\*\*\s*$/gm, "## $1")
+    .replace(/^\s*#{1,6}\s*(summary|concept breakdown|bullet points|revision notes)\s*$/gim, "")
+    .replace(/^\s*\*\*(summary|concept breakdown|bullet points|revision notes)\*\*\s*$/gim, "")
+    .replace(/^\s*#{1,6}\s*key point\s*$/gim, "### Key Point")
+    .replace(/^\s*\*\*key point\*\*\s*$/gim, "### Key Point")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 
-  if (!cleaned) return `## ${tabTitle}\n\nNo content available.`
-
-  if (!/^#{1,3}\s/m.test(cleaned)) {
-    const sections = cleaned
-      .split(/\n\n+/)
-      .map((part) => part.trim())
-      .filter(Boolean)
-
-    if (sections.length > 1) {
-      const first = sections.shift() ?? ""
-      return [first, "---", ...sections.map((section) => `## Key Point\n\n${section}`)].join("\n\n")
-    }
+  if (!cleaned) {
+    return `${tabTitle}\n\nNo content available.`
   }
 
   return cleaned
@@ -721,7 +117,7 @@ function escapeHtml(value: string) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
 }
 
@@ -729,47 +125,54 @@ function renderPrintableHtml(content: string) {
   const lines = normalizeNoteContent(content, "Notes").split("\n")
   const html: string[] = []
   let inList = false
+  let inOrderedList = false
 
-  const closeList = () => {
+  const closeLists = () => {
     if (inList) {
       html.push("</ul>")
       inList = false
+    }
+    if (inOrderedList) {
+      html.push("</ol>")
+      inOrderedList = false
     }
   }
 
   for (const rawLine of lines) {
     const line = rawLine.trim()
+
     if (!line) {
-      closeList()
+      closeLists()
       continue
     }
 
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
-      closeList()
+      closeLists()
       html.push('<hr class="divider" />')
       continue
     }
 
     if (line.startsWith("### ")) {
-      closeList()
+      closeLists()
       html.push(`<h3>${escapeHtml(line.replace(/^###\s+/, ""))}</h3>`)
       continue
     }
 
     if (line.startsWith("## ")) {
-      closeList()
+      closeLists()
       html.push(`<h2>${escapeHtml(line.replace(/^##\s+/, ""))}</h2>`)
       continue
     }
 
     if (line.startsWith("# ")) {
-      closeList()
+      closeLists()
       html.push(`<h1>${escapeHtml(line.replace(/^#\s+/, ""))}</h1>`)
       continue
     }
 
     if (/^[-*]\s+/.test(line)) {
       if (!inList) {
+        closeLists()
         html.push('<ul class="bullet-list">')
         inList = true
       }
@@ -777,11 +180,21 @@ function renderPrintableHtml(content: string) {
       continue
     }
 
-    closeList()
+    if (/^\d+\.\s+/.test(line)) {
+      if (!inOrderedList) {
+        closeLists()
+        html.push('<ol class="ordered-list">')
+        inOrderedList = true
+      }
+      html.push(`<li>${escapeHtml(line.replace(/^\d+\.\s+/, ""))}</li>`)
+      continue
+    }
+
+    closeLists()
     html.push(`<p>${escapeHtml(line)}</p>`)
   }
 
-  closeList()
+  closeLists()
   return html.join("\n")
 }
 
@@ -790,7 +203,6 @@ export default function NotesPage() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [uploadedFileMeta, setUploadedFileMeta] = useState<UploadedFileMeta | null>(null)
   const [videoUrl, setVideoUrl] = useState("")
-  const [selectedPrompt, setSelectedPrompt] = useState<PromptType>("summary")
   const [activeTab, setActiveTab] = useState<NoteTab["type"]>("summary")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -819,11 +231,16 @@ export default function NotesPage() {
     const match = history.find((item) => item.id === savedId)
     if (!match) return
 
+    const normalizedTabs = match.tabs.map((tab) => ({
+      ...tab,
+      content: normalizeNoteContent(tab.content, tab.title),
+    }))
+
     setGeneratedTitle(match.source_title)
-    setGeneratedNotes(match.tabs)
+    setGeneratedNotes(normalizedTabs)
     setSourceHint(match.source_hint || match.source_label || "")
     setSourceMode(match.source_type)
-    setActiveTab(match.tabs[0]?.type || "summary")
+    setActiveTab(normalizedTabs[0]?.type || "summary")
   }, [history])
 
   useEffect(() => {
@@ -843,7 +260,7 @@ export default function NotesPage() {
         setHistory(data.notes || [])
       }
     } catch {
-      //
+        //
     }
   }
 
@@ -862,7 +279,7 @@ export default function NotesPage() {
     if (file.size > MAX_FILE_BYTES) {
       setUploadedFile(null)
       setUploadedFileMeta(null)
-      setGenerateError("Please upload a file under 18 MB.")
+      setGenerateError("Please upload a file under 5 MB.")
       e.target.value = ""
       return
     }
@@ -925,7 +342,6 @@ export default function NotesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceMode,
-          promptType: selectedPrompt,
           videoUrl,
           files,
         }),
@@ -979,11 +395,11 @@ export default function NotesPage() {
 
     const tabsHtml = generatedNotes
       .map(
-        (tab) => `
-          <section class="section-card">
+        (tab, index) => `
+          <section class="section-card ${index > 0 ? "page-break" : ""}">
             <div class="section-head">
               <div>
-                <p class="section-label">${escapeHtml(tab.title)}</p>
+                <p class="section-label">EduPilot Notes</p>
                 <h2>${escapeHtml(tab.title)}</h2>
               </div>
             </div>
@@ -1004,26 +420,37 @@ export default function NotesPage() {
           <style>
             :root { color-scheme: dark; }
             * { box-sizing: border-box; }
+            @page {
+              size: A4;
+              margin: 18mm;
+            }
             body {
               margin: 0;
               font-family: Inter, Arial, sans-serif;
-              background: linear-gradient(180deg, #041224 0%, #05101f 100%);
+              background:
+                radial-gradient(circle at top, rgba(245, 158, 11, 0.08), transparent 28%),
+                linear-gradient(180deg, #041224 0%, #07162a 100%);
               color: #f8fafc;
-              padding: 36px;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             .sheet {
               max-width: 980px;
               margin: 0 auto;
-              border: 1px solid rgba(255,255,255,0.08);
-              border-radius: 24px;
-              background: rgba(9, 18, 36, 0.92);
-              box-shadow: 0 18px 60px rgba(0,0,0,0.35);
-              overflow: hidden;
+              min-height: 100vh;
+              padding: 28px;
             }
             .hero {
-              padding: 36px;
-              border-bottom: 1px solid rgba(255,255,255,0.08);
-              background: linear-gradient(180deg, rgba(29, 78, 216, 0.08), rgba(245, 158, 11, 0.04));
+              border: 1px solid rgba(255,255,255,0.08);
+              border-radius: 28px;
+              background: rgba(8, 18, 35, 0.88);
+              box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+              overflow: hidden;
+              margin-bottom: 22px;
+            }
+            .hero-inner {
+              padding: 34px;
+              background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(245,158,11,0.03));
             }
             .eyebrow {
               display: inline-block;
@@ -1036,18 +463,32 @@ export default function NotesPage() {
               letter-spacing: 0.08em;
               text-transform: uppercase;
             }
-            h1 { margin: 18px 0 10px; font-size: 34px; line-height: 1.2; }
-            .hint { margin: 0; color: #a5b4cc; font-size: 15px; line-height: 1.7; }
-            .content { padding: 28px; }
+            .hero h1 {
+              margin: 18px 0 10px;
+              font-size: 34px;
+              line-height: 1.2;
+              color: #ffffff;
+            }
+            .hint {
+              margin: 0;
+              color: #a5b4cc;
+              font-size: 15px;
+              line-height: 1.8;
+            }
             .section-card {
-              margin-bottom: 20px;
               border: 1px solid rgba(255,255,255,0.08);
-              border-radius: 22px;
-              background: rgba(5, 16, 31, 0.75);
+              border-radius: 24px;
+              background: rgba(8, 18, 35, 0.88);
+              box-shadow: 0 18px 60px rgba(0,0,0,0.22);
               overflow: hidden;
+              margin-bottom: 22px;
+            }
+            .page-break {
+              page-break-before: always;
+              break-before: page;
             }
             .section-head {
-              padding: 22px 24px;
+              padding: 24px 28px;
               border-bottom: 1px solid rgba(255,255,255,0.08);
               background: rgba(255,255,255,0.02);
             }
@@ -1056,34 +497,65 @@ export default function NotesPage() {
               color: #fbbf24;
               font-size: 12px;
               font-weight: 700;
-              letter-spacing: 0.08em;
+              letter-spacing: 0.18em;
               text-transform: uppercase;
             }
-            .section-head h2 { margin: 0; font-size: 24px; }
-            .section-body { padding: 24px; }
+            .section-head h2 {
+              margin: 0;
+              font-size: 26px;
+              color: #ffffff;
+            }
+            .section-body {
+              padding: 28px;
+            }
             .section-body h1,
             .section-body h2,
-            .section-body h3 { margin: 24px 0 12px; color: #ffffff; }
-            .section-body h2 { font-size: 20px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
-            .section-body h3 { font-size: 17px; color: #fbbf24; }
+            .section-body h3 {
+              color: #ffffff;
+              margin: 24px 0 12px;
+            }
+            .section-body h1 { font-size: 28px; }
+            .section-body h2 {
+              font-size: 20px;
+              padding-top: 8px;
+              border-top: 1px solid rgba(255,255,255,0.08);
+            }
+            .section-body h3 {
+              font-size: 17px;
+              color: #fbbf24;
+            }
             .section-body p,
-            .section-body li { color: #dbe7f6; font-size: 15px; line-height: 1.8; }
-            .section-body .divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 18px 0; }
-            .bullet-list { margin: 0; padding-left: 22px; }
-            @media print {
-              body { padding: 0; background: #041224; }
-              .sheet { box-shadow: none; border-radius: 0; }
+            .section-body li {
+              color: #dbe7f6;
+              font-size: 15px;
+              line-height: 1.9;
+            }
+            .divider {
+              border: none;
+              border-top: 1px solid rgba(255,255,255,0.08);
+              margin: 18px 0;
+            }
+            .bullet-list,
+            .ordered-list {
+              margin: 0;
+              padding-left: 22px;
+            }
+            .bullet-list li,
+            .ordered-list li {
+              margin-bottom: 8px;
             }
           </style>
         </head>
         <body>
           <div class="sheet">
-            <div class="hero">
-              <div class="eyebrow">EduPilot Notes Export</div>
-              <h1>${escapeHtml(generatedTitle)}</h1>
-              <p class="hint">${escapeHtml(sourceHint || "Smart notes generated from your selected study material.")}</p>
-            </div>
-            <div class="content">${tabsHtml}</div>
+            <section class="hero">
+              <div class="hero-inner">
+                <div class="eyebrow">EduPilot Notes Export</div>
+                <h1>${escapeHtml(generatedTitle)}</h1>
+                <p class="hint">${escapeHtml(sourceHint || "Smart notes generated from your selected study material.")}</p>
+              </div>
+            </section>
+            ${tabsHtml}
           </div>
           <script>
             window.onload = () => window.print();
@@ -1201,7 +673,9 @@ export default function NotesPage() {
                           <p className="font-medium text-foreground">{uploadedFile.name}</p>
                           <p className="text-sm text-muted-foreground">{formatFileSize(uploadedFile.size)}</p>
                           {uploadedFileMeta ? (
-                            <p className="mt-1 text-xs text-emerald-400">Uploaded once. Reused for faster note generation.</p>
+                            <p className="mt-1 text-xs text-emerald-400">
+                              Uploaded once. Reused for faster note generation.
+                            </p>
                           ) : null}
                         </div>
                         <Button
@@ -1227,7 +701,7 @@ export default function NotesPage() {
                           <p className="text-sm text-muted-foreground">
                             Supports {selectedOption.accept?.replaceAll(",", ", ")}
                           </p>
-                          <p className="text-xs text-muted-foreground">Maximum file size: 18 MB</p>
+                          <p className="text-xs text-muted-foreground">Maximum file size: 5 MB</p>
                         </div>
                         <input
                           type="file"
@@ -1268,29 +742,50 @@ export default function NotesPage() {
           <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
             <Card className="border-border bg-card">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Choose what you want from it</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <History className="h-5 w-5 text-primary" />
+                  Saved Notes History
+                </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Pick the note format before generating.
+                  Open your recent generated notes from here.
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  {promptOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setSelectedPrompt(option.id)}
-                      className={cn(
-                        "rounded-xl border px-4 py-3 text-left transition-all",
-                        selectedPrompt === option.id
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-secondary/30 hover:border-primary/40"
-                      )}
-                    >
-                      <p className="font-medium text-foreground">{option.label}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{option.helper}</p>
-                    </button>
-                  ))}
-                </div>
+                {history.length ? (
+                  <div className="space-y-3">
+                    {history.slice(0, 8).map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          const normalizedTabs = item.tabs.map((tab) => ({
+                            ...tab,
+                            content: normalizeNoteContent(tab.content, tab.title),
+                          }))
+                          setGeneratedTitle(item.source_title)
+                          setGeneratedNotes(normalizedTabs)
+                          setSourceHint(item.source_hint || item.source_label || "")
+                          setSourceMode(item.source_type)
+                          setActiveTab(normalizedTabs[0]?.type || "summary")
+                        }}
+                        className="w-full rounded-xl border border-border/80 bg-background/40 px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate font-medium text-foreground">{item.source_title}</p>
+                          <Badge variant="secondary" className="capitalize">
+                            {item.source_type}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                          {item.source_hint || item.source_label || "Saved note"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border/70 bg-background/30 px-4 py-5 text-sm text-muted-foreground">
+                    No saved history yet.
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1302,12 +797,6 @@ export default function NotesPage() {
                     <div className="flex items-center justify-between gap-3">
                       <span>Source</span>
                       <Badge variant="secondary">{selectedOption.title}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Output</span>
-                      <Badge variant="secondary">
-                        {promptOptions.find((item) => item.id === selectedPrompt)?.label}
-                      </Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span>Status</span>
@@ -1402,57 +891,12 @@ export default function NotesPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-foreground">No notes generated yet</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Select a source, review the tips, choose the output style on the side, and generate your notes.
+                  Select a source, review the tips, and generate your notes.
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
-
-        {history.length ? (
-          <Card className="border-border bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <History className="h-5 w-5 text-primary" />
-                Saved Notes History
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Your recently generated notes appear here for quick access.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {history.slice(0, 6).map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      const normalizedTabs = item.tabs.map((tab) => ({
-                        ...tab,
-                        content: normalizeNoteContent(tab.content, tab.title),
-                      }))
-                      setGeneratedTitle(item.source_title)
-                      setGeneratedNotes(normalizedTabs)
-                      setSourceHint(item.source_hint || item.source_label || "")
-                      setSourceMode(item.source_type)
-                      setActiveTab(normalizedTabs[0]?.type || "summary")
-                    }}
-                    className="w-full rounded-xl border border-border/80 bg-background/40 px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-medium text-foreground">{item.source_title}</p>
-                      <Badge variant="secondary" className="capitalize">
-                        {item.source_type}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                      {item.source_hint || item.source_label || "Saved note"}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
       </div>
     </div>
   )
