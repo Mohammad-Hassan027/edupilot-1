@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          error: "Free AI limit reached. Please wait 1 minute and try again.",
+          error: "Free AI limit reached. Please wait for hours and try again.",
         },
         { status: 429 }
       )
