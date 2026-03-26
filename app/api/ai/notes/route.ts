@@ -258,7 +258,33 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error("[ai/notes] Error:", error)
-    const message = error instanceof Error ? error.message : "Failed to generate notes"
-    return NextResponse.json({ error: message }, { status: 500 })
+
+    const rawMessage =
+      error instanceof Error ? error.message : "Failed to generate notes"
+
+    const message = rawMessage.toLowerCase()
+
+    if (
+      message.includes("quota exceeded") ||
+      message.includes("rate limit") ||
+      message.includes("too many requests") ||
+      message.includes("retry in") ||
+      message.includes("429") ||
+      message.includes("resource_exhausted")
+    ) {
+      return NextResponse.json(
+        {
+          error: "Free AI limit reached. Please wait 1 minute and try again.",
+        },
+        { status: 429 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error: "Failed to generate notes. Please try again.",
+      },
+      { status: 500 }
+    )
   }
 }
