@@ -330,4 +330,4 @@ ${analysis}
     const message = error instanceof Error ? error.message : "Failed to generate notes"
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+} 
