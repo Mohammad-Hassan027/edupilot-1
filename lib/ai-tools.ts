@@ -1,3 +1,5 @@
+import JSZip from "jszip"
+
 export type UploadedAttachment = {
   name: string
   url: string
@@ -20,6 +22,7 @@ interface GeminiInlinePart {
 }
 
 const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024
+const OFFICE_TEXT_MIME = "text/plain"
 
 function getGeminiKey() {
   const key = process.env.GEMINI_API_KEY?.trim()
@@ -31,11 +34,8 @@ function getGeminiKey() {
 
 function normalizeMimeType(fileName: string, mimeType?: string) {
   const normalized = (mimeType || "").trim().toLowerCase()
-  if (normalized && normalized !== "application/octet-stream") {
-    return normalized
-  }
-
   const extension = fileName.split(".").pop()?.toLowerCase() || ""
+
   const byExtension: Record<string, string> = {
     txt: "text/plain",
     md: "text/markdown",
@@ -76,6 +76,19 @@ function normalizeMimeType(fileName: string, mimeType?: string) {
     sql: "text/plain",
   }
 
+  const correctedMimeAliases: Record<string, string> = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.documents":
+      byExtension.docx,
+    "application/vnd.openxmlformats-officedocument.presentationml.presentations":
+      byExtension.pptx,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheets":
+      byExtension.xlsx,
+  }
+
+  if (normalized && normalized !== "application/octet-stream") {
+    return correctedMimeAliases[normalized] || normalized
+  }
+
   return byExtension[extension] || "application/octet-stream"
 }
 
@@ -96,6 +109,154 @@ function isGeminiFriendlyMimeType(mimeType: string) {
     mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
     mimeType === "application/octet-stream"
   )
+}
+
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+}
+
+function cleanExtractedText(value: string) {
+  return value
+    .replace(/\r/g, "")
+    .replace(/\u0000/g, " ")
+    .replace(/[\t\f\v]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ ]{2,}/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim()
+}
+
+function extractReadableStrings(raw: string) {
+  const normalized = raw
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, " ")
+    .replace(/[ ]{2,}/g, " ")
+
+  const matches = normalized.match(/[\p{L}\p{N}][\p{L}\p{N}\p{P}\p{Zs}]{3,}/gu) || []
+  const unique: string[] = []
+  const seen = new Set<string>()
+
+  for (const item of matches) {
+    const cleaned = item.trim()
+    if (!cleaned) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(cleaned)
+    if (unique.length >= 400) break
+  }
+
+  return cleanExtractedText(unique.join("\n"))
+}
+
+async function extractDocxText(buffer: Buffer) {
+  const zip = await JSZip.loadAsync(buffer)
+  const candidateFiles = [
+    "word/document.xml",
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/header3.xml",
+    "word/footer1.xml",
+    "word/footer2.xml",
+    "word/footer3.xml",
+    "word/footnotes.xml",
+    "word/endnotes.xml",
+  ]
+
+  const parts: string[] = []
+
+  for (const fileName of candidateFiles) {
+    const file = zip.file(fileName)
+    if (!file) continue
+
+    const xml = await file.async("string")
+    const withBreaks = xml
+      .replace(/<w:tab\/?\s*>/g, "\t")
+      .replace(/<w:br\/?\s*>/g, "\n")
+      .replace(/<w:cr\/?\s*>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+
+    const text = Array.from(withBreaks.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g))
+      .map((match) => decodeXmlEntities(match[1]))
+      .join("")
+
+    if (text.trim()) {
+      parts.push(text)
+    }
+  }
+
+  return cleanExtractedText(parts.join("\n\n"))
+}
+
+async function extractPptxText(buffer: Buffer) {
+  const zip = await JSZip.loadAsync(buffer)
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/(slides|notesSlides)\/.+\.xml$/i.test(name))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+
+  const slides: string[] = []
+
+  for (const fileName of slideFiles) {
+    const xml = await zip.file(fileName)?.async("string")
+    if (!xml) continue
+
+    const text = Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g))
+      .map((match) => decodeXmlEntities(match[1]))
+      .join("\n")
+
+    if (text.trim()) {
+      slides.push(text)
+    }
+  }
+
+  return cleanExtractedText(slides.join("\n\n---\n\n"))
+}
+
+function extractLegacyOfficeText(buffer: Buffer) {
+  const utf16 = extractReadableStrings(buffer.toString("utf16le"))
+  if (utf16) return utf16
+
+  const latin1 = extractReadableStrings(buffer.toString("latin1"))
+  if (latin1) return latin1
+
+  return ""
+}
+
+async function convertOfficeFileToText(buffer: Buffer, attachment: UploadedAttachment, mimeType: string) {
+  const extension = attachment.name.split(".").pop()?.toLowerCase() || ""
+  let text = ""
+
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || extension === "docx") {
+    text = await extractDocxText(buffer)
+  } else if (
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    extension === "pptx"
+  ) {
+    text = await extractPptxText(buffer)
+  } else if (mimeType === "application/msword" || extension === "doc") {
+    text = extractLegacyOfficeText(buffer)
+  } else if (mimeType === "application/vnd.ms-powerpoint" || extension === "ppt") {
+    text = extractLegacyOfficeText(buffer)
+  }
+
+  const cleaned = cleanExtractedText(text)
+  if (!cleaned) {
+    throw new Error(`${attachment.name} could not be read. Please re-save it as DOCX, PPTX, or PDF and try again.`)
+  }
+
+  return {
+    inlineData: {
+      mimeType: OFFICE_TEXT_MIME,
+      data: Buffer.from(`File: ${attachment.name}\n\n${cleaned}`, "utf8").toString("base64"),
+    },
+  }
 }
 
 async function fetchAttachmentPart(attachment: UploadedAttachment): Promise<GeminiInlinePart | null> {
@@ -120,6 +281,17 @@ async function fetchAttachmentPart(attachment: UploadedAttachment): Promise<Gemi
     attachment.type || response.headers.get("content-type") || undefined
   )
 
+  const buffer = Buffer.from(arrayBuffer)
+
+  if (
+    mimeType === "application/msword" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mimeType === "application/vnd.ms-powerpoint" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  ) {
+    return convertOfficeFileToText(buffer, attachment, mimeType)
+  }
+
   if (!isGeminiFriendlyMimeType(mimeType)) {
     throw new Error(`${attachment.name} has an unsupported file type for AI analysis.`)
   }
@@ -127,7 +299,7 @@ async function fetchAttachmentPart(attachment: UploadedAttachment): Promise<Gemi
   return {
     inlineData: {
       mimeType,
-      data: Buffer.from(arrayBuffer).toString("base64"),
+      data: buffer.toString("base64"),
     },
   }
 }
@@ -231,6 +403,7 @@ export async function analyzeAttachmentsWithGemini(params: {
     "You are EduPilot, an AI tutor helping a student understand uploaded study material.",
     "Read the uploaded files carefully and answer the user in a clear, structured way.",
     "If the upload is a ZIP, inspect whatever content is available inside it and explain the important files first.",
+    "For DOC, DOCX, PPT, and PPTX uploads, the file may be pre-converted into plain text before reaching you, so preserve the original meaning even if formatting is simplified.",
     "If the user asked a question, answer it directly. If not, summarize the uploaded material and suggest next study steps.",
     params.webContext ? `Web search notes for extra context:\n${params.webContext}` : "",
     `User request: ${message}`,
@@ -249,76 +422,79 @@ export async function analyzeAttachmentsWithGemini(params: {
       body: JSON.stringify({
         contents: [
           {
-            parts: [...inlineParts, { text: prompt }],
+            parts: [{ text: prompt }, ...inlineParts],
           },
         ],
       }),
     }
   )
 
-  const data = await response.json()
+  const payload = await response.json()
 
   if (!response.ok) {
-    const message = data?.error?.message || "Failed to analyze uploaded files with Gemini."
+    const message = payload?.error?.message || "Failed to analyze uploaded files with Gemini."
     throw new Error(message)
   }
 
-  const text = extractTextFromGeminiResponse(data)
+  const text = extractTextFromGeminiResponse(payload)
   if (!text) {
-    throw new Error("Gemini could not generate a readable answer for the uploaded files.")
+    throw new Error("Gemini returned an empty analysis for the uploaded files.")
   }
 
   return text
 }
 
-export function summarizeAttachments(attachments: UploadedAttachment[]) {
-  if (!attachments.length) return ""
+export async function searchWithTavily(query: string): Promise<TavilySearchResult[]> {
+  const apiKey = process.env.TAVILY_API_KEY?.trim()
+  if (!apiKey || !query.trim()) return []
 
-  return attachments
-    .map((file, index) => {
-      const sizeInKb = Math.max(1, Math.round((file.size || 0) / 1024))
-      const urlText = file.url ? ` | URL: ${file.url}` : ""
-      return `${index + 1}. ${file.name} (${file.type || "unknown"}, ${sizeInKb} KB)${urlText}`
+  try {
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        search_depth: "advanced",
+        max_results: 5,
+        include_answer: false,
+        include_raw_content: false,
+      }),
     })
-    .join("\n")
+
+    if (!response.ok) {
+      return []
+    }
+
+    const data = (await response.json()) as {
+      results?: Array<{
+        title?: string
+        url?: string
+        content?: string
+        score?: number
+      }>
+    }
+
+    return (data.results || []).map((item) => ({
+      title: item.title || "Untitled result",
+      url: item.url || "",
+      content: item.content || "",
+      source: item.url || "Web",
+    }))
+  } catch {
+    return []
+  }
 }
 
-export async function searchWithTavily(query: string): Promise<TavilySearchResult[]> {
-  const apiKey = process.env.TAVILY_API_KEY
-  if (!apiKey) {
-    throw new Error("TAVILY_API_KEY is not set")
-  }
+export function summarizeAttachments(attachments: UploadedAttachment[]) {
+  if (!attachments.length) return "No files uploaded."
 
-  const response = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      query,
-      search_depth: "basic",
-      max_results: 5,
-      include_answer: false,
-      include_raw_content: false,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Tavily search failed (${response.status}): ${errorText}`)
-  }
-
-  const data = (await response.json()) as {
-    results?: Array<{ title?: string; url?: string; content?: string }>
-  }
-
-  return (data.results || [])
-    .filter((item) => item.url)
-    .map((item) => ({
-      title: item.title?.trim() || "Untitled result",
-      url: item.url!.trim(),
-      content: item.content?.trim() || "",
-      source: new URL(item.url!).hostname.replace(/^www\./, ""),
-    }))
+  return attachments
+    .map((attachment, index) => {
+      const sizeLabel = attachment.size ? ` (${(attachment.size / 1024 / 1024).toFixed(2)} MB)` : ""
+      return `${index + 1}. ${attachment.name}${sizeLabel}`
+    })
+    .join("\n")
 }
