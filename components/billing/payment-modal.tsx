@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle, CheckCircle, ShieldCheck } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle, ShieldCheck, FlaskConical, CreditCard } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 
 interface Plan {
@@ -29,31 +29,46 @@ interface PaymentModalProps {
 
 export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: PaymentModalProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [isRazorpayLoading, setIsRazorpayLoading] = useState(false)
+  const [scriptReady, setScriptReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const { email, profile } = useUser()
 
-  // Load Razorpay script
   useEffect(() => {
-    const script = document.createElement("script")
-    script.src = "https://checkout.razorpay.com/v1/checkout.js"
-    script.async = true
-    document.body.appendChild(script)
+    let script: HTMLScriptElement | null = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+
+    const handleLoad = () => setScriptReady(true)
+    const handleError = () => {
+      setScriptReady(false)
+      setError("Razorpay test checkout could not load. You can still activate the trial instantly in test mode.")
+    }
+
+    if (!script) {
+      script = document.createElement("script")
+      script.src = "https://checkout.razorpay.com/v1/checkout.js"
+      script.async = true
+      script.onload = handleLoad
+      script.onerror = handleError
+      document.body.appendChild(script)
+    } else {
+      setScriptReady(true)
+    }
+
     return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
+      if (script) {
+        script.onload = null
+        script.onerror = null
       }
     }
   }, [])
 
-  // Test mode: activate trial without real payment
   const handleTestSimulate = async () => {
     try {
       setIsLoading(true)
       setError(null)
       setPaymentStatus("processing")
 
-      // Create a fake order ID for test mode
       const fakeOrderId = `test_order_${Date.now()}`
       const fakePaymentId = `test_pay_${Date.now()}`
       const fakeSig = "test_signature_bypass"
@@ -62,24 +77,27 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          razorpay_order_id:   fakeOrderId,
+          razorpay_order_id: fakeOrderId,
           razorpay_payment_id: fakePaymentId,
-          razorpay_signature:  fakeSig,
+          razorpay_signature: fakeSig,
           planId: plan.id,
-          testMode: true,       // signals server to skip signature check
+          testMode: true,
         }),
       })
 
       const verifyData = await verifyResponse.json()
 
       if (!verifyResponse.ok) {
-        throw new Error(verifyData.error || "Test simulation failed")
+        throw new Error(verifyData.error || "Test activation failed")
       }
 
       setPaymentStatus("success")
-      setTimeout(() => { onPaymentSuccess(); onClose() }, 1800)
+      setTimeout(() => {
+        onPaymentSuccess()
+        onClose()
+      }, 1400)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Test simulation failed")
+      setError(err instanceof Error ? err.message : "Test activation failed")
       setPaymentStatus("error")
     } finally {
       setIsLoading(false)
@@ -88,11 +106,10 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
 
   const handlePayment = async () => {
     try {
-      setIsLoading(true)
+      setIsRazorpayLoading(true)
       setError(null)
       setPaymentStatus("processing")
 
-      // Create order — backend reads user from session
       const orderResponse = await fetch("/api/payments/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,20 +123,18 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
 
       const orderData = await orderResponse.json()
 
-      // Razorpay checkout options
       const options = {
         key: orderData.razorpayKey,
         order_id: orderData.orderId,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "EduPilot",
-        description: `${plan.name} — test payment for 14-day free trial activation`,
-        image: "/icon.svg",
+        description: `${plan.name} — Razorpay test checkout`,
         prefill: {
           email: email ?? "",
           name: profile?.full_name ?? "",
         },
-        notes: { planId: plan.id },
+        notes: { planId: plan.id, mode: "test" },
         theme: { color: "#f59e0b" },
         handler: async (response: {
           razorpay_order_id: string
@@ -139,7 +154,6 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             })
 
             const verifyData = await verifyResponse.json()
-
             if (!verifyResponse.ok) {
               throw new Error(verifyData.error || "Payment verification failed")
             }
@@ -148,7 +162,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             setTimeout(() => {
               onPaymentSuccess()
               onClose()
-            }, 2000)
+            }, 1600)
           } catch (err) {
             setError(err instanceof Error ? err.message : "Payment verification failed")
             setPaymentStatus("error")
@@ -156,126 +170,142 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         },
         modal: {
           ondismiss: () => {
-            setIsLoading(false)
+            setIsRazorpayLoading(false)
             setPaymentStatus("idle")
           },
+          escape: true,
+          backdropclose: false,
+          animation: true,
+          confirm_close: true,
         },
       }
 
       const RazorpayClass = (window as { Razorpay?: new (opts: typeof options) => { open(): void } }).Razorpay
-      if (RazorpayClass) {
-        const rzp = new RazorpayClass(options)
-        rzp.open()
-      } else {
-        throw new Error("Razorpay script not loaded. Please refresh and try again.")
+      if (!RazorpayClass) {
+        throw new Error("Razorpay test checkout is not available right now. Use instant test activation below.")
       }
+
+      const rzp = new RazorpayClass(options)
+      rzp.open()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Payment failed. Please try again."
-      setError(msg)
+      setError(err instanceof Error ? err.message : "Payment failed. Please try again.")
       setPaymentStatus("error")
     } finally {
-      setIsLoading(false)
+      setIsRazorpayLoading(false)
     }
   }
 
+  const busy = isLoading || isRazorpayLoading || paymentStatus === "processing"
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md border-border bg-card">
+      <DialogContent className="w-[95vw] max-w-[560px] border-border bg-card sm:!max-w-[560px]">
         <DialogHeader>
           <DialogTitle>Activate {plan.name} Plan</DialogTitle>
           <DialogDescription>
-            Pay in Razorpay test mode to verify your account and unlock a 14-day free trial for the selected plan.
+            Test mode is enabled. Use the instant test activation for a smooth trial flow, or open Razorpay test checkout if you want to test the external payment window.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Plan Summary */}
           <div className="rounded-lg border border-border bg-secondary/50 p-4">
-            <div className="flex justify-between items-start mb-2">
+            <div className="mb-2 flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Plan</p>
                 <p className="font-semibold text-foreground">{plan.name}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">Charge</p>
-                <p className="text-2xl font-bold text-foreground">₹1</p>
+                <p className="text-sm text-muted-foreground">Mode</p>
+                <p className="text-lg font-bold text-foreground">14-day trial</p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground border-t border-border pt-2 mt-2">
-              ₹1 is charged for account verification only and is refunded immediately after payment.
+            <p className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground">
+              Since this setup is only for testing, you can activate the trial instantly without depending on Razorpay popup behavior.
             </p>
           </div>
 
-          {/* Test mode notice */}
-          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-            <ShieldCheck className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-            <div className="space-y-1 text-xs text-amber-600 dark:text-amber-400">
-              <p>
-                <strong>Test payment mode.</strong> Do not enter random fake card numbers like <strong>111111111</strong>. Razorpay test mode still validates the card format and accepts only Razorpay test cards.
-              </p>
-              <p>
-                Use an official Razorpay test card such as <strong>4100 2800 0000 1007</strong> or <strong>5500 6700 0000 1002</strong> · CVV: any 3 digits · Expiry: any future date.
-              </p>
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+            <div className="flex items-start gap-2">
+              <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+              <div className="space-y-1 text-xs text-emerald-600 dark:text-emerald-400">
+                <p><strong>Recommended for testing:</strong> Instant test activation.</p>
+                <p>It activates the trial inside your app without opening the external Razorpay window, so the flow stays smooth and reliable while you build.</p>
+              </div>
             </div>
           </div>
 
-          {/* Status messages */}
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+            <div className="flex items-start gap-2">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                <p><strong>Optional Razorpay test checkout:</strong> this may show browser or iframe warnings in test mode.</p>
+                <p>Use official test cards like <strong>4100 2800 0000 1007</strong> or <strong>5500 6700 0000 1002</strong> · CVV: any 3 digits · Expiry: any future date.</p>
+              </div>
+            </div>
+          </div>
+
           {paymentStatus === "success" && (
             <Alert className="border-emerald-500/50 bg-emerald-500/10">
               <CheckCircle className="h-4 w-4 text-emerald-500" />
               <AlertDescription className="text-emerald-500">
-                Payment verified! Your 14-day free trial is now active.
+                Trial activated successfully.
               </AlertDescription>
             </Alert>
           )}
+
           {paymentStatus === "error" && error && (
             <Alert className="border-destructive/50 bg-destructive/10">
               <AlertCircle className="h-4 w-4 text-destructive" />
               <AlertDescription className="text-destructive">{error}</AlertDescription>
             </Alert>
           )}
+
           {paymentStatus === "processing" && (
             <Alert className="border-accent/50 bg-accent/10">
-              <Loader2 className="h-4 w-4 text-accent animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <AlertDescription className="text-accent">
-                Complete the payment in the popup window.
+                Processing test activation...
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Accepted methods */}
-          <div className="rounded-lg border border-border bg-secondary/30 p-3">
-            <p className="text-xs font-medium text-muted-foreground mb-1">Accepted Payment Methods</p>
-            <p className="text-xs text-muted-foreground">Razorpay · UPI · Net Banking · Cards · Wallets</p>
-          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button
+              className="gap-2"
+              onClick={handleTestSimulate}
+              disabled={busy || paymentStatus === "success"}
+            >
+              {isLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Activating...</>
+              ) : paymentStatus === "success" ? (
+                <><CheckCircle className="h-4 w-4" />Activated</>
+              ) : (
+                <><FlaskConical className="h-4 w-4" />Instant Test Activation</>
+              )}
+            </Button>
 
-          {/* Actions */}
-          <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1"
-              onClick={onClose}
-              disabled={isLoading || paymentStatus === "processing"}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 gap-2"
+              className="gap-2"
               onClick={handlePayment}
-              disabled={isLoading || paymentStatus === "processing" || paymentStatus === "success"}
+              disabled={busy || paymentStatus === "success" || !scriptReady}
             >
-              {paymentStatus === "processing" ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Processing...</>
-              ) : paymentStatus === "success" ? (
-                <><CheckCircle className="h-4 w-4" />Activated!</>
+              {isRazorpayLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
               ) : (
-                "Pay ₹1 & Activate Trial"
+                <><CreditCard className="h-4 w-4" />Open Razorpay Test Checkout</>
               )}
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center">
-            Your payment is secured by Razorpay. We never store card details.
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={onClose} disabled={busy}>
+              Close
+            </Button>
+          </div>
+
+          <p className="text-center text-xs text-muted-foreground">
+            For development, use the instant activation button above. It is the smoothest option and avoids external checkout issues.
           </p>
         </div>
       </DialogContent>
