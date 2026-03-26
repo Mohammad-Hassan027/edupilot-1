@@ -945,7 +945,7 @@ function escapeHtml(value: string) {
     ((sourceMode === "video" && !!videoUrl.trim()) ||
       (sourceMode !== "video" && !!uploadedFile && uploadedFile.size <= MAX_FILE_BYTES))
 
-  // const activeTabData = generatedNotes?.find((tab) => tab.type === activeTab) || generatedNotes?.[0]
+  const activeTabData = generatedNotes?.find((tab) => tab.type === activeTab) || generatedNotes?.[0]
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -1359,6 +1359,101 @@ function escapeHtml(value: string) {
           </Card>
         ) : null}
       </div>
+
+      {generatedNotes?.length ? (
+        <div className="pointer-events-none fixed left-[-99999px] top-0 opacity-0">
+          <div
+            ref={pdfExportRef}
+            style={{
+              width: "794px",
+              background:
+                "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(3,17,38,1) 100%)",
+              color: "#f8fafc",
+              padding: "32px",
+              fontFamily:
+                'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            }}
+          >
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "28px",
+                background: "rgba(15,23,42,0.55)",
+                padding: "28px",
+                boxShadow: "0 20px 50px rgba(0,0,0,0.28)",
+                backdropFilter: "blur(12px)",
+              }}
+            >
+              <div style={{ marginBottom: "24px" }}>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: "30px",
+                    lineHeight: 1.25,
+                    fontWeight: 800,
+                    color: "#ffffff",
+                  }}
+                >
+                  {generatedTitle}
+                </h1>
+
+                {sourceHint ? (
+                  <p
+                    style={{
+                      marginTop: "10px",
+                      marginBottom: 0,
+                      fontSize: "14px",
+                      lineHeight: 1.8,
+                      color: "rgba(226,232,240,0.85)",
+                    }}
+                  >
+                    {sourceHint}
+                  </p>
+                ) : null}
+              </div>
+
+              {generatedNotes.map((tab, index) => (
+                <div
+                  key={tab.type}
+                  style={{
+                    marginTop: index === 0 ? 0 : "26px",
+                    padding: "22px 22px 18px 22px",
+                    borderRadius: "22px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(2,12,27,0.7)",
+                    pageBreakInside: "avoid",
+                  }}
+                >
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "22px",
+                      lineHeight: 1.35,
+                      fontWeight: 700,
+                      color: "#ffffff",
+                    }}
+                  >
+                    {tab.title}
+                  </h2>
+
+                  <div
+                    style={{
+                      height: "1px",
+                      width: "180px",
+                      marginTop: "12px",
+                      marginBottom: "18px",
+                      background:
+                        "linear-gradient(90deg, rgba(234,179,8,0.95) 0%, rgba(255,255,255,0.18) 60%, rgba(255,255,255,0) 100%)",
+                    }}
+                  />
+
+                  <MarkdownRenderer content={tab.content} className="text-[15px] leading-7" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
