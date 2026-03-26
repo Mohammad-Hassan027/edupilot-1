@@ -10,58 +10,53 @@ import { cn } from "@/lib/utils"
 const plans = [
   {
     name: "Free",
-    badge: "Free Trial",
-    description: "Perfect for trying out EduPilot",
+    badge: null,
+    description: "Best for getting started",
     price: { monthly: 0, yearly: 0 },
     features: [
-      "5 AI notes per month",
-      "Basic AI Tutor (10 queries/day)",
-      "Basic flashcards (50 cards)",
-      "Limited quiz generation",
-      "Community support",
+      "Unlimited AI Tutor",
+      "Unlimited Notes",
     ],
     limitations: [
-      "No study planner",
-      "No analytics",
-      "No voice assistant",
+      "No Study Planner",
+      "No Analytics",
+      "No Voice Assistant",
+      "No AI Flashcards",
+      "No AI Quiz",
     ],
     cta: "Get Started",
     popular: false,
   },
   {
     name: "Pro",
-    badge: null,
-    description: "For serious learners",
+    badge: "14-Day Free Trial",
+    description: "Everything unlimited, except Study Planner",
     price: { monthly: 199, yearly: 1990 },
     features: [
-      "Unlimited AI notes",
-      "Full AI Tutor access",
-      "Unlimited flashcards",
-      "Quiz generator with analytics",
-      "Smart study planner",
-      "Learning analytics",
-      "Priority support",
-      "Export to PDF/Notion",
+      "Unlimited AI Tutor",
+      "Unlimited Notes",
+      "Unlimited Flashcards",
+      "Unlimited Quiz",
+      "Unlimited AI Voice",
+      "Analytics included",
     ],
-    limitations: [],
+    limitations: ["Study Planner not available"],
     cta: "Start Free Trial",
     popular: true,
   },
   {
     name: "Premium",
-    badge: null,
-    description: "For power learners",
+    badge: "14-Day Free Trial",
+    description: "Everything included",
     price: { monthly: 499, yearly: 4990 },
     features: [
-      "Everything in Pro",
-      "AI Voice Assistant",
-      "AI Learning Twin",
-      "Priority AI processing",
-      "Advanced analytics & insights",
-      "Custom study paths",
-      "API access",
-      "Dedicated support",
-      "Early access to new features",
+      "Unlimited AI Tutor",
+      "Unlimited Notes",
+      "Unlimited Flashcards",
+      "Unlimited Quiz",
+      "Unlimited AI Voice",
+      "Study Planner included",
+      "Analytics included",
     ],
     limitations: [],
     cta: "Start Free Trial",
@@ -72,19 +67,19 @@ const plans = [
 const faqs = [
   {
     question: "Can I change plans later?",
-    answer: "Yes, you can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.",
+    answer: "Yes, you can upgrade or downgrade your plan later.",
   },
   {
-    question: "Is there a student discount?",
-    answer: "Yes! Students with a valid .edu email get 20% off all paid plans. Contact support to apply the discount.",
+    question: "Do Pro and Premium include a free trial?",
+    answer: "Yes. Both paid plans start with a 14-day free trial in the current test setup.",
   },
   {
     question: "What payment methods do you accept?",
-    answer: "We accept all major credit cards, UPI, net banking, and popular digital wallets in India.",
+    answer: "We accept Razorpay-supported test payments including cards, UPI, and net banking in test mode.",
   },
   {
-    question: "Can I get a refund?",
-    answer: "We offer a 7-day money-back guarantee on all paid plans. No questions asked.",
+    question: "Is the current payment flow live?",
+    answer: "No. It is currently configured in Razorpay test mode for development and testing.",
   },
 ]
 
@@ -94,24 +89,21 @@ export default function PricingPage() {
   return (
     <div className="py-16 md:py-24">
       <div className="container mx-auto px-4">
-        {/* Trial Banner */}
         <div className="mx-auto mb-8 max-w-2xl rounded-2xl border border-primary/20 bg-primary/5 p-6 text-center">
-          <h2 className="mb-2 text-xl font-semibold text-foreground">Simple Trial Based Pricing</h2>
+          <h2 className="mb-2 text-xl font-semibold text-foreground">Choose Your Learning Plan</h2>
           <p className="text-muted-foreground">
-            All users can explore EduPilot for free with limited usage. Upgrade anytime to unlock unlimited AI learning tools.
+            Free users get unlimited AI Tutor and Notes. Upgrade to Pro or Premium to unlock Flashcards, AI Voice, and Quiz with a 14-day free trial.
           </p>
         </div>
 
-        {/* Header */}
         <div className="mx-auto mb-16 max-w-2xl text-center">
           <h1 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">
-            Choose Your Learning Plan
+            Pricing for every learner
           </h1>
           <p className="mb-8 text-lg text-muted-foreground">
-            Start free, upgrade when you&apos;re ready. All plans include a 14-day free trial.
+            Pro and Premium are currently available in Razorpay test mode with a 14-day free trial.
           </p>
 
-          {/* Billing Toggle */}
           <div className="inline-flex items-center gap-4 rounded-full border border-border bg-card p-1">
             <button
               onClick={() => setBillingPeriod("monthly")}
@@ -139,7 +131,6 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* Pricing Cards */}
         <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-3">
           {plans.map((plan) => (
             <Card
@@ -159,7 +150,7 @@ export default function PricingPage() {
               )}
 
               <CardHeader className="pb-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-xl">{plan.name}</CardTitle>
                   {plan.badge && (
                     <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500 border border-emerald-500/20">
@@ -171,18 +162,13 @@ export default function PricingPage() {
               </CardHeader>
 
               <CardContent className="flex flex-1 flex-col">
-                {/* Price */}
                 <div className="mb-6">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-bold text-foreground">
-                      {plan.price[billingPeriod] === 0
-                        ? "Free"
-                        : `₹${plan.price[billingPeriod]}`}
+                      {plan.price[billingPeriod] === 0 ? "Free" : `₹${plan.price[billingPeriod]}`}
                     </span>
                     {plan.price[billingPeriod] > 0 && (
-                      <span className="text-muted-foreground">
-                        /{billingPeriod === "monthly" ? "mo" : "yr"}
-                      </span>
+                      <span className="text-muted-foreground">/{billingPeriod === "monthly" ? "mo" : "yr"}</span>
                     )}
                   </div>
                   {billingPeriod === "yearly" && plan.price.yearly > 0 && (
@@ -192,7 +178,6 @@ export default function PricingPage() {
                   )}
                 </div>
 
-                {/* Features */}
                 <ul className="mb-6 flex-1 space-y-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm">
@@ -208,14 +193,11 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                {/* CTA */}
                 <Button
                   asChild
                   className={cn(
                     "w-full",
-                    plan.popular
-                      ? "bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground"
-                      : ""
+                    plan.popular ? "bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground" : ""
                   )}
                   variant={plan.popular ? "default" : "outline"}
                 >
@@ -226,21 +208,17 @@ export default function PricingPage() {
           ))}
         </div>
 
-        {/* Trial Notes */}
         <div className="mx-auto mt-12 max-w-3xl space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            All plans include a free trial. You can explore features before upgrading.
+            Flashcards, AI Voice, and Quiz are premium features. AI Tutor and Notes stay free.
           </p>
           <p className="text-xs text-muted-foreground">
-            This is an early access pricing model. Features and pricing may evolve.
+            Current checkout is in Razorpay test mode. Use Razorpay test cards while testing the payment flow.
           </p>
         </div>
 
-        {/* FAQs */}
         <div className="mx-auto mt-24 max-w-3xl">
-          <h2 className="mb-8 text-center text-2xl font-bold text-foreground">
-            Frequently Asked Questions
-          </h2>
+          <h2 className="mb-8 text-center text-2xl font-bold text-foreground">Frequently Asked Questions</h2>
           <div className="grid gap-6 md:grid-cols-2">
             {faqs.map((faq) => (
               <div key={faq.question} className="rounded-xl border border-border bg-card p-6">
@@ -251,11 +229,8 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* CTA */}
         <div className="mx-auto mt-16 max-w-2xl text-center">
-          <p className="mb-4 text-muted-foreground">
-            Have questions? We&apos;re here to help.
-          </p>
+          <p className="mb-4 text-muted-foreground">Have questions? We&apos;re here to help.</p>
           <Button variant="outline" asChild>
             <Link href="/contact">Contact Sales</Link>
           </Button>

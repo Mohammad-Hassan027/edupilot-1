@@ -1,18 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Layers, Plus, Sparkles, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Sparkles, Loader2, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
-import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
+import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
+import { hasPaidAccess } from "@/lib/plans"
+import { useUser } from "@/hooks/use-user"
 
-interface Flashcard { id: string; front: string; back: string; mastered: boolean }
+interface Flashcard {
+  id: string
+  front: string
+  back: string
+  mastered: boolean
+}
 
 const DEMO_CARD: Flashcard = {
   id: "demo",
@@ -22,49 +29,111 @@ const DEMO_CARD: Flashcard = {
 }
 
 export default function FlashcardsPage() {
-  const [cards, setCards]               = useState<Flashcard[]>([DEMO_CARD])
+  const { subscription, refetch } = useUser()
+  const [cards, setCards] = useState<Flashcard[]>([DEMO_CARD])
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [isFlipped, setIsFlipped]       = useState(false)
-  const [dialogOpen, setDialogOpen]     = useState(false)
-  const [aiTopic, setAiTopic]           = useState("")
-  const [aiCount, setAiCount]           = useState("10")
+  const [isFlipped, setIsFlipped] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [planModalOpen, setPlanModalOpen] = useState(false)
+  const [aiTopic, setAiTopic] = useState("")
+  const [aiCount, setAiCount] = useState("10")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [genError, setGenError]         = useState("")
-  const [showLoginModal, setShowLoginModal]     = useState(false)
-  const [showCreditsModal, setShowCreditsModal] = useState(false)
+  const [genError, setGenError] = useState("")
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   const currentCard = cards[currentIndex]
-  const masteredCount = cards.filter(c => c.mastered).length
+  const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
+  const isPaidUser = hasPaidAccess(subscription)
 
-  const handleNext = () => { if (currentIndex < cards.length - 1) { setCurrentIndex(i => i + 1); setIsFlipped(false) } }
-  const handlePrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); setIsFlipped(false) } }
-  const handleMastered = () => {
-    setCards(prev => prev.map((c, i) => i === currentIndex ? { ...c, mastered: true } : c))
-    if (currentIndex < cards.length - 1) { setCurrentIndex(i => i + 1); setIsFlipped(false) }
+  const handleGenerateClick = async () => {
+    setGenError("")
+
+    const profileRes = await fetch("/api/user/profile")
+    if (profileRes.status === 401) {
+      setShowLoginModal(true)
+      return
+    }
+
+    if (!isPaidUser) {
+      setPlanModalOpen(true)
+      return
+    }
+
+    setDialogOpen(true)
   }
-  const handleShuffle = () => { setCards(c => [...c].sort(() => Math.random() - 0.5)); setCurrentIndex(0); setIsFlipped(false) }
-  const handleReset   = () => { setCards(c => c.map(x => ({ ...x, mastered: false }))); setCurrentIndex(0); setIsFlipped(false) }
+
+  const handleNext = () => {
+    if (currentIndex < cards.length - 1) {
+      setCurrentIndex((i) => i + 1)
+      setIsFlipped(false)
+    }
+  }
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1)
+      setIsFlipped(false)
+    }
+  }
+
+  const handleMastered = () => {
+    setCards((prev) => prev.map((c, i) => (i === currentIndex ? { ...c, mastered: true } : c)))
+    if (currentIndex < cards.length - 1) {
+      setCurrentIndex((i) => i + 1)
+      setIsFlipped(false)
+    }
+  }
+
+  const handleShuffle = () => {
+    setCards((c) => [...c].sort(() => Math.random() - 0.5))
+    setCurrentIndex(0)
+    setIsFlipped(false)
+  }
+
+  const handleReset = () => {
+    setCards((c) => c.map((x) => ({ ...x, mastered: false })))
+    setCurrentIndex(0)
+    setIsFlipped(false)
+  }
 
   const handleGenerate = async () => {
     if (!aiTopic.trim()) return
+
     setIsGenerating(true)
     setGenError("")
+
     try {
       const res = await fetch("/api/ai/flashcards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: aiTopic.trim(), count: parseInt(aiCount) }),
+        body: JSON.stringify({ topic: aiTopic.trim(), count: parseInt(aiCount, 10) }),
       })
+
       const data = await res.json()
+
       if (!res.ok) {
-        if (data.requiresLogin)  { setShowLoginModal(true);  setDialogOpen(false); return }
-        if (data.requiresUpgrade){ setShowCreditsModal(true); setDialogOpen(false); return }
-        setGenError(data.error || "Failed to generate flashcards"); return
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          setDialogOpen(false)
+          return
+        }
+        if (data.requiresUpgrade) {
+          setPlanModalOpen(true)
+          setDialogOpen(false)
+          return
+        }
+        setGenError(data.error || "Failed to generate flashcards")
+        return
       }
+
       const newCards: Flashcard[] = data.flashcards.map((f: { front: string; back: string }, i: number) => ({
-        id: `ai-${Date.now()}-${i}`, front: f.front, back: f.back, mastered: false,
+        id: `ai-${Date.now()}-${i}`,
+        front: f.front,
+        back: f.back,
+        mastered: false,
       }))
+
       setCards(newCards)
       setCurrentIndex(0)
       setIsFlipped(false)
@@ -85,12 +154,25 @@ export default function FlashcardsPage() {
             <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
             <p className="text-muted-foreground">Review and memorize with AI-generated cards</p>
           </div>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+          <Button className="gap-2" onClick={handleGenerateClick}>
             <Sparkles className="h-4 w-4" /> Generate with AI
           </Button>
         </div>
 
-        {/* Progress */}
+        {!isPaidUser && (
+          <Card className="border-amber-500/30 bg-amber-500/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <Crown className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />
+              <div>
+                <p className="font-medium text-foreground">Flashcards is a paid feature.</p>
+                <p className="text-muted-foreground mt-1">
+                  Free users can view this page, but AI generation unlocks only after starting a Pro or Premium 14-day free trial.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>Card {currentIndex + 1} of {cards.length}</span>
@@ -101,10 +183,8 @@ export default function FlashcardsPage() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="relative h-64 cursor-pointer" onClick={() => setIsFlipped(!isFlipped)}>
           <div className={cn("absolute inset-0 transition-all duration-500 [transform-style:preserve-3d]", isFlipped && "[transform:rotateY(180deg)]")}>
-            {/* Front */}
             <Card className={cn("absolute inset-0 border-border bg-card [backface-visibility:hidden]", currentCard?.mastered && "border-emerald-500/30 bg-emerald-500/5")}>
               <CardContent className="h-full flex flex-col items-center justify-center p-8 text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Question</p>
@@ -112,7 +192,7 @@ export default function FlashcardsPage() {
                 <p className="text-sm text-muted-foreground mt-6">Click to reveal answer</p>
               </CardContent>
             </Card>
-            {/* Back */}
+
             <Card className="absolute inset-0 border-primary/30 bg-primary/5 [backface-visibility:hidden] [transform:rotateY(180deg)]">
               <CardContent className="h-full flex flex-col items-center justify-center p-8 text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Answer</p>
@@ -122,7 +202,6 @@ export default function FlashcardsPage() {
           </div>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center justify-between gap-3">
           <Button variant="outline" size="icon" onClick={handlePrev} disabled={currentIndex === 0}><ChevronLeft className="h-4 w-4" /></Button>
           <div className="flex gap-2 flex-1 justify-center">
@@ -137,7 +216,6 @@ export default function FlashcardsPage() {
           <Button variant="outline" size="icon" onClick={handleNext} disabled={currentIndex === cards.length - 1}><ChevronRight className="h-4 w-4" /></Button>
         </div>
 
-        {/* All mastered message */}
         {masteredCount === cards.length && cards.length > 1 && (
           <Card className="border-emerald-500/30 bg-emerald-500/10">
             <CardContent className="p-4 text-center">
@@ -148,7 +226,6 @@ export default function FlashcardsPage() {
         )}
       </div>
 
-      {/* AI Generate Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
@@ -156,18 +233,21 @@ export default function FlashcardsPage() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Topic</Label>
-              <Input placeholder="e.g. Photosynthesis, JavaScript Arrays, World War II..."
-                value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}
+              <Label>Topic or description</Label>
+              <Input
+                placeholder="e.g. Photosynthesis, JavaScript Arrays, World War II..."
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
                 className="bg-secondary border-border"
-                onKeyDown={(e) => e.key === "Enter" && handleGenerate()} />
+                onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+              />
             </div>
             <div className="space-y-2">
               <Label>Number of flashcards</Label>
               <Select value={aiCount} onValueChange={setAiCount}>
                 <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[5,10,15,20,25,30].map(n => <SelectItem key={n} value={String(n)}>{n} cards</SelectItem>)}
+                  {[5, 10, 15, 20].map((n) => <SelectItem key={n} value={String(n)}>{n} cards</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -183,7 +263,14 @@ export default function FlashcardsPage() {
       </Dialog>
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Flashcards" />
-      <CreditsExhaustedModal open={showCreditsModal} onOpenChange={setShowCreditsModal} feature="flashcards" />
+      <ChoosePlanModal
+        open={planModalOpen}
+        onOpenChange={setPlanModalOpen}
+        onPaymentSuccess={() => {
+          refetch()
+          setDialogOpen(true)
+        }}
+      />
     </>
   )
 }

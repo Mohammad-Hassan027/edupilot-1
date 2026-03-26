@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic"
+
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { verifyRazorpaySignature, fetchRazorpayPayment, issueRefund } from "@/lib/payments"
@@ -23,7 +24,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing payment details" }, { status: 400 })
     }
 
-    // 1. Verify signature — skip in test simulation mode
+    if (planId !== "pro" && planId !== "premium") {
+      return NextResponse.json({ error: "Invalid plan selected" }, { status: 400 })
+    }
+
     if (!testMode) {
       const isValid = verifyRazorpaySignature(
         razorpay_order_id,
@@ -36,7 +40,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 })
       }
 
-      // 2. Update payment record to captured (real payment only)
       await updatePaymentRecord(razorpay_order_id, {
         razorpay_payment_id,
         razorpay_signature,
@@ -44,7 +47,6 @@ export async function POST(request: NextRequest) {
       }).catch(() => {})
     }
 
-    // 3. Try to issue ₹1 refund (real payment only, non-fatal)
     let refunded = false
     if (!testMode) {
       try {
@@ -59,13 +61,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Activate 14-day trial + unlimited credits
-    const subscription = await activateTrial(user.id)
+    const subscription = await activateTrial(user.id, planId)
     await refillCreditsForTrial(user.id)
 
     return NextResponse.json({
       success: true,
-      message: "Payment verified. Your 14-day trial is now active!",
+      message: "Payment verified. Your 14-day free trial is now active!",
       paymentId: razorpay_payment_id,
       orderId: razorpay_order_id,
       planId,

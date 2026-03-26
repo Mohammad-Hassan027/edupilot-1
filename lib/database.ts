@@ -171,7 +171,7 @@ export async function getSubscription(userId: string) {
   return data as Subscription
 }
 
-export async function activateTrial(userId: string) {
+export async function activateTrial(userId: string, planId: "pro" | "premium") {
   const admin = await getSupabaseAdmin()
   const now = new Date()
   const expiry = new Date(now)
@@ -181,6 +181,7 @@ export async function activateTrial(userId: string) {
     .from("subscriptions")
     .update({
       status: "trial",
+      plan_id: planId,
       trial_active: true,
       trial_start: now.toISOString(),
       trial_expiry: expiry.toISOString(),

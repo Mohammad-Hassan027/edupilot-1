@@ -113,7 +113,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         amount: orderData.amount,
         currency: orderData.currency,
         name: "EduPilot",
-        description: `${plan.name} — ₹1 Account Verification (Refunded instantly)`,
+        description: `${plan.name} — test payment for 14-day free trial activation`,
         image: "/icon.svg",
         prefill: {
           email: email ?? "",
@@ -182,9 +182,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md border-border bg-card">
         <DialogHeader>
-          <DialogTitle>Activate {plan.name}</DialogTitle>
+          <DialogTitle>Activate {plan.name} Plan</DialogTitle>
           <DialogDescription>
-            Pay ₹1 to verify your account and unlock 14 days of unlimited access.
+            Pay in Razorpay test mode to verify your account and unlock a 14-day free trial for the selected plan.
           </DialogDescription>
         </DialogHeader>
 
@@ -219,7 +219,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             <Alert className="border-emerald-500/50 bg-emerald-500/10">
               <CheckCircle className="h-4 w-4 text-emerald-500" />
               <AlertDescription className="text-emerald-500">
-                Payment verified! Your 14-day trial is now active.
+                Payment verified! Your 14-day free trial is now active.
               </AlertDescription>
             </Alert>
           )}
