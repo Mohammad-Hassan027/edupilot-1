@@ -24,7 +24,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[92vh] w-[94vw] flex-col overflow-hidden border-border bg-card p-0 sm:max-h-[90vh] sm:w-[90vw] md:w-[88vw] lg:w-[84vw] xl:w-[80vw] 2xl:max-w-[1400px]">
+        <DialogContent className="flex max-h-[92vh] w-[95vw] flex-col overflow-hidden border-border bg-card p-0 sm:w-[92vw] sm:max-h-[90vh] sm:!max-w-[92vw] md:w-[88vw] md:!max-w-[88vw] lg:w-[80vw] lg:!max-w-[80vw] xl:w-[78vw] xl:!max-w-[78vw] 2xl:w-[72vw] 2xl:!max-w-[1200px]">
           <div className="shrink-0 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
             <DialogHeader className="space-y-2 pr-8 text-left">
               <DialogTitle className="text-xl sm:text-2xl">Choose Your Learning Plan</DialogTitle>
@@ -40,7 +40,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
                 <span className="font-semibold">Test mode:</span> Use Razorpay test cards for checkout. Your selected plan starts with a 14-day free trial after successful payment verification.
               </div>
 
-              <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
+              <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">
                 {LEARNING_PLANS.map((plan) => {
                   const isFree = plan.id === "free"
 
