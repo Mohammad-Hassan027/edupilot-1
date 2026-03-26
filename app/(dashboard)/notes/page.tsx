@@ -58,10 +58,10 @@ const sourceOptions: Array<{
     id: "pdf",
     icon: FileText,
     title: "PDF",
-    description: "Upload a PDF, DOC, or PPT file and turn it into study notes.",
-    accept: ".pdf,.doc,.docx,.ppt,.pptx",
+    description: "Upload a PDF and turn it into study notes.",
+    accept: ".pdf",
     hints: [
-      "Use chapter PDFs, lecture notes, DOC/DOCX files, handouts, PPT/PPTX slides, or scanned text-based files.",
+      "Use chapter PDFs, lecture notes, handouts, or scanned text-based PDFs.",
       "EduPilot will automatically generate Summary, Concept Breakdown, Bullet Points, and Revision Notes.",
       "Please upload files under 5 MB for best speed and reliability.",
     ],
