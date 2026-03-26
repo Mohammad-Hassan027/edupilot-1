@@ -127,6 +127,15 @@ const fileUploadSuggestions = [
   "After uploading, ask: Summarize this file, explain this code, or create quiz questions from it.",
 ]
 
+function cleanAIResponse(text: string) {
+  return text
+    // remove lines with ====
+    .replace(/={3,}/g, "")
+    // remove extra blank lines
+    .replace(/\n\s*\n/g, "\n\n")
+    .trim()
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -917,9 +926,9 @@ function AITutorContent() {
                           )}
                         >
                           {message.role === "assistant" ? (
-                            <MarkdownRenderer content={message.content} />
+                            <MarkdownRenderer content={cleanAIResponse(message.content)} />
                           ) : (
-                            <p className="text-sm leading-relaxed md:text-base">{message.content}</p>
+                            <p className="text-sm leading-relaxed md:text-base">{cleanAIResponse(message.content)}</p>
                           )}
 
                           {message.attachments?.length ? (
