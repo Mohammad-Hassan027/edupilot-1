@@ -40,3 +40,43 @@ export async function GET(
     return NextResponse.json({ messages: [] }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: Promise<{ sessionId: string }> }
+) {
+  try {
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const { sessionId } = await context.params
+    const admin = await getSupabaseAdmin()
+
+    const { error: messagesError } = await admin
+      .from("chat_messages")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("user_id", user.id)
+
+    if (messagesError) {
+      console.error("[user/chat-history/session/delete messages] Error:", messagesError)
+      return NextResponse.json({ error: "Failed to delete chat" }, { status: 500 })
+    }
+
+    const { error: sessionError } = await admin
+      .from("chat_sessions")
+      .delete()
+      .eq("id", sessionId)
+      .eq("user_id", user.id)
+
+    if (sessionError) {
+      console.error("[user/chat-history/session/delete session] Error:", sessionError)
+      return NextResponse.json({ error: "Failed to delete chat" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error("[user/chat-history/session/delete] Error:", err)
+    return NextResponse.json({ error: "Failed to delete chat" }, { status: 500 })
+  }
+}

@@ -37,6 +37,7 @@ import {
   Globe,
   ImageIcon,
   Loader2,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -228,6 +229,33 @@ function AITutorContent() {
       setIsLoadingHistory(false)
     }
   }, [])
+
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/user/chat-history/${sessionId}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to delete chat")
+      }
+
+      setChatSessions((prev) => prev.filter((chat) => chat.id !== sessionId))
+
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null)
+        setMessages(initialMessages)
+        setInput("")
+        setSelectedFiles([])
+        setActiveMode("chat")
+        setActiveHint(null)
+        setShowSourcesSidebar(false)
+        setActiveSources([])
+      }
+    } catch (error) {
+      console.error(error)
+    }
+  }
 
   const handleOpenSession = async (sessionId: string) => {
     try {
@@ -755,38 +783,58 @@ function AITutorContent() {
                 </div>
               ) : (
                 chatSessions.map((chat) => (
-                  <button
+                  <div
                     key={chat.id}
-                    onClick={() => handleOpenSession(chat.id)}
                     className={cn(
-                      "flex w-full items-start gap-3 overflow-hidden rounded-lg p-3 text-left transition-colors hover:bg-secondary",
+                      "group flex items-start gap-3 overflow-hidden rounded-lg p-3 text-left transition-colors hover:bg-secondary",
                       activeSessionId === chat.id && "bg-secondary"
                     )}
                   >
-                    <MessageSquare className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <button
+                      onClick={() => handleOpenSession(chat.id)}
+                      className="flex min-w-0 flex-1 items-start gap-3 overflow-hidden text-left"
+                    >
+                      <MessageSquare className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
 
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <p
-                        className="overflow-hidden text-sm font-medium leading-5 text-foreground"
-                        style={{
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                        }}
-                      >
-                        {chat.title}
-                      </p>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p
+                          className="overflow-hidden text-sm font-medium leading-5 text-foreground"
+                          style={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                          }}
+                        >
+                          {chat.title}
+                        </p>
 
-                      <div className="mt-1 flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span className="shrink-0">{chat.time}</span>
-                        <span className="shrink-0">•</span>
-                        <span className="truncate">{chat.messages} messages</span>
+                        <div className="mt-1 flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          <span className="shrink-0">{chat.time}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="truncate">{chat.messages} messages</span>
+                        </div>
                       </div>
-                    </div>
+                    </button>
 
-                    <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-                  </button>
+                    <div className="flex items-start gap-1 pl-1">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleDeleteSession(chat.id)
+                        }}
+                        aria-label="Delete chat"
+                        title="Delete chat"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+                  </div>
                 ))
               )}
             </div>
