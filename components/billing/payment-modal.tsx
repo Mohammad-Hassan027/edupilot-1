@@ -209,9 +209,14 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
           {/* Test mode notice */}
           <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
             <ShieldCheck className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              <strong>Test payment mode.</strong> Use Razorpay test cards — e.g. Card: 4111 1111 1111 1111 · CVV: any 3 digits · Expiry: any future date
-            </p>
+            <div className="space-y-1 text-xs text-amber-600 dark:text-amber-400">
+              <p>
+                <strong>Test payment mode.</strong> Do not enter random fake card numbers like <strong>111111111</strong>. Razorpay test mode still validates the card format and accepts only Razorpay test cards.
+              </p>
+              <p>
+                Use an official Razorpay test card such as <strong>4100 2800 0000 1007</strong> or <strong>5500 6700 0000 1002</strong> · CVV: any 3 digits · Expiry: any future date.
+              </p>
+            </div>
           </div>
 
           {/* Status messages */}
