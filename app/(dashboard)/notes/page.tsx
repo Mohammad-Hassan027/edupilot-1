@@ -598,7 +598,6 @@ export default function NotesPage() {
   const [isDownloading, setIsDownloading] = useState(false)
 
   const pdfExportRef = useRef<HTMLDivElement | null>(null)
-  const tabContentRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const selectedOption = useMemo(
     () => sourceOptions.find((option) => option.id === sourceMode) || sourceOptions[0],
@@ -734,211 +733,59 @@ export default function NotesPage() {
       setIsGenerating(false)
     }
   }
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-}
 
-  function getPlainTextFromRenderedTab(tabType: NoteTabType) {
-    const element = tabContentRefs.current[tabType]
-    if (!element) return ""
+  async function copyTabContent(tabType: NoteTabType, content: string) {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedTab(tabType)
 
-    const clone = element.cloneNode(true) as HTMLElement
-
-    clone.querySelectorAll("ul").forEach((ul) => {
-      const items = Array.from(ul.querySelectorAll(":scope > li"))
-      const text = items
-        .map((li) => {
-          const liText = (li.textContent || "").replace(/\s+/g, " ").trim()
-          return liText ? `• ${liText}` : ""
-        })
-        .filter(Boolean)
-        .join("\n")
-      const replacement = document.createElement("div")
-      replacement.textContent = text
-      ul.replaceWith(replacement)
-    })
-
-    clone.querySelectorAll("ol").forEach((ol) => {
-      const items = Array.from(ol.querySelectorAll(":scope > li"))
-      const text = items
-        .map((li, index) => {
-          const liText = (li.textContent || "").replace(/\s+/g, " ").trim()
-          return liText ? `${index + 1}. ${liText}` : ""
-        })
-        .filter(Boolean)
-        .join("\n")
-      const replacement = document.createElement("div")
-      replacement.textContent = text
-      ol.replaceWith(replacement)
-    })
-
-    clone.querySelectorAll("hr").forEach((hr) => {
-      const replacement = document.createElement("div")
-      replacement.textContent = "────────────────────"
-      hr.replaceWith(replacement)
-    })
-
-    const blocks = Array.from(clone.querySelectorAll("h1,h2,h3,p,blockquote,div,pre"))
-      .map((node) => (node.textContent || "").replace(/\s+\n/g, "\n").replace(/\n\s+/g, "\n").trim())
-      .filter(Boolean)
-
-    return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim()
-  }
-
-  function getHtmlFromRenderedTab(tabType: NoteTabType, title: string) {
-    const element = tabContentRefs.current[tabType]
-    if (!element) return ""
-
-    return `
-      <div style="background:#031126;color:#f8fafc;padding:24px;border-radius:24px;border:1px solid rgba(255,255,255,0.08);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-        <h2 style="margin:0 0 12px 0;font-size:28px;line-height:1.3;font-weight:700;color:#ffffff;">
-          ${escapeHtml(title)}
-        </h2>
-        <div style="height:1px;width:220px;margin:0 0 24px 0;background:linear-gradient(90deg, rgba(234,179,8,0.95) 0%, rgba(255,255,255,0.18) 60%, rgba(255,255,255,0) 100%);"></div>
-        ${element.innerHTML}
-      </div>
-    `
-  }
-  async function copyTabContent(tabType: NoteTabType, title: string) {
-  try {
-    const plainText = getPlainTextFromRenderedTab(tabType)
-    const htmlText = getHtmlFromRenderedTab(tabType, title)
-
-    if (!plainText) {
-      throw new Error("No content available to copy.")
+      window.setTimeout(() => {
+        setCopiedTab((prev) => (prev === tabType ? null : prev))
+      }, 1800)
+    } catch {
+      setGenerateError("Unable to copy the text right now.")
     }
-
-    if (navigator.clipboard && "write" in navigator.clipboard && typeof ClipboardItem !== "undefined") {
-      const item = new ClipboardItem({
-        "text/plain": new Blob([plainText], { type: "text/plain" }),
-        "text/html": new Blob([htmlText], { type: "text/html" }),
-      })
-
-      await navigator.clipboard.write([item])
-    } else {
-      await navigator.clipboard.writeText(plainText)
-    }
-
-    setCopiedTab(tabType)
-
-    window.setTimeout(() => {
-      setCopiedTab((prev) => (prev === tabType ? null : prev))
-    }, 1800)
-  } catch (error) {
-    console.error("Copy failed:", error)
-    setGenerateError("Unable to copy the selected tab content right now.")
   }
-}
 
   async function downloadNotesAsPdf() {
-  if (!generatedNotes?.length) return
+    if (!generatedNotes?.length || !pdfExportRef.current) return
 
-  let tempContainer: HTMLDivElement | null = null
+    try {
+      setIsDownloading(true)
 
-  try {
-    setIsDownloading(true)
-    setGenerateError("")
+      const html2pdfModule = await import("html2pdf.js")
+      const html2pdf = html2pdfModule.default
 
-    const module = await import("html2pdf.js")
-    const html2pdf =
-      (module as { default?: unknown }).default || module
+      const filename =
+        `${generatedTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "notes"}.pdf`
 
-    if (typeof html2pdf !== "function") {
-      throw new Error("html2pdf function not found.")
+      await html2pdf()
+        .set({
+          margin: [12, 12, 12, 12],
+          filename,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#020817",
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait",
+          },
+          pagebreak: {
+            mode: ["avoid-all", "css", "legacy"],
+          },
+        })
+        .from(pdfExportRef.current)
+        .save()
+    } catch {
+      setGenerateError("Failed to download PDF. Please check that html2pdf.js is installed correctly.")
+    } finally {
+      setIsDownloading(false)
     }
-
-    tempContainer = document.createElement("div")
-    tempContainer.style.position = "fixed"
-    tempContainer.style.left = "0"
-    tempContainer.style.top = "0"
-    tempContainer.style.width = "794px"
-    tempContainer.style.zIndex = "-1"
-    tempContainer.style.opacity = "0"
-    tempContainer.style.pointerEvents = "none"
-    tempContainer.style.background = "linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(3,17,38,1) 100%)"
-    tempContainer.style.padding = "32px"
-    tempContainer.style.color = "#f8fafc"
-    tempContainer.style.fontFamily =
-      "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-
-    tempContainer.innerHTML = `
-      <div style="border:1px solid rgba(255,255,255,0.08);border-radius:28px;background:rgba(15,23,42,0.55);padding:28px;box-shadow:0 20px 50px rgba(0,0,0,0.28);">
-        <div style="margin-bottom:24px;">
-          <h1 style="margin:0;font-size:30px;line-height:1.25;font-weight:800;color:#ffffff;">
-            ${escapeHtml(generatedTitle)}
-          </h1>
-          ${
-            sourceHint
-              ? `<p style="margin-top:10px;margin-bottom:0;font-size:14px;line-height:1.8;color:rgba(226,232,240,0.85);">
-                  ${escapeHtml(sourceHint)}
-                </p>`
-              : ""
-          }
-        </div>
-
-        ${generatedNotes
-          .map(
-            (tab, index) => `
-              <div style="margin-top:${index === 0 ? "0" : "26px"};padding:22px 22px 18px 22px;border-radius:22px;border:1px solid rgba(255,255,255,0.08);background:rgba(2,12,27,0.7);page-break-inside:avoid;">
-                <h2 style="margin:0;font-size:22px;line-height:1.35;font-weight:700;color:#ffffff;">
-                  ${escapeHtml(tab.title)}
-                </h2>
-                <div style="height:1px;width:180px;margin-top:12px;margin-bottom:18px;background:linear-gradient(90deg, rgba(234,179,8,0.95) 0%, rgba(255,255,255,0.18) 60%, rgba(255,255,255,0) 100%);"></div>
-                ${getHtmlFromRenderedTab(tab.type, tab.title)}
-              </div>
-            `
-          )
-          .join("")}
-      </div>
-    `
-
-    document.body.appendChild(tempContainer)
-
-    const filename = `${generatedTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "notes"}.pdf`
-
-    await (html2pdf as (element?: HTMLElement) => {
-      set: (options: unknown) => {
-        from: (element: HTMLElement) => {
-          save: () => Promise<void>
-        }
-      }
-    })()
-      .set({
-        margin: [8, 8, 8, 8],
-        filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#020617",
-          logging: false,
-        },
-        jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
-        },
-        pagebreak: {
-          mode: ["css", "legacy"],
-        },
-      })
-      .from(tempContainer)
-      .save()
-  } catch (error) {
-    console.error("PDF download failed:", error)
-    setGenerateError("Failed to download PDF. Please try again after refreshing the page.")
-  } finally {
-    if (tempContainer && document.body.contains(tempContainer)) {
-      document.body.removeChild(tempContainer)
-    }
-    setIsDownloading(false)
   }
-}
 
   const canGenerate =
     !isGenerating &&
@@ -1272,7 +1119,7 @@ function escapeHtml(value: string) {
                             variant="outline"
                             size="sm"
                             className="gap-2 border-white/10 bg-background/40"
-                            onClick={() => copyTabContent(tab.type, tab.title)}
+                            onClick={() => copyTabContent(tab.type, tab.content)}
                           >
                             <Copy className="h-4 w-4" />
                             {copiedTab === tab.type ? "Text copied" : "Copy"}
@@ -1280,16 +1127,11 @@ function escapeHtml(value: string) {
                         </div>
                       </div>
 
-                        <div
-                          className="px-5 py-6 md:px-6 md:py-7"
-                          ref={(node) => {
-                            tabContentRefs.current[tab.type] = node
-                          }}
-                        >
-                          <div className="prose prose-invert max-w-none">
-                            <MarkdownRenderer content={tab.content} className="text-[15px] leading-7" />
-                          </div>
+                      <div className="px-5 py-6 md:px-6 md:py-7">
+                        <div className="prose prose-invert max-w-none">
+                          <MarkdownRenderer content={tab.content} className="text-[15px] leading-7" />
                         </div>
+                      </div>
                     </div>
                   </TabsContent>
                 ))}
