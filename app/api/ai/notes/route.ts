@@ -157,11 +157,14 @@ Return ONLY valid JSON in this exact shape:
 
 Rules:
 - Do not wrap JSON in markdown fences
-- Keep the language student-friendly
-- Use markdown inside each content field
+- Keep the language student-friendly and professional
+- Use clean markdown inside each content field
+- Do not start sections with raw labels like "## Summary" or repeat the tab title
+- Use short intro paragraphs, horizontal dividers (---), and clear H2/H3 subheadings where helpful
+- Avoid cluttered symbols or unnecessary markdown noise
 - The summary tab should be short and clear
-- The concepts tab should explain key ideas
-- The bullet points tab should be concise and skimmable
+- The concepts tab should explain key ideas with well-structured sub-sections
+- The bullet points tab should be concise, scannable, and exam-friendly
 - The revision tab should include quick review notes plus 3 to 5 practice questions
 `.trim()
 

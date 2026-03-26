@@ -89,7 +89,7 @@ function renderInline(text: string) {
         href={token.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="font-medium break-all text-primary underline decoration-primary/40 underline-offset-4 hover:opacity-80"
+        className="break-all font-medium text-primary underline decoration-primary/40 underline-offset-4 hover:opacity-80"
       >
         {token.label}
       </a>
@@ -97,8 +97,18 @@ function renderInline(text: string) {
   })
 }
 
+function normalizeContent(content: string) {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/^\s*#+\s*(summary|concept breakdown|bullet points|revision notes)\s*$/gim, "")
+    .replace(/^\s*\*\*(.*?)\*\*\s*$/gm, "## $1")
+    .replace(/^\s*([A-Z][A-Za-z0-9()\-/& ,]{3,60}):\s*$/gm, "## $1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export function MarkdownRenderer({ content, className }: Props) {
-  const lines = content.replace(/\r\n/g, "\n").split("\n")
+  const lines = normalizeContent(content).split("\n")
   const elements: React.ReactNode[] = []
 
   let i = 0
@@ -112,7 +122,7 @@ export function MarkdownRenderer({ content, className }: Props) {
     }
 
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
-      elements.push(<hr key={`hr-${i}`} className="my-5 border-white/10" />)
+      elements.push(<hr key={`hr-${i}`} className="my-6 border-white/10" />)
       i++
       continue
     }
@@ -130,7 +140,7 @@ export function MarkdownRenderer({ content, className }: Props) {
       if (i < lines.length) i++
 
       elements.push(
-        <div key={`code-${i}`} className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+        <div key={`code-${i}`} className="my-5 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
           {language ? (
             <div className="border-b border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground">
               {language}
@@ -146,7 +156,7 @@ export function MarkdownRenderer({ content, className }: Props) {
 
     if (line.startsWith("### ")) {
       elements.push(
-        <h3 key={`h3-${i}`} className="mt-5 mb-2 text-base font-semibold text-foreground md:text-lg">
+        <h3 key={`h3-${i}`} className="mb-2 mt-6 text-base font-semibold tracking-wide text-primary md:text-lg">
           {renderInline(line.replace(/^###\s+/, ""))}
         </h3>
       )
@@ -156,9 +166,12 @@ export function MarkdownRenderer({ content, className }: Props) {
 
     if (line.startsWith("## ")) {
       elements.push(
-        <h2 key={`h2-${i}`} className="mt-6 mb-3 text-lg font-semibold text-foreground md:text-xl">
-          {renderInline(line.replace(/^##\s+/, ""))}
-        </h2>
+        <div key={`h2-wrap-${i}`} className="pt-2">
+          <hr className="mb-4 border-white/10" />
+          <h2 className="text-lg font-semibold text-foreground md:text-xl">
+            {renderInline(line.replace(/^##\s+/, ""))}
+          </h2>
+        </div>
       )
       i++
       continue
@@ -166,9 +179,12 @@ export function MarkdownRenderer({ content, className }: Props) {
 
     if (line.startsWith("# ")) {
       elements.push(
-        <h1 key={`h1-${i}`} className="mt-6 mb-3 text-xl font-bold text-foreground md:text-2xl">
-          {renderInline(line.replace(/^#\s+/, ""))}
-        </h1>
+        <div key={`h1-wrap-${i}`} className="pt-2">
+          <h1 className="mb-3 text-xl font-bold text-foreground md:text-2xl">
+            {renderInline(line.replace(/^#\s+/, ""))}
+          </h1>
+          <hr className="border-primary/20" />
+        </div>
       )
       i++
       continue
@@ -185,7 +201,7 @@ export function MarkdownRenderer({ content, className }: Props) {
       elements.push(
         <blockquote
           key={`quote-${i}`}
-          className="my-4 rounded-r-2xl border-l-4 border-primary/60 bg-primary/5 px-4 py-3 text-sm leading-7 text-muted-foreground"
+          className="my-5 rounded-r-2xl border-l-4 border-primary/60 bg-primary/5 px-4 py-3 text-sm leading-7 text-muted-foreground"
         >
           {quoteLines.map((quote, index) => (
             <p key={index} className={index ? "mt-2" : ""}>
@@ -206,7 +222,7 @@ export function MarkdownRenderer({ content, className }: Props) {
       }
 
       elements.push(
-        <ul key={`ul-${i}`} className="my-3 space-y-2">
+        <ul key={`ul-${i}`} className="my-4 space-y-2.5">
           {items.map((item, index) => (
             <li key={index} className="flex gap-3 text-sm leading-7 text-foreground md:text-[15px]">
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
@@ -227,7 +243,7 @@ export function MarkdownRenderer({ content, className }: Props) {
       }
 
       elements.push(
-        <ol key={`ol-${i}`} className="my-3 space-y-2">
+        <ol key={`ol-${i}`} className="my-4 space-y-2.5">
           {items.map((item, index) => (
             <li key={index} className="flex gap-3 text-sm leading-7 text-foreground md:text-[15px]">
               <span className="min-w-5 shrink-0 font-semibold text-primary">{index + 1}.</span>
@@ -263,8 +279,8 @@ export function MarkdownRenderer({ content, className }: Props) {
       <p
         key={`p-${i}`}
         className={cn(
-          "text-sm leading-7 text-foreground md:text-[15px]",
-          looksLikeSectionLead && "mt-4 font-semibold text-foreground"
+          "text-[15px] leading-8 text-foreground/95",
+          looksLikeSectionLead && "mt-5 text-base font-semibold text-foreground"
         )}
       >
         {renderInline(paragraph)}
@@ -277,7 +293,7 @@ export function MarkdownRenderer({ content, className }: Props) {
   return (
     <div
       className={cn(
-        "space-y-1 text-sm text-foreground [&_p+ol]:mt-2 [&_p+ul]:mt-2",
+        "space-y-2 text-sm text-foreground [&_p+ol]:mt-2 [&_p+ul]:mt-2",
         className
       )}
     >
