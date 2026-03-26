@@ -1,8 +1,8 @@
-export interface UploadedAttachment {
+export type UploadedAttachment = {
   name: string
-  url?: string
+  url: string
   type: string
-  size: number
+  size?: number
 }
 
 export interface TavilySearchResult {
@@ -42,6 +42,16 @@ function normalizeMimeType(fileName: string, mimeType?: string) {
     csv: "text/csv",
     json: "application/json",
     pdf: "application/pdf",
+
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
     zip: "application/zip",
     png: "image/png",
     jpg: "image/jpeg",
@@ -78,6 +88,12 @@ function isGeminiFriendlyMimeType(mimeType: string) {
     mimeType === "application/xml" ||
     mimeType === "application/zip" ||
     mimeType === "application/x-zip-compressed" ||
+    mimeType === "application/msword" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mimeType === "application/vnd.ms-powerpoint" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
     mimeType === "application/octet-stream"
   )
 }
@@ -260,7 +276,7 @@ export function summarizeAttachments(attachments: UploadedAttachment[]) {
 
   return attachments
     .map((file, index) => {
-      const sizeInKb = Math.max(1, Math.round(file.size / 1024))
+      const sizeInKb = Math.max(1, Math.round((file.size || 0) / 1024))
       const urlText = file.url ? ` | URL: ${file.url}` : ""
       return `${index + 1}. ${file.name} (${file.type || "unknown"}, ${sizeInKb} KB)${urlText}`
     })
