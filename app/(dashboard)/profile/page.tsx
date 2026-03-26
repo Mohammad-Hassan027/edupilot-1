@@ -40,8 +40,12 @@ export default function ProfilePage() {
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
   const avatarSrc = profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
 
-  const planLabel = subscription?.trial_active ? "Trial Active" :
-    subscription?.status === "active" ? "Pro Member" : "Free Member"
+  const currentPlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : "Free"
+  const planLabel = subscription?.trial_active
+    ? `${currentPlanName} Trial Active`
+    : subscription?.status === "active"
+      ? `${currentPlanName} Member`
+      : "Free Member"
 
   const totalCreditsUsed = (credits?.ai_chat_used ?? 0) + (credits?.flashcards_used ?? 0) + (credits?.study_plan_used ?? 0)
 
@@ -195,7 +199,7 @@ export default function ProfilePage() {
               </Badge>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
-                {subscription?.trial_active ? "Trial" : subscription?.status === "active" ? "Pro" : "Free"}
+                {subscription?.trial_active ? `${currentPlanName} Trial` : subscription?.status === "active" ? currentPlanName : "Free"}
               </Badge>
             </div>
 

@@ -140,23 +140,56 @@ export async function refillCreditsForTrial(userId: string) {
 
 export async function createSubscription(userId: string) {
   const admin = await getSupabaseAdmin()
-  const { data, error } = await admin
+  const baseRecord = {
+    user_id: userId,
+    status: "free",
+    trial_active: false,
+    trial_start: null,
+    trial_expiry: null,
+    subscription_start: null,
+    subscription_end: null,
+  }
+
+  let data: unknown = null
+  let error: { message: string } | null = null
+
+  const withPlan = await admin
     .from("subscriptions")
-    .insert({
-      user_id: userId,
-      status: "free",
-      plan_id: "free",
-      trial_active: false,
-      trial_start: null,
-      trial_expiry: null,
-      subscription_start: null,
-      subscription_end: null,
-    })
+    .insert({ ...baseRecord, plan_id: "free" })
     .select()
     .single()
 
+  data = withPlan.data
+  error = withPlan.error
+
+  if (error?.message?.includes("plan_id")) {
+    const legacyInsert = await admin
+      .from("subscriptions")
+      .insert(baseRecord)
+      .select()
+      .single()
+
+    data = legacyInsert.data
+    error = legacyInsert.error
+  }
+
   if (error) throw new Error(`Subscription creation failed: ${error.message}`)
-  return data as Subscription
+  return { ...((data as Record<string, unknown>) ?? {}), plan_id: "free" } as Subscription
+}
+
+export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premium" | "free"> {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("payments")
+    .select("plan_id,status,created_at")
+    .eq("user_id", userId)
+    .in("status", ["captured", "refunded"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+
+  if (error || !data || data.length === 0) return "free"
+  const planId = data[0]?.plan_id
+  return planId === "pro" || planId === "premium" ? planId : "free"
 }
 
 export async function getSubscription(userId: string) {
@@ -167,8 +200,15 @@ export async function getSubscription(userId: string) {
     .eq("user_id", userId)
     .single()
 
-  if (error) return null
-  return data as Subscription
+  if (error || !data) return null
+
+  const planId = (data as Record<string, unknown>).plan_id
+  if (planId === "pro" || planId === "premium" || planId === "free") {
+    return data as Subscription
+  }
+
+  const fallbackPlan = await getLatestPaidPlan(userId)
+  return { ...data, plan_id: fallbackPlan } as Subscription
 }
 
 export async function activateTrial(userId: string, planId: "pro" | "premium") {
@@ -177,22 +217,45 @@ export async function activateTrial(userId: string, planId: "pro" | "premium") {
   const expiry = new Date(now)
   expiry.setDate(expiry.getDate() + 14)
 
-  const { data, error } = await admin
+  const baseUpdates = {
+    status: "trial",
+    trial_active: true,
+    trial_start: now.toISOString(),
+    trial_expiry: expiry.toISOString(),
+    updated_at: now.toISOString(),
+  }
+
+  let data: unknown = null
+  let error: { message: string } | null = null
+
+  const attemptWithPlan = await admin
     .from("subscriptions")
     .update({
-      status: "trial",
+      ...baseUpdates,
       plan_id: planId,
-      trial_active: true,
-      trial_start: now.toISOString(),
-      trial_expiry: expiry.toISOString(),
-      updated_at: now.toISOString(),
     })
     .eq("user_id", userId)
     .select()
     .single()
 
+  data = attemptWithPlan.data
+  error = attemptWithPlan.error
+
+  if (error?.message?.includes("plan_id")) {
+    const legacyAttempt = await admin
+      .from("subscriptions")
+      .update(baseUpdates)
+      .eq("user_id", userId)
+      .select()
+      .single()
+
+    data = legacyAttempt.data
+    error = legacyAttempt.error
+  }
+
   if (error) throw new Error(`Trial activation failed: ${error.message}`)
-  return data as Subscription
+
+  return { ...((data as Record<string, unknown>) ?? {}), plan_id: planId } as Subscription
 }
 
 export async function isTrialActive(userId: string): Promise<boolean> {

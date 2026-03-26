@@ -29,7 +29,7 @@ const DEMO_CARD: Flashcard = {
 }
 
 export default function FlashcardsPage() {
-  const { subscription, refetch } = useUser()
+  const { subscription, refetch, isLoading, error, email } = useUser()
   const [cards, setCards] = useState<Flashcard[]>([DEMO_CARD])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
@@ -46,11 +46,12 @@ export default function FlashcardsPage() {
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
   const isPaidUser = hasPaidAccess(subscription)
 
-  const handleGenerateClick = async () => {
+  const handleGenerateClick = () => {
     setGenError("")
 
-    const profileRes = await fetch("/api/user/profile")
-    if (profileRes.status === 401) {
+    if (isLoading) return
+
+    if (error === "not_authenticated" || !email) {
       setShowLoginModal(true)
       return
     }
@@ -154,7 +155,7 @@ export default function FlashcardsPage() {
             <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
             <p className="text-muted-foreground">Review and memorize with AI-generated cards</p>
           </div>
-          <Button className="gap-2" onClick={handleGenerateClick}>
+          <Button className="gap-2" onClick={handleGenerateClick} disabled={isLoading}>
             <Sparkles className="h-4 w-4" /> Generate with AI
           </Button>
         </div>

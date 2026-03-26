@@ -54,7 +54,7 @@ export async function GET() {
     data: { profile, credits, subscription, email: user.email, authName },
   })
   // Cache for 30 seconds to reduce DB hammering
-  response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60")
+  response.headers.set("Cache-Control", "no-store")
   return response
 }
 
