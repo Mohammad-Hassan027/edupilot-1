@@ -106,6 +106,7 @@ export default function PlannerPage() {
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [pendingPlannerAction, setPendingPlannerAction] = useState<null | "open_task" | "open_ai">(null)
   const canUsePlanner = canAccessFeature(subscription, "planner")
+  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
   const guardPlannerAccess = (action: "open_task" | "open_ai") => {
     if (isLoading) {
@@ -326,17 +327,27 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
         </div>
       </div>
 
-      {!canUsePlanner && (
+      {activePlanName ? (
+        <Card className="border-emerald-500/30 bg-emerald-500/10">
+          <CardContent className="flex items-start gap-3 p-4 text-sm">
+            <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+            <div>
+              <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
+              <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !canUsePlanner ? (
         <Card className="border-amber-500/30 bg-amber-500/10">
           <CardContent className="flex items-start gap-3 p-4 text-sm">
             <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <div>
               <p className="font-medium text-foreground">Planner is a Premium feature.</p>
-              <p className="mt-1 text-muted-foreground">Pro users can use Flashcards, AI Voice, and Quiz, but Planner unlocks only after starting a Premium 14-day free trial.</p>
+              <p className="mt-1 text-muted-foreground">Upgrade to Premium to unlock Planner instantly after successful payment.</p>
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Calendar */}
@@ -535,6 +546,8 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
         onPaymentSuccess={async () => {
           setShowPlanModal(false)
           await refetch()
+          setShowPlanModal(false)
+          setPendingPlannerAction(null)
         }}
       />
     </>

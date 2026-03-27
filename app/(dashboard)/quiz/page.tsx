@@ -41,6 +41,7 @@ export default function QuizPage() {
   const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
+  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
   const currentQuestion = questions[currentIndex]
   const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
   const correctCount = answers.filter((a, i) => a === questions[i]?.answer).length
@@ -154,17 +155,27 @@ export default function QuizPage() {
             <p className="text-muted-foreground">Enter a topic and let AI create a personalized quiz for you</p>
           </div>
 
-          {!canUseQuiz && (
+          {activePlanName ? (
+            <Card className="border-emerald-500/30 bg-emerald-500/10">
+              <CardContent className="flex items-start gap-3 p-4 text-sm">
+                <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                <div>
+                  <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
+                  <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : !canUseQuiz ? (
             <Card className="border-amber-500/30 bg-amber-500/10">
               <CardContent className="flex items-start gap-3 p-4 text-sm">
                 <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
                 <div>
                   <p className="font-medium text-foreground">Quiz is a Pro feature.</p>
-                  <p className="mt-1 text-muted-foreground">Free users can open this page, but AI quiz generation unlocks only after starting a Pro or Premium 14-day free trial.</p>
+                  <p className="mt-1 text-muted-foreground">Start Pro or Premium to unlock this feature instantly after successful payment.</p>
                 </div>
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           <Card className="border-border bg-card">
             <CardContent className="space-y-6 p-6">
@@ -224,6 +235,8 @@ export default function QuizPage() {
           onPaymentSuccess={async () => {
             setShowPlanModal(false)
             await refetch()
+            setShowPlanModal(false)
+            setPendingGenerateClick(false)
           }}
         />
       </>

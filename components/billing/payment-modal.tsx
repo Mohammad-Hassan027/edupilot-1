@@ -10,7 +10,13 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle, CheckCircle, ShieldCheck, CreditCard } from "lucide-react"
+import {
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+  ShieldCheck,
+  CreditCard,
+} from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 
 interface Plan {
@@ -27,22 +33,35 @@ interface PaymentModalProps {
   onPaymentSuccess: () => void | Promise<void>
 }
 
-export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: PaymentModalProps) {
+export function PaymentModal({
+  isOpen,
+  onClose,
+  plan,
+  onPaymentSuccess,
+}: PaymentModalProps) {
   const [isOpeningCheckout, setIsOpeningCheckout] = useState(false)
   const [scriptReady, setScriptReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
+  const [paymentStatus, setPaymentStatus] = useState<
+    "idle" | "processing" | "success" | "error"
+  >("idle")
   const { email, profile } = useUser()
 
   useEffect(() => {
     if (!isOpen) return
 
+    setError(null)
+    setPaymentStatus("idle")
+
     let mounted = true
-    let script: HTMLScriptElement | null = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+    let script: HTMLScriptElement | null = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    )
 
     const handleLoad = () => {
       if (mounted) setScriptReady(true)
     }
+
     const handleError = () => {
       if (!mounted) return
       setScriptReady(false)
@@ -72,7 +91,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
     }
   }, [isOpen])
 
-  const planAmountLabel = useMemo(() => (plan.price === "0" ? "Free" : `₹${plan.price}${plan.period}`), [plan.period, plan.price])
+  const planAmountLabel = useMemo(() => {
+    return plan.price === "0" ? "Free" : `₹${plan.price}${plan.period}`
+  }, [plan.period, plan.price])
 
   const handlePayment = async () => {
     try {
@@ -87,16 +108,24 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
       })
 
       const orderData = await orderResponse.json().catch(() => ({}))
+
       if (!orderResponse.ok) {
         throw new Error(orderData.error || "Failed to create order")
       }
 
       const RazorpayClass = (window as {
-        Razorpay?: new (opts: Record<string, unknown>) => { open(): void; on?: (event: string, cb: (response: unknown) => void) => void }
+        Razorpay?: new (
+          opts: Record<string, unknown>
+        ) => {
+          open(): void
+          on?: (event: string, cb: (response: unknown) => void) => void
+        }
       }).Razorpay
 
       if (!RazorpayClass) {
-        throw new Error("Razorpay checkout is not available right now. Please refresh and try again.")
+        throw new Error(
+          "Razorpay checkout is not available right now. Please refresh and try again."
+        )
       }
 
       const rzp = new RazorpayClass({
@@ -143,17 +172,18 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             })
 
             const verifyData = await verifyResponse.json().catch(() => ({}))
-            if (!verifyResponse.ok) {
+
+            if (!verifyResponse.ok || !verifyData.success) {
               throw new Error(verifyData.error || "Payment verification failed")
             }
 
             setPaymentStatus("success")
-            setTimeout(async () => {
-              await onPaymentSuccess()
-              onClose()
-            }, 900)
+            await onPaymentSuccess()
+            onClose()
           } catch (err) {
-            setError(err instanceof Error ? err.message : "Payment verification failed")
+            setError(
+              err instanceof Error ? err.message : "Payment verification failed"
+            )
             setPaymentStatus("error")
           } finally {
             setIsOpeningCheckout(false)
@@ -164,7 +194,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
       rzp.on?.("payment.failed", (response: unknown) => {
         console.error("[Razorpay payment.failed]", response)
         setPaymentStatus("error")
-        setError("Payment was not completed. Please use Razorpay test card details and try again.")
+        setError(
+          "Payment was not completed. Please use Razorpay test card details and try again."
+        )
         setIsOpeningCheckout(false)
       })
 
@@ -184,7 +216,8 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         <DialogHeader>
           <DialogTitle>Activate {plan.name} Plan</DialogTitle>
           <DialogDescription>
-            Complete the Razorpay test payment to start your 14-day free trial and unlock AI Flashcards instantly.
+            Complete the Razorpay test payment to start your 14-day free trial and
+            unlock the selected plan instantly across the app.
           </DialogDescription>
         </DialogHeader>
 
@@ -200,8 +233,11 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
                 <p className="text-lg font-bold text-foreground">{planAmountLabel}</p>
               </div>
             </div>
+
             <div className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
-              Your plan starts with a <span className="font-medium text-foreground">14-day free trial</span> after successful payment verification.
+              Your plan starts with a{" "}
+              <span className="font-medium text-foreground">14-day free trial</span>{" "}
+              after successful payment verification.
             </div>
           </div>
 
@@ -209,8 +245,14 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             <div className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
               <div className="space-y-1 text-xs text-amber-600 dark:text-amber-400">
-                <p><strong>Test mode:</strong> Use official Razorpay test card details.</p>
-                <p>Try <strong>4100 2800 0000 1007</strong> or <strong>5500 6700 0000 1002</strong> · CVV: any 3 digits · Expiry: any future date.</p>
+                <p>
+                  <strong>Test mode:</strong> Use official Razorpay test card details.
+                </p>
+                <p>
+                  Try <strong>4100 2800 0000 1007</strong> or{" "}
+                  <strong>5500 6700 0000 1002</strong> · CVV: any 3 digits · Expiry:
+                  any future date.
+                </p>
               </div>
             </div>
           </div>
@@ -227,7 +269,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
           {paymentStatus === "error" && error && (
             <Alert className="border-destructive/50 bg-destructive/10">
               <AlertCircle className="h-4 w-4 text-destructive" />
-              <AlertDescription className="text-destructive">{error}</AlertDescription>
+              <AlertDescription className="text-destructive">
+                {error}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -247,9 +291,15 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
               disabled={busy || paymentStatus === "success" || !scriptReady}
             >
               {isOpeningCheckout ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Opening checkout...
+                </>
               ) : (
-                <><CreditCard className="h-4 w-4" />Pay in Test Mode</>
+                <>
+                  <CreditCard className="h-4 w-4" />
+                  Pay in Test Mode
+                </>
               )}
             </Button>
 

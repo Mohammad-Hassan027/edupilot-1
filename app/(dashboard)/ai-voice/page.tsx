@@ -39,6 +39,7 @@ export default function AIVoicePage() {
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const canUseVoice = canAccessFeature(subscription, "ai_voice")
+  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis
@@ -163,19 +164,29 @@ export default function AIVoicePage() {
           <p className="text-muted-foreground">Ask questions hands-free — powered by Gemini AI</p>
         </div>
 
-        {!canUseVoice && (
+        {activePlanName ? (
+          <Card className="border-emerald-500/30 bg-emerald-500/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+              <div>
+                <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
+                <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : !canUseVoice ? (
           <Card className="border-amber-500/30 bg-amber-500/10">
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div>
                 <p className="font-medium text-foreground">AI Voice is a Pro feature.</p>
                 <p className="mt-1 text-muted-foreground">
-                  Free users can open this page, but voice generation unlocks only after starting a Pro or Premium 14-day free trial.
+                  Start Pro or Premium to unlock this feature instantly after successful payment.
                 </p>
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="relative overflow-hidden border-border bg-card">
@@ -283,6 +294,8 @@ export default function AIVoicePage() {
         onPaymentSuccess={async () => {
           setShowPlanModal(false)
           await refetch()
+          setShowPlanModal(false)
+          setPendingVoiceAction(false)
         }}
       />
     </>

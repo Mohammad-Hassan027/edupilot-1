@@ -46,6 +46,7 @@ export default function FlashcardsPage() {
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
   const isPaidUser = hasPaidAccess(subscription)
+  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
   const handleGenerateClick = () => {
     setGenError("")
@@ -171,19 +172,29 @@ export default function FlashcardsPage() {
           </Button>
         </div>
 
-        {!isPaidUser && (
+        {activePlanName ? (
+          <Card className="border-emerald-500/30 bg-emerald-500/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+              <div>
+                <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
+                <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : !isPaidUser ? (
           <Card className="border-amber-500/30 bg-amber-500/10">
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />
               <div>
                 <p className="font-medium text-foreground">Flashcards is a paid feature.</p>
                 <p className="text-muted-foreground mt-1">
-                  Free users can view this page, but AI generation unlocks only after starting a Pro or Premium 14-day free trial.
+                  Start Pro or Premium to unlock this feature instantly after successful payment.
                 </p>
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-muted-foreground">
@@ -280,6 +291,9 @@ export default function FlashcardsPage() {
         onOpenChange={setPlanModalOpen}
         onPaymentSuccess={async () => {
           await refetch()
+          setPlanModalOpen(false)
+          setDialogOpen(false)
+          setPendingGenerateClick(false)
           setPlanModalOpen(false)
           setDialogOpen(true)
         }}
