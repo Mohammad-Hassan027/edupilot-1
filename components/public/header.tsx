@@ -35,7 +35,7 @@ export function PublicHeader() {
   useEffect(() => {
     const supabase = getSupabaseBrowserClient()
 
-    const loadSession = async () => {
+    const setUserFromSession = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -60,11 +60,11 @@ export function PublicHeader() {
       setAuthReady(true)
     }
 
-    loadSession()
+    setUserFromSession()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const u = session.user
         const name =
@@ -83,10 +83,11 @@ export function PublicHeader() {
       }
 
       setAuthReady(true)
+      router.refresh()
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router])
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" })
