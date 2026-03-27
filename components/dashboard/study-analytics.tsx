@@ -1,22 +1,28 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
-import { TrendingUp, Clock, Target, Flame } from "lucide-react"
+import { TrendingUp, Clock, Target, Gauge } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useActivityTracker } from "@/components/activity/activity-tracker-provider"
 
 interface StatsData {
-  streak: number
-  learningHours: string
+  trackedSecondsThisWeek: number
   weekTrend: string
   activeDaysThisWeek: number
   weeklyActivity: Array<{ label: string; count: number }>
+  engagementLevel: string
+}
+
+function formatHours(seconds: number) {
+  return (seconds / 3600).toFixed(1)
 }
 
 export function StudyAnalytics() {
   const [data, setData] = useState<StatsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { currentSessionSeconds, isActivelyTracking } = useActivityTracker()
 
   useEffect(() => {
     fetch("/api/user/stats")
@@ -26,16 +32,26 @@ export function StudyAnalytics() {
       .finally(() => setIsLoading(false))
   }, [])
 
+  const liveWeekHours = useMemo(() => {
+    return formatHours((data?.trackedSecondsThisWeek ?? 0) + currentSessionSeconds)
+  }, [data?.trackedSecondsThisWeek, currentSessionSeconds])
+
   const stats = data
     ? [
-        { label: "Study Streak", value: `${data.streak} days`, icon: Flame, color: "text-orange-500" },
-        { label: "This Week", value: `${data.learningHours} hrs`, icon: Clock, color: "text-primary" },
+        { label: "Live Tracking", value: isActivelyTracking ? "Active" : "Paused", icon: Clock, color: "text-primary" },
+        { label: "This Week", value: `${liveWeekHours} hrs`, icon: Clock, color: "text-primary" },
         { label: "vs Last Week", value: data.weekTrend, icon: TrendingUp, color: "text-violet-500" },
         {
           label: "Active Days",
           value: `${data.activeDaysThisWeek} days`,
           icon: Target,
           color: "text-emerald-500",
+        },
+        {
+          label: "Engagement",
+          value: data.engagementLevel,
+          icon: Gauge,
+          color: "text-amber-500",
         },
       ]
     : []
@@ -94,7 +110,7 @@ export function StudyAnalytics() {
                           borderRadius: "8px",
                           color: "hsl(var(--foreground))",
                         }}
-                        formatter={(value: number) => [`${value} actions`, "Activity"]}
+                        formatter={(value: number) => [`${value} signals`, "Activity"]}
                       />
                       <Area
                         type="monotone"
@@ -111,7 +127,7 @@ export function StudyAnalytics() {
                   <div>
                     <TrendingUp className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-40" />
                     <p className="text-sm text-muted-foreground">No activity this week yet.</p>
-                    <p className="text-xs text-muted-foreground">Start using AI features to track your progress!</p>
+                    <p className="text-xs text-muted-foreground">Start using AI features to track your progress.</p>
                   </div>
                 </div>
               )}

@@ -1,23 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Clock, Flame, HelpCircle, Activity } from "lucide-react"
+import { Clock, HelpCircle, Activity, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useActivityTracker } from "@/components/activity/activity-tracker-provider"
 
 interface Stats {
-  streak: number
   learningHours: string
+  trackedSecondsThisWeek: number
   quizzesTaken: number
   totalActivities: number
   weekTrend: string
   activeDaysThisMonth: number
+  engagementLevel: string
+}
+
+function formatLiveHours(seconds: number) {
+  return (seconds / 3600).toFixed(1)
 }
 
 export function QuickStats() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const { currentSessionSeconds, isActivelyTracking } = useActivityTracker()
 
   useEffect(() => {
     fetch("/api/user/stats")
@@ -26,6 +33,11 @@ export function QuickStats() {
       .catch(() => setStats(null))
       .finally(() => setIsLoading(false))
   }, [])
+
+  const liveLearningHours = useMemo(() => {
+    const baseSeconds = stats?.trackedSecondsThisWeek ?? 0
+    return formatLiveHours(baseSeconds + currentSessionSeconds)
+  }, [stats?.trackedSecondsThisWeek, currentSessionSeconds])
 
   if (isLoading) {
     return (
@@ -48,20 +60,10 @@ export function QuickStats() {
 
   const cards = [
     {
-      label: "Learning Streak",
-      value: String(stats?.streak ?? 0),
-      unit: "days",
-      change:
-        (stats?.streak ?? 0) >= 7 ? "🔥 Keep it up!" : (stats?.streak ?? 0) > 0 ? "Going strong!" : "Start today!",
-      icon: Flame,
-      color: "text-orange-500",
-      bgColor: "bg-orange-500/10",
-    },
-    {
       label: "Learning Hours",
-      value: stats?.learningHours ?? "0.0",
+      value: liveLearningHours,
       unit: "hrs",
-      change: `${stats?.weekTrend ?? "0%"} vs last week`,
+      change: isActivelyTracking ? "Tracking live now" : "Paused due to inactivity",
       icon: Clock,
       color: "text-primary",
       bgColor: "bg-primary/10",
@@ -83,6 +85,15 @@ export function QuickStats() {
       icon: HelpCircle,
       color: "text-violet-500",
       bgColor: "bg-violet-500/10",
+    },
+    {
+      label: "Engagement Level",
+      value: stats?.engagementLevel ?? "Low",
+      unit: "",
+      change: `${stats?.weekTrend ?? "0%"} vs last week`,
+      icon: Gauge,
+      color: "text-amber-500",
+      bgColor: "bg-amber-500/10",
     },
   ]
 

@@ -124,6 +124,15 @@ export default function AIVoicePage() {
 
         const aiMsg: Message = { id: `${Date.now()}-assistant`, role: "assistant", text: data.reply }
         setMessages((prev) => [...prev, aiMsg])
+        fetch("/api/usage/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            feature: "ai_voice",
+            action: "voice_prompt_completed",
+            metadata: { prompt: userText },
+          }),
+        }).catch(() => undefined)
         speak(data.reply)
       } catch (e) {
         const errText = e instanceof Error ? e.message : "Something went wrong"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { cn } from "@/lib/utils"
+import { ActivityTrackerProvider } from "@/components/activity/activity-tracker-provider"
 
 export default function DashboardLayout({
   children,
@@ -36,7 +37,7 @@ export default function DashboardLayout({
         )}
       >
         <DashboardHeader />
-        {children}
+        <ActivityTrackerProvider>{children}</ActivityTrackerProvider>
       </main>
     </div>
   )

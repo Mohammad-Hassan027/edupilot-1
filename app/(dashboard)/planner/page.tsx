@@ -212,6 +212,15 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
       if (Array.isArray(parsed)) {
         setAiSuggestions(parsed.map((item: AIScheduleItem) => ({ ...item, selected: false })))
         setAiGenerated(true)
+        fetch("/api/usage/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            feature: "study_plan",
+            action: "plan_generated",
+            metadata: { goal: aiGoal, sessionCount: parsed.length },
+          }),
+        }).catch(() => undefined)
       }
     } catch {
       // fallback to static data on parse error

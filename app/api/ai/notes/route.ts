@@ -8,7 +8,7 @@ import {
   summarizeAttachments,
   type UploadedAttachment,
 } from "@/lib/ai-tools"
-import { getSavedNotes, saveGeneratedNote } from "@/lib/database"
+import { getSavedNotes, saveGeneratedNote, logUsage } from "@/lib/database"
 
 type SourceMode = "pdf" | "video" | "spreadsheet"
 type NoteType = "summary" | "concepts" | "bullets" | "revision"
@@ -267,6 +267,12 @@ export async function POST(req: NextRequest) {
           sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
           sourceHint: generated.sourceHint || sourceHint,
           tabs: generated.tabs,
+        })
+
+        await logUsage(user.id, "notes", "notes_generated", {
+          sourceMode,
+          title: generated.title || sourceTitle,
+          tabCount: generated.tabs.length,
         })
       } catch (saveError) {
         console.error("[ai/notes] Save warning:", saveError)

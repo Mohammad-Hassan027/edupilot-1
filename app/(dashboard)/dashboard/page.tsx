@@ -4,6 +4,7 @@ import { StudyAnalytics } from "@/components/dashboard/study-analytics"
 import { QuizScores } from "@/components/dashboard/quiz-scores"
 import { SavedNotesCard } from "@/components/dashboard/saved-notes-card"
 import { MonthlyActivityCard } from "@/components/dashboard/monthly-activity-card"
+import { FeatureUsageCard } from "@/components/dashboard/feature-usage-card"
 
 export default function DashboardPage() {
   return (
@@ -21,6 +22,9 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-2 xl:col-span-1">
           <SavedNotesCard />
+        </div>
+        <div className="lg:col-span-2 xl:col-span-3">
+          <FeatureUsageCard />
         </div>
         <div className="lg:col-span-2 xl:col-span-3">
           <MonthlyActivityCard />
