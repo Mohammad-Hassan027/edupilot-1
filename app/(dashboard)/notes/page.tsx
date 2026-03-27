@@ -907,7 +907,6 @@ export default function NotesPage() {
                               onClick={() => handleDeleteSavedNote(item.id)}
                             >
                               <Trash2 className="h-4 w-4" />
-                              Delete
                             </Button>
                           </div>
                         </div>
