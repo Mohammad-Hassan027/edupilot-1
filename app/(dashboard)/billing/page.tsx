@@ -164,7 +164,10 @@ export default function BillingPage() {
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/40 p-4">
                     <p className="text-sm text-muted-foreground">Billing email</p>
-                    <p className="mt-1 truncate text-lg font-semibold text-foreground">{email || "—"}</p>
+                    {/* <p className="mt-1 truncate text-lg font-semibold text-foreground">{email || "—"}</p> */}
+                    <p className="text-white font-medium truncate max-w-[180px]">
+                      {email || "—"}
+                    </p>
                   </div>
                 </div>
 
