@@ -3,19 +3,59 @@ import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { getProfile, upsertProfile, getCredits, getSubscription, createProfile, createCredits, createSubscription } from "@/lib/database"
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const user_id = searchParams.get("user_id")
+export async function GET() {
+  const user = await getUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", user_id)
-    .single()
+  let [profile, credits, subscription] = await Promise.all([
+    getProfile(user.id),
+    getCredits(user.id),
+    getSubscription(user.id),
+  ])
 
-  return NextResponse.json({
-    plan: subscription?.plan_id || "free",
+  // Auto-provision missing records (handles Google OAuth users who skipped register)
+  if (!profile) {
+    const name =
+      (user.user_metadata?.full_name as string) ||
+      (user.user_metadata?.name as string) ||
+      user.email?.split("@")[0] ||
+      "User"
+    try { profile = await createProfile(user.id, user.email ?? "", name) } catch {}
+  }
+  if (!credits) {
+    try { credits = await createCredits(user.id) } catch {}
+  }
+  if (!subscription) {
+    try { subscription = await createSubscription(user.id) } catch {}
+  }
+
+  // If profile exists but full_name is null, back-fill from Google metadata
+  if (profile && !profile.full_name) {
+    const name =
+      (user.user_metadata?.full_name as string) ||
+      (user.user_metadata?.name as string) ||
+      user.email?.split("@")[0] ||
+      "User"
+    try {
+      profile = await upsertProfile(user.id, { full_name: name })
+    } catch {}
+  }
+
+  // authName gives the hook a name even when profile row is stale
+  const authName =
+    (user.user_metadata?.full_name as string) ||
+    (user.user_metadata?.name as string) ||
+    null
+
+  const response = NextResponse.json({
+    success: true,
+    data: { profile, credits, subscription, email: user.email, authName },
   })
+  // Cache for 30 seconds to reduce DB hammering
+  response.headers.set("Cache-Control", "no-store")
+  return response
 }
 
 export async function PATCH(req: NextRequest) {
