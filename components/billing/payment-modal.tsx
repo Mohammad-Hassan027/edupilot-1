@@ -178,6 +178,17 @@ export function PaymentModal({
             }
 
             setPaymentStatus("success")
+
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("user-data-refresh", {
+                  detail: {
+                    subscription: verifyData.subscription ?? null,
+                  },
+                })
+              )
+            }
+
             await onPaymentSuccess()
             onClose()
           } catch (err) {
