@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
   const [error, setError] = useState<string | null>(null)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const { email, profile } = useUser()
+  const router = useRouter()
 
   useEffect(() => {
     if (!isOpen) return
@@ -151,7 +153,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             setTimeout(() => {
               onPaymentSuccess()
               onClose()
-            }, 900)
+              router.refresh()
+              window.location.reload()
+            }, 500)
           } catch (err) {
             setError(err instanceof Error ? err.message : "Payment verification failed")
             setPaymentStatus("error")
