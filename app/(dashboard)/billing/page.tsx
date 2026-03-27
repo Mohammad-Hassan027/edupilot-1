@@ -37,9 +37,9 @@ export default function BillingPage() {
   const { email, subscription, credits, isLoading, refetch } = useUser()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
 
-  const isTrial     = subscription?.trial_active === true
-  const isPro       = subscription?.status === "active"
-  const isUpgraded  = isTrial || isPro
+  const isTrial = subscription?.trial_active === true
+  const isPro = subscription?.status === "active" && (subscription?.plan_id === "pro" || subscription?.plan_id === "premium")
+  const isUpgraded = isTrial || isPro
 
   const trialExpiry = subscription?.trial_expiry
   const trialDaysLeft = trialExpiry
@@ -169,7 +169,7 @@ export default function BillingPage() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Status</span>
               <Badge className="bg-emerald-500/20 text-emerald-500">
-                {isTrial ? "Trial Active" : "Pro"}
+                {isTrial ? `${subscription?.plan_id === "premium" ? "Premium" : "Pro"} Trial` : subscription?.plan_id === "premium" ? "Premium" : "Pro"}
               </Badge>
             </div>
             {trialExpiry && (

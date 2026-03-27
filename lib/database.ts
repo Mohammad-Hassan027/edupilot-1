@@ -228,29 +228,60 @@ export async function activateTrial(userId: string, planId: "pro" | "premium") {
   let data: unknown = null
   let error: { message: string } | null = null
 
-  const attemptWithPlan = await admin
+  const existing = await admin
     .from("subscriptions")
-    .update({
-      ...baseUpdates,
-      plan_id: planId,
-    })
+    .select("id")
     .eq("user_id", userId)
-    .select()
-    .single()
+    .maybeSingle()
 
-  data = attemptWithPlan.data
-  error = attemptWithPlan.error
-
-  if (error?.message?.includes("plan_id")) {
-    const legacyAttempt = await admin
+  if (!existing.data) {
+    const insertAttempt = await admin
       .from("subscriptions")
-      .update(baseUpdates)
+      .insert({
+        user_id: userId,
+        ...baseUpdates,
+        plan_id: planId,
+      })
+      .select()
+      .single()
+
+    data = insertAttempt.data
+    error = insertAttempt.error
+
+    if (error?.message?.includes("plan_id")) {
+      const legacyInsert = await admin
+        .from("subscriptions")
+        .insert({ user_id: userId, ...baseUpdates })
+        .select()
+        .single()
+      data = legacyInsert.data
+      error = legacyInsert.error
+    }
+  } else {
+    const attemptWithPlan = await admin
+      .from("subscriptions")
+      .update({
+        ...baseUpdates,
+        plan_id: planId,
+      })
       .eq("user_id", userId)
       .select()
       .single()
 
-    data = legacyAttempt.data
-    error = legacyAttempt.error
+    data = attemptWithPlan.data
+    error = attemptWithPlan.error
+
+    if (error?.message?.includes("plan_id")) {
+      const legacyAttempt = await admin
+        .from("subscriptions")
+        .update(baseUpdates)
+        .eq("user_id", userId)
+        .select()
+        .single()
+
+      data = legacyAttempt.data
+      error = legacyAttempt.error
+    }
   }
 
   if (error) throw new Error(`Trial activation failed: ${error.message}`)

@@ -99,7 +99,11 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
                             )}
                             variant={isFree ? "outline" : plan.popular ? "default" : "outline"}
                             disabled={isFree}
-                            onClick={() => !isFree && setSelectedPlanId(plan.id as PaidPlanId)}
+                            onClick={() => {
+                              if (isFree) return
+                              onOpenChange(false)
+                              setSelectedPlanId(plan.id as PaidPlanId)
+                            }}
                           >
                             {plan.cta}
                           </Button>

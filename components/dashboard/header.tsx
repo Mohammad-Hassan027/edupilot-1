@@ -54,10 +54,10 @@ const searchResultTypes = [
   { type: "quiz", icon: HelpCircle, label: "Quizzes" },
 ]
 
-function getPlanLabel(status: string | undefined, trialActive: boolean): string {
-  if (trialActive) return "Trial"
-  if (status === "active") return "Pro Plan"
-  if (status === "trial") return "Trial"
+function getPlanLabel(status: string | undefined, trialActive: boolean, planId?: string | null): string {
+  const paidLabel = planId === "premium" ? "Premium" : "Pro"
+  if (trialActive || status === "trial") return `${paidLabel} Trial`
+  if (status === "active") return `${paidLabel} Plan`
   return "Free Plan"
 }
 
@@ -82,7 +82,7 @@ export function DashboardHeader() {
     .toUpperCase()
     .slice(0, 2)
   const avatarSeed = email || displayName
-  const planLabel = getPlanLabel(subscription?.status, subscription?.trial_active ?? false)
+  const planLabel = getPlanLabel(subscription?.status, subscription?.trial_active ?? false, subscription?.plan_id)
   const aiCreditsLeft = credits?.ai_chat_remaining ?? 0
 
   useEffect(() => {
