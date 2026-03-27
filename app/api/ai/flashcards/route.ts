@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const paidTrialActive = await isTrialActive(user.id)
     const hasPaidPlan = subscription?.plan_id === "pro" || subscription?.plan_id === "premium"
     const canUseFlashcards = Boolean(
-      hasPaidPlan && (paidTrialActive || subscription?.status === "active")
+      hasPaidPlan && (paidTrialActive || subscription?.status === "active" || subscription?.status === "trial")
     )
 
     if (!canUseFlashcards) {

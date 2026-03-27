@@ -45,8 +45,9 @@ export default function SettingsPage() {
 
   const displayName = profile?.full_name || email?.split("@")[0] || "User"
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-  const planLabel = subscription?.trial_active ? "Trial Active" :
-    subscription?.status === "active" ? "Pro Plan" : "Free Plan"
+  const currentPlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : "Free"
+  const planLabel = subscription?.trial_active ? `${currentPlanName} Trial Active` :
+    subscription?.status === "active" ? `${currentPlanName} Plan` : "Free Plan"
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()

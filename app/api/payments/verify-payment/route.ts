@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { getUser } from "@/lib/auth-server"
 import {
-  activateTrial,
+  activatePlanSubscription,
   refillCreditsForTrial,
   updatePaymentRecord,
   createSubscription,
@@ -64,8 +64,9 @@ export async function POST(req: Request) {
       status: "captured",
     })
 
-    const subscription = await activateTrial(user.id, planId)
+    await activatePlanSubscription(user.id, planId)
     await refillCreditsForTrial(user.id).catch(() => {})
+    const subscription = await getSubscription(user.id)
 
     return NextResponse.json({
       success: true,

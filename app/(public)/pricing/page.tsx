@@ -30,15 +30,16 @@ const plans = [
   {
     name: "Pro",
     badge: "14-Day Free Trial",
-    description: "Perfect for Flashcards and AI Voice",
+    description: "Perfect for Flashcards, AI Voice, and Quiz",
     price: { monthly: 199, yearly: 1990 },
     features: [
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
       "Unlimited AI Voice",
+      "Unlimited Quiz",
     ],
-    limitations: ["Quiz not included", "Planner not included"],
+    limitations: ["Planner not included"],
     cta: "Start Free Trial",
     popular: true,
   },
@@ -89,7 +90,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-8 max-w-2xl rounded-2xl border border-primary/20 bg-primary/5 p-6 text-center">
           <h2 className="mb-2 text-xl font-semibold text-foreground">Choose Your Learning Plan</h2>
           <p className="text-muted-foreground">
-            Free users get unlimited AI Tutor and Notes. Upgrade to Pro for Flashcards and AI Voice, or choose Premium for Quiz and Planner too.
+            Free users get unlimited AI Tutor and Notes. Upgrade to Pro for Flashcards, AI Voice, and Quiz, or choose Premium for everything including Planner.
           </p>
         </div>
 
@@ -207,7 +208,7 @@ export default function PricingPage() {
 
         <div className="mx-auto mt-12 max-w-3xl space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Flashcards and AI Voice are Pro features. Quiz and Planner are Premium features. AI Tutor and Notes stay free.
+            Flashcards, AI Voice, and Quiz are Pro features. Planner is a Premium feature. AI Tutor and Notes stay free.
           </p>
           <p className="text-xs text-muted-foreground">
             Current checkout is in Razorpay test mode. Use Razorpay test cards while testing the payment flow.

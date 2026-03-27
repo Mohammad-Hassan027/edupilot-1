@@ -183,13 +183,51 @@ export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premiu
     .from("payments")
     .select("plan_id,status,created_at")
     .eq("user_id", userId)
-    .in("status", ["captured", "refunded"])
+    .eq("status", "captured")
     .order("created_at", { ascending: false })
     .limit(1)
 
   if (error || !data || data.length === 0) return "free"
   const planId = data[0]?.plan_id
   return planId === "pro" || planId === "premium" ? planId : "free"
+}
+
+function getPlanRank(planId: string | null | undefined) {
+  if (planId === "premium") return 2
+  if (planId === "pro") return 1
+  return 0
+}
+
+async function syncSubscriptionPlanFromPayments(userId: string, planId: "free" | "pro" | "premium") {
+  const admin = await getSupabaseAdmin()
+  const now = new Date()
+  const expiry = new Date(now)
+  expiry.setDate(expiry.getDate() + 14)
+
+  const payload = {
+    user_id: userId,
+    status: planId === "free" ? "free" : "trial",
+    plan_id: planId,
+    trial_active: planId !== "free",
+    trial_start: planId === "free" ? null : now.toISOString(),
+    trial_expiry: planId === "free" ? null : expiry.toISOString(),
+    subscription_start: planId === "free" ? null : now.toISOString(),
+    subscription_end: null,
+    updated_at: now.toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("subscriptions")
+    .upsert(payload, { onConflict: "user_id" })
+    .select()
+    .single()
+
+  if (error) throw new Error(`Subscription sync failed: ${error.message}`)
+  return data as Subscription
+}
+
+export async function activatePlanSubscription(userId: string, planId: "pro" | "premium") {
+  return syncSubscriptionPlanFromPayments(userId, planId)
 }
 
 export async function getSubscription(userId: string) {
@@ -200,62 +238,29 @@ export async function getSubscription(userId: string) {
     .eq("user_id", userId)
     .single()
 
-  if (error || !data) return null
+  const latestPaidPlan = await getLatestPaidPlan(userId)
 
-  const planId = (data as Record<string, unknown>).plan_id
-  if (planId === "pro" || planId === "premium" || planId === "free") {
+  if (error || !data) {
+    if (latestPaidPlan !== "free") {
+      return await syncSubscriptionPlanFromPayments(userId, latestPaidPlan)
+    }
+    return null
+  }
+
+  const currentPlan = (data as Record<string, unknown>).plan_id as string | null | undefined
+  if (getPlanRank(latestPaidPlan) > getPlanRank(currentPlan)) {
+    return await syncSubscriptionPlanFromPayments(userId, latestPaidPlan)
+  }
+
+  if (currentPlan === "pro" || currentPlan === "premium" || currentPlan === "free") {
     return data as Subscription
   }
 
-  const fallbackPlan = await getLatestPaidPlan(userId)
-  return { ...data, plan_id: fallbackPlan } as Subscription
+  return { ...data, plan_id: latestPaidPlan } as Subscription
 }
 
 export async function activateTrial(userId: string, planId: "pro" | "premium") {
-  const admin = await getSupabaseAdmin()
-  const now = new Date()
-  const expiry = new Date(now)
-  expiry.setDate(expiry.getDate() + 14)
-
-  const baseUpdates = {
-    status: "trial",
-    trial_active: true,
-    trial_start: now.toISOString(),
-    trial_expiry: expiry.toISOString(),
-    updated_at: now.toISOString(),
-  }
-
-  let data: unknown = null
-  let error: { message: string } | null = null
-
-  const attemptWithPlan = await admin
-    .from("subscriptions")
-    .update({
-      ...baseUpdates,
-      plan_id: planId,
-    })
-    .eq("user_id", userId)
-    .select()
-    .single()
-
-  data = attemptWithPlan.data
-  error = attemptWithPlan.error
-
-  if (error?.message?.includes("plan_id")) {
-    const legacyAttempt = await admin
-      .from("subscriptions")
-      .update(baseUpdates)
-      .eq("user_id", userId)
-      .select()
-      .single()
-
-    data = legacyAttempt.data
-    error = legacyAttempt.error
-  }
-
-  if (error) throw new Error(`Trial activation failed: ${error.message}`)
-
-  return { ...((data as Record<string, unknown>) ?? {}), plan_id: planId } as Subscription
+  return activatePlanSubscription(userId, planId)
 }
 
 export async function isTrialActive(userId: string): Promise<boolean> {
