@@ -253,8 +253,8 @@ export default function BillingPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
                   <p>• Free users can browse paid feature pages, but checkout opens when they try to generate premium content.</p>
-                  <p>• Pro users can access Flashcards, AI Voice, and Quiz.</p>
-                  <p>• Premium users can access all paid features, including Planner.</p>
+                  <p>• Pro users can access Flashcards and AI Voice.</p>
+                  <p>• Premium users can access Flashcards, AI Voice, Quiz, and Planner.</p>
                 </CardContent>
               </Card>
             </div>

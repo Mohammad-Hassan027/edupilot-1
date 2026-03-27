@@ -30,17 +30,15 @@ const plans = [
   {
     name: "Pro",
     badge: "14-Day Free Trial",
-    description: "Everything unlimited, except Study Planner",
+    description: "Perfect for Flashcards and AI Voice",
     price: { monthly: 199, yearly: 1990 },
     features: [
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
-      "Unlimited Quiz",
       "Unlimited AI Voice",
-      "Analytics included",
     ],
-    limitations: ["Study Planner not available"],
+    limitations: ["Quiz not included", "Planner not included"],
     cta: "Start Free Trial",
     popular: true,
   },
@@ -53,10 +51,9 @@ const plans = [
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
-      "Unlimited Quiz",
       "Unlimited AI Voice",
+      "Unlimited Quiz",
       "Study Planner included",
-      "Analytics included",
     ],
     limitations: [],
     cta: "Start Free Trial",
@@ -92,7 +89,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-8 max-w-2xl rounded-2xl border border-primary/20 bg-primary/5 p-6 text-center">
           <h2 className="mb-2 text-xl font-semibold text-foreground">Choose Your Learning Plan</h2>
           <p className="text-muted-foreground">
-            Free users get unlimited AI Tutor and Notes. Upgrade to Pro or Premium to unlock Flashcards, AI Voice, and Quiz with a 14-day free trial.
+            Free users get unlimited AI Tutor and Notes. Upgrade to Pro for Flashcards and AI Voice, or choose Premium for Quiz and Planner too.
           </p>
         </div>
 
@@ -210,7 +207,7 @@ export default function PricingPage() {
 
         <div className="mx-auto mt-12 max-w-3xl space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Flashcards, AI Voice, and Quiz are premium features. AI Tutor and Notes stay free.
+            Flashcards and AI Voice are Pro features. Quiz and Planner are Premium features. AI Tutor and Notes stay free.
           </p>
           <p className="text-xs text-muted-foreground">
             Current checkout is in Razorpay test mode. Use Razorpay test cards while testing the payment flow.

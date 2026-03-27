@@ -2,8 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { generateQuiz } from "@/lib/ai"
-import { consumeCredit } from "@/lib/credits"
-import { logUsage } from "@/lib/database"
+import { logUsage, getSubscription, isTrialActive } from "@/lib/database"
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,13 +21,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const creditResult = await consumeCredit(user.id, "ai_chat")
+    const subscription = await getSubscription(user.id)
+    const paidTrialActive = await isTrialActive(user.id)
+    const hasPremiumPlan = subscription?.plan_id === "premium"
+    const canUseQuiz = Boolean(
+      hasPremiumPlan && (paidTrialActive || subscription?.status === "active")
+    )
 
-    if (!creditResult.allowed) {
+    if (!canUseQuiz) {
       return NextResponse.json(
         {
-          error: "You have used your free credits. Activate your 14-day trial.",
-          code: "NO_CREDITS",
+          error: "Quiz is available on the Premium plan only. Upgrade to Premium to continue.",
+          code: "PLAN_REQUIRED",
           requiresUpgrade: true,
         },
         { status: 402 }
@@ -40,13 +44,13 @@ export async function POST(req: NextRequest) {
     logUsage(user.id, "quiz", "quiz_generated", {
       topic,
       count: questions.length,
-      creditsRemaining: creditResult.remaining,
+      planId: subscription?.plan_id,
     }).catch(console.error)
 
     return NextResponse.json({
       success: true,
       questions,
-      creditsRemaining: creditResult.remaining,
+      planId: subscription?.plan_id,
     })
   } catch (err) {
     console.error("[ai/quiz] Error:", err)

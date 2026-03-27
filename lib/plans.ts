@@ -38,17 +38,15 @@ export const LEARNING_PLANS: LearningPlan[] = [
     name: "Pro",
     price: 199,
     period: "/mo",
-    description: "Everything unlimited, excluding Study Planner",
+    description: "Unlock Flashcards and AI Voice",
     features: [
       "14-day free trial",
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
-      "Unlimited Quiz",
       "Unlimited AI Voice",
-      "Analytics included",
     ],
-    limitations: ["Study Planner not included"],
+    limitations: ["Quiz not included", "Planner not included"],
     popular: true,
     cta: "Start 14-Day Trial",
   },
@@ -63,10 +61,9 @@ export const LEARNING_PLANS: LearningPlan[] = [
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
-      "Unlimited Quiz",
       "Unlimited AI Voice",
+      "Unlimited Quiz",
       "Study Planner included",
-      "Analytics included",
     ],
     cta: "Start 14-Day Trial",
   },
@@ -151,6 +148,13 @@ export function canAccessFeature(
   } | null | undefined,
   feature: "flashcards" | "ai_voice" | "quiz" | "planner"
 ) {
-  if (feature === "planner") return hasPremiumAccess(subscription)
-  return hasProAccess(subscription)
+  if (feature === "flashcards" || feature === "ai_voice") {
+    return hasProAccess(subscription)
+  }
+
+  if (feature === "quiz" || feature === "planner") {
+    return hasPremiumAccess(subscription)
+  }
+
+  return false
 }

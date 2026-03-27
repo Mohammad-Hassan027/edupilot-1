@@ -29,7 +29,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
             <DialogHeader className="space-y-2 pr-8 text-left">
               <DialogTitle className="text-xl sm:text-2xl">Choose Your Learning Plan</DialogTitle>
               <DialogDescription className="max-w-3xl text-sm leading-6">
-                Flashcards, AI Voice, and Quiz are premium features. Start a 14-day free trial in Razorpay test mode.
+                Choose the right plan for this feature. Pro unlocks Flashcards and AI Voice. Premium unlocks Quiz and Planner too.
               </DialogDescription>
             </DialogHeader>
           </div>

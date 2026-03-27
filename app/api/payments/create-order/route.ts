@@ -18,6 +18,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "planId is required" }, { status: 400 })
     }
 
+    if (planId !== "pro" && planId !== "premium") {
+      return NextResponse.json({ error: "Invalid plan selected" }, { status: 400 })
+    }
+
     // Validate Razorpay keys are present before attempting order creation
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
       console.error("[create-order] Razorpay keys missing from environment")
@@ -27,15 +31,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const amountInRupees = planId === "premium" ? 499 : 199
     const receipt = `ep_${user.id.slice(0, 8)}_${Date.now()}`.slice(0, 40)
-    const order = await createRazorpayOrder(1, receipt, {
+    const order = await createRazorpayOrder(amountInRupees, receipt, {
       planId,
       userId: user.id,
       email:  user.email ?? "",
     })
 
     // Save payment record (non-fatal if DB write fails)
-    await createPaymentRecord(user.id, order.id, 100, planId).catch((err) => {
+    await createPaymentRecord(user.id, order.id, amountInRupees * 100, planId).catch((err) => {
       console.error("[create-order] Failed to save payment record:", err)
     })
 

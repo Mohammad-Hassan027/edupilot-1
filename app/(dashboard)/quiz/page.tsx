@@ -170,8 +170,8 @@ export default function QuizPage() {
               <CardContent className="flex items-start gap-3 p-4 text-sm">
                 <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
                 <div>
-                  <p className="font-medium text-foreground">Quiz is a Pro feature.</p>
-                  <p className="mt-1 text-muted-foreground">Start Pro or Premium to unlock this feature instantly after successful payment.</p>
+                  <p className="font-medium text-foreground">Quiz is a Premium feature.</p>
+                  <p className="mt-1 text-muted-foreground">Upgrade to Premium to unlock this feature instantly after successful payment.</p>
                 </div>
               </CardContent>
             </Card>
