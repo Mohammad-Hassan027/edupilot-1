@@ -167,7 +167,7 @@ export async function createSubscription(userId: string) {
       .from("subscriptions")
       .insert(baseRecord)
       .select()
-      .maybeSingle()
+      .single()
 
     data = legacyInsert.data
     error = legacyInsert.error
@@ -177,7 +177,7 @@ export async function createSubscription(userId: string) {
   return { ...((data as Record<string, unknown>) ?? {}), plan_id: "free" } as Subscription
 }
 
-export async function getLatestPaidPayment(userId: string): Promise<{ plan_id: "pro" | "premium"; created_at: string } | null> {
+export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premium" | "free"> {
   const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("payments")
@@ -186,20 +186,10 @@ export async function getLatestPaidPayment(userId: string): Promise<{ plan_id: "
     .in("status", ["captured", "refunded"])
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle()
 
-  if (error || !data) return null
-  if (data.plan_id !== "pro" && data.plan_id !== "premium") return null
-
-  return {
-    plan_id: data.plan_id,
-    created_at: data.created_at,
-  }
-}
-
-export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premium" | "free"> {
-  const latestPayment = await getLatestPaidPayment(userId)
-  return latestPayment?.plan_id ?? "free"
+  if (error || !data || data.length === 0) return "free"
+  const planId = data[0]?.plan_id
+  return planId === "pro" || planId === "premium" ? planId : "free"
 }
 
 export async function getSubscription(userId: string) {
@@ -208,53 +198,17 @@ export async function getSubscription(userId: string) {
     .from("subscriptions")
     .select("*")
     .eq("user_id", userId)
-    .maybeSingle()
+    .single()
 
-  const latestPayment = await getLatestPaidPayment(userId)
-  const now = Date.now()
-  const fallbackTrialExpiry = latestPayment
-    ? new Date(new Date(latestPayment.created_at).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString()
-    : null
-  const fallbackTrialActive = Boolean(fallbackTrialExpiry && new Date(fallbackTrialExpiry).getTime() > now)
+  if (error || !data) return null
 
-  if (error && !data) return null
-  if (!data) {
-    if (!latestPayment) return null
-    return {
-      id: "legacy-fallback",
-      user_id: userId,
-      status: fallbackTrialActive ? "trial" : "active",
-      plan_id: latestPayment.plan_id,
-      trial_active: fallbackTrialActive,
-      trial_start: latestPayment.created_at,
-      trial_expiry: fallbackTrialExpiry,
-      subscription_start: latestPayment.created_at,
-      subscription_end: null,
-      created_at: latestPayment.created_at,
-      updated_at: latestPayment.created_at,
-    } as Subscription
-  }
-
-  const record = data as Record<string, unknown>
-  const planId = record.plan_id
+  const planId = (data as Record<string, unknown>).plan_id
   if (planId === "pro" || planId === "premium" || planId === "free") {
     return data as Subscription
   }
 
-  if (!latestPayment) {
-    return { ...data, plan_id: "free" } as Subscription
-  }
-
-  return {
-    ...data,
-    plan_id: latestPayment.plan_id,
-    status: (record.status as Subscription["status"] | null) ?? (fallbackTrialActive ? "trial" : "active"),
-    trial_active: typeof record.trial_active === "boolean" ? record.trial_active : fallbackTrialActive,
-    trial_start: (record.trial_start as string | null) ?? latestPayment.created_at,
-    trial_expiry: (record.trial_expiry as string | null) ?? fallbackTrialExpiry,
-    subscription_start: (record.subscription_start as string | null) ?? latestPayment.created_at,
-    subscription_end: (record.subscription_end as string | null) ?? null,
-  } as Subscription
+  const fallbackPlan = await getLatestPaidPlan(userId)
+  return { ...data, plan_id: fallbackPlan } as Subscription
 }
 
 export async function activateTrial(userId: string, planId: "pro" | "premium") {
@@ -282,7 +236,7 @@ export async function activateTrial(userId: string, planId: "pro" | "premium") {
     })
     .eq("user_id", userId)
     .select()
-    .maybeSingle()
+    .single()
 
   data = attemptWithPlan.data
   error = attemptWithPlan.error
@@ -297,35 +251,6 @@ export async function activateTrial(userId: string, planId: "pro" | "premium") {
 
     data = legacyAttempt.data
     error = legacyAttempt.error
-  }
-
-  if (!error && !data) {
-    await createSubscription(userId)
-
-    const retry = await admin
-      .from("subscriptions")
-      .update({
-        ...baseUpdates,
-        plan_id: planId,
-      })
-      .eq("user_id", userId)
-      .select()
-      .maybeSingle()
-
-    data = retry.data
-    error = retry.error
-
-    if (error?.message?.includes("plan_id")) {
-      const legacyRetry = await admin
-        .from("subscriptions")
-        .update(baseUpdates)
-        .eq("user_id", userId)
-        .select()
-        .maybeSingle()
-
-      data = legacyRetry.data
-      error = legacyRetry.error
-    }
   }
 
   if (error) throw new Error(`Trial activation failed: ${error.message}`)

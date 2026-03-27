@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,7 +40,6 @@ export default function FlashcardsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [genError, setGenError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
@@ -50,10 +49,7 @@ export default function FlashcardsPage() {
   const handleGenerateClick = () => {
     setGenError("")
 
-    if (isLoading) {
-      setPendingGenerateClick(true)
-      return
-    }
+    if (isLoading) return
 
     if (error === "not_authenticated" || !email) {
       setShowLoginModal(true)
@@ -101,13 +97,6 @@ export default function FlashcardsPage() {
     setCurrentIndex(0)
     setIsFlipped(false)
   }
-
-
-  useEffect(() => {
-    if (!pendingGenerateClick || isLoading) return
-    setPendingGenerateClick(false)
-    handleGenerateClick()
-  }, [pendingGenerateClick, isLoading, error, email, isPaidUser])
 
   const handleGenerate = async () => {
     if (!aiTopic.trim()) return

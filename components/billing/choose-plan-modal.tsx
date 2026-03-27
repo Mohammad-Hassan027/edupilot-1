@@ -101,6 +101,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
                             disabled={isFree}
                             onClick={() => {
                               if (isFree) return
+                              onOpenChange(false)
                               setSelectedPlanId(plan.id as PaidPlanId)
                             }}
                           >
