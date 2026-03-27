@@ -23,6 +23,7 @@ import {
   History,
   Plus,
   Eye,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -239,6 +240,31 @@ export default function NotesPage() {
 
     void loadSavedNote(savedId)
   }, [history])
+
+    async function handleDeleteSavedNote(noteId: string) {
+    const confirmed = window.confirm("Are you sure you want to delete this saved note?")
+    if (!confirmed) return
+
+    try {
+      const response = await fetch(`/api/ai/notes/${noteId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete note")
+      }
+
+      setHistory((prev) => prev.filter((item) => item.id !== noteId))
+
+      if (currentSavedId === noteId) {
+        resetGeneratedView()
+      }
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Failed to delete note")
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -854,6 +880,7 @@ export default function NotesPage() {
                               <Eye className="h-4 w-4" />
                               Open
                             </Button>
+
                             <Button
                               variant="outline"
                               size="sm"
@@ -871,6 +898,16 @@ export default function NotesPage() {
                             >
                               <Download className="h-4 w-4" />
                               Download
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteSavedNote(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
                             </Button>
                           </div>
                         </div>

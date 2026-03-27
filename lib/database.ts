@@ -442,3 +442,19 @@ export async function getSavedNotes(userId: string, limit = 5) {
   if (error) return []
   return (data || []) as SavedNoteRecord[]
 }
+
+export async function deleteSavedNote(userId: string, noteId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("saved_notes")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", noteId)
+
+  if (error) {
+    throw new Error(`Failed to delete note: ${error.message}`)
+  }
+
+  return { success: true }
+}
