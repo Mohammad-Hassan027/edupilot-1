@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Bell, Search, Sparkles, Menu, X, Home, LayoutDashboard, MessageSquareText, FileText,
   Layers, HelpCircle, Calendar, BookOpen, Settings, Mic, User, CreditCard,
-  LogOut, Clock, TrendingUp, Lightbulb, Zap, LogIn
+  LogOut, Clock, TrendingUp, Lightbulb, LogIn
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -69,7 +69,7 @@ export function DashboardHeader() {
   const searchRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
-  const { profile, email, subscription, credits, isLoading, fullName, error } = useUser()
+  const { profile, email, subscription, isLoading, fullName, error } = useUser()
   // isGuest: loading finished and no authenticated user
   const isGuest = !isLoading && (error === "not_authenticated" || !email)
 
@@ -83,7 +83,6 @@ export function DashboardHeader() {
     .slice(0, 2)
   const avatarSeed = email || displayName
   const planLabel = getPlanLabel(subscription?.status, subscription?.trial_active ?? false, subscription?.plan_id)
-  const aiCreditsLeft = credits?.ai_chat_remaining ?? 0
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -133,22 +132,6 @@ export function DashboardHeader() {
           </p>
         </div>
       </DropdownMenuLabel>
-
-      {/* Credits indicator */}
-      {!isLoading && subscription?.status === "free" && (
-        <>
-          <DropdownMenuSeparator />
-          <div className="px-2 py-1.5">
-            <div className="flex items-center justify-between rounded-md bg-primary/10 px-2 py-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-primary">
-                <Zap className="h-3 w-3" />
-                <span>AI Credits</span>
-              </div>
-              <span className="text-xs font-semibold text-primary">{aiCreditsLeft} left</span>
-            </div>
-          </div>
-        </>
-      )}
 
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild className="cursor-pointer">

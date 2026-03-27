@@ -11,13 +11,13 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  Camera, Save, User, Mail, Clock, BookOpen, Trophy,
+  Camera, Save, User, Mail, Clock, BookOpen,
   X, Trash2, Loader2, CalendarDays, Edit2, CheckCircle
 } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 
 export default function ProfilePage() {
-  const { profile, email, credits, subscription, isLoading, refetch } = useUser()
+  const { profile, email, subscription, isLoading, refetch } = useUser()
 
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -47,7 +47,6 @@ export default function ProfilePage() {
       ? `${currentPlanName} Member`
       : "Free Member"
 
-  const totalCreditsUsed = (credits?.ai_chat_used ?? 0) + (credits?.flashcards_used ?? 0) + (credits?.study_plan_used ?? 0)
 
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
@@ -195,9 +194,6 @@ export default function ProfilePage() {
 
             <div className="flex flex-wrap justify-center gap-2">
               <Badge variant="secondary" className="gap-1">
-                <Trophy className="h-3 w-3" />{totalCreditsUsed} Actions
-              </Badge>
-              <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
                 {subscription?.trial_active ? `${currentPlanName} Trial` : subscription?.status === "active" ? currentPlanName : "Free"}
               </Badge>
@@ -277,16 +273,15 @@ export default function ProfilePage() {
         <Card className="lg:col-span-3 border-border bg-card">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-primary" />Learning Stats
+              <BookOpen className="h-4 w-4 text-primary" />Account Overview
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
-                { label: "AI Chats Used", value: credits?.ai_chat_used ?? 0, icon: "💬" },
-                { label: "Flashcard Sessions", value: credits?.flashcards_used ?? 0, icon: "🃏" },
-                { label: "Study Plans", value: credits?.study_plan_used ?? 0, icon: "📋" },
                 { label: "Plan Status", value: planLabel, icon: "⭐" },
+                { label: "Membership", value: subscription?.status === "active" ? "Active" : subscription?.trial_active ? "Trial" : "Free", icon: "🛡️" },
+                { label: "Member Since", value: memberSince, icon: "📅" },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-border bg-secondary/50 p-4 text-center">
                   <div className="text-2xl mb-1">{item.icon}</div>

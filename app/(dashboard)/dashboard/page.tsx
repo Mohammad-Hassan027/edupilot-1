@@ -2,7 +2,6 @@ import { QuickStats } from "@/components/dashboard/quick-stats"
 import { RecentTopics } from "@/components/dashboard/recent-topics"
 import { StudyAnalytics } from "@/components/dashboard/study-analytics"
 import { QuizScores } from "@/components/dashboard/quiz-scores"
-import { CreditStatus } from "@/components/dashboard/credit-status"
 import { SavedNotesCard } from "@/components/dashboard/saved-notes-card"
 
 export default function DashboardPage() {
@@ -12,9 +11,6 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <RecentTopics />
-        </div>
-        <div>
-          <CreditStatus />
         </div>
         <div className="lg:col-span-1">
           <StudyAnalytics />
