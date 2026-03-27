@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle, CheckCircle, ShieldCheck, CreditCard } from "lucide-react"
-import { persistSubscriptionOverride, useUser } from "@/hooks/use-user"
+import { useUser } from "@/hooks/use-user"
 
 interface Plan {
   id: string
@@ -24,7 +24,7 @@ interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
   plan: Plan
-  onPaymentSuccess: () => void | Promise<void>
+  onPaymentSuccess: () => void
 }
 
 export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: PaymentModalProps) {
@@ -32,17 +32,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
   const [scriptReady, setScriptReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
-  const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false)
-  const isMountedRef = useRef(true)
-  const hasCompletedPaymentRef = useRef(false)
   const { email, profile } = useUser()
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -86,8 +76,6 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
 
   const handlePayment = async () => {
     try {
-      if (hasCompletedPaymentRef.current) return
-
       setIsOpeningCheckout(true)
       setError(null)
       setPaymentStatus("processing")
@@ -126,17 +114,11 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
           planId: plan.id,
           env: "test",
         },
-        readonly: { email: true, name: true },
-        config: { display: { hide: [{ method: "emi" }] } },
         theme: { color: "#f59e0b" },
         modal: {
           ondismiss: () => {
-            if (hasCompletedPaymentRef.current) return
-            if (isMountedRef.current) {
-              setIsOpeningCheckout(false)
-              setPaymentStatus("idle")
-              setIsLaunchingCheckout(false)
-            }
+            setIsOpeningCheckout(false)
+            setPaymentStatus("idle")
           },
           escape: true,
           backdropclose: false,
@@ -165,28 +147,14 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
               throw new Error(verifyData.error || "Payment verification failed")
             }
 
-            hasCompletedPaymentRef.current = true
-            persistSubscriptionOverride(plan.id as "pro" | "premium")
-
-            if (isMountedRef.current) {
-              setPaymentStatus("success")
-              setIsLaunchingCheckout(false)
-            }
-
-            await onPaymentSuccess()
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new Event("user-data-refresh"))
-            }
-
-            window.setTimeout(() => {
+            setPaymentStatus("success")
+            setTimeout(() => {
+              onPaymentSuccess()
               onClose()
-            }, 350)
+            }, 900)
           } catch (err) {
-            if (isMountedRef.current) {
-              setError(err instanceof Error ? err.message : "Payment verification failed")
-              setPaymentStatus("error")
-              setIsLaunchingCheckout(false)
-            }
+            setError(err instanceof Error ? err.message : "Payment verification failed")
+            setPaymentStatus("error")
           } finally {
             setIsOpeningCheckout(false)
           }
@@ -195,46 +163,20 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
 
       rzp.on?.("payment.failed", (response: unknown) => {
         console.error("[Razorpay payment.failed]", response)
-        if (isMountedRef.current) {
-          setPaymentStatus("error")
-          setError("Payment was not completed. Please use Razorpay test card details and try again.")
-          setIsOpeningCheckout(false)
-          setIsLaunchingCheckout(false)
-        }
-      })
-
-      if (isMountedRef.current) {
-        setIsLaunchingCheckout(true)
-      }
-
-      window.requestAnimationFrame(() => {
-        rzp.open()
-      })
-    } catch (err) {
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : "Payment failed. Please try again.")
         setPaymentStatus("error")
+        setError("Payment was not completed. Please use Razorpay test card details and try again.")
         setIsOpeningCheckout(false)
-        setIsLaunchingCheckout(false)
-      }
+      })
+
+      rzp.open()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payment failed. Please try again.")
+      setPaymentStatus("error")
+      setIsOpeningCheckout(false)
     }
   }
 
   const busy = isOpeningCheckout || paymentStatus === "processing"
-
-  if (isLaunchingCheckout) {
-    return (
-      <div className="fixed right-4 top-4 z-[100] w-[calc(100vw-2rem)] max-w-md rounded-xl border border-amber-500/40 bg-background p-4 shadow-2xl">
-        <div className="flex items-start gap-3">
-          <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-amber-500" />
-          <div className="space-y-1">
-            <p className="font-medium text-foreground">Please wait for a while while processing payment.</p>
-            <p className="text-sm text-muted-foreground">Razorpay checkout is opening. Please wait a moment while your payment window loads.</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -293,7 +235,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             <Alert className="border-accent/50 bg-accent/10">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <AlertDescription className="text-accent">
-Please wait for a while while processing payment. Opening Razorpay checkout...
+                Opening Razorpay checkout...
               </AlertDescription>
             </Alert>
           )}
@@ -305,7 +247,7 @@ Please wait for a while while processing payment. Opening Razorpay checkout...
               disabled={busy || paymentStatus === "success" || !scriptReady}
             >
               {isOpeningCheckout ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Please wait while processing payment...</>
+                <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
               ) : (
                 <><CreditCard className="h-4 w-4" />Pay in Test Mode</>
               )}

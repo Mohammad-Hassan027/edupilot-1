@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Sparkles, Loader2
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
-import { canAccessFeature } from "@/lib/plans"
+import { hasPaidAccess } from "@/lib/plans"
 import { useUser } from "@/hooks/use-user"
 
 interface Flashcard {
@@ -40,43 +40,29 @@ export default function FlashcardsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [genError, setGenError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
-  const canUseFlashcards = canAccessFeature(subscription, "flashcards")
+  const isPaidUser = hasPaidAccess(subscription)
 
-  const resolveGenerateAccess = () => {
+  const handleGenerateClick = () => {
     setGenError("")
+
+    if (isLoading) return
 
     if (error === "not_authenticated" || !email) {
       setShowLoginModal(true)
       return
     }
 
-    if (!canUseFlashcards) {
+    if (!isPaidUser) {
       setPlanModalOpen(true)
       return
     }
 
     setDialogOpen(true)
   }
-
-  const handleGenerateClick = () => {
-    if (isLoading) {
-      setPendingGenerateClick(true)
-      return
-    }
-
-    resolveGenerateAccess()
-  }
-
-  useEffect(() => {
-    if (!pendingGenerateClick || isLoading) return
-    setPendingGenerateClick(false)
-    resolveGenerateAccess()
-  }, [pendingGenerateClick, isLoading, error, email, canUseFlashcards])
 
   const handleNext = () => {
     if (currentIndex < cards.length - 1) {
@@ -169,12 +155,12 @@ export default function FlashcardsPage() {
             <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
             <p className="text-muted-foreground">Review and memorize with AI-generated cards</p>
           </div>
-          <Button className="gap-2" onClick={handleGenerateClick}>
+          <Button className="gap-2" onClick={handleGenerateClick} disabled={isLoading}>
             <Sparkles className="h-4 w-4" /> Generate with AI
           </Button>
         </div>
 
-        {!canUseFlashcards && (
+        {!isPaidUser && (
           <Card className="border-amber-500/30 bg-amber-500/10">
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />
