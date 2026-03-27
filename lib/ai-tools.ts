@@ -23,6 +23,7 @@ interface GeminiInlinePart {
 
 const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024
 const OFFICE_TEXT_MIME = "text/plain"
+const GEMINI_TEXT_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
 
 function getGeminiKey() {
   const key = process.env.GEMINI_API_KEY?.trim()
@@ -229,6 +230,51 @@ function extractLegacyOfficeText(buffer: Buffer) {
   return ""
 }
 
+
+function extractCsvText(buffer: Buffer) {
+  return cleanExtractedText(buffer.toString("utf8"))
+}
+
+async function extractXlsxText(buffer: Buffer) {
+  const zip = await JSZip.loadAsync(buffer)
+  const sharedStringsXml = await zip.file("xl/sharedStrings.xml")?.async("string")
+  const sharedStrings = sharedStringsXml
+    ? Array.from(sharedStringsXml.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)).map((match) => decodeXmlEntities(match[1]))
+    : []
+
+  const sheetFiles = Object.keys(zip.files)
+    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+
+  const sheets: string[] = []
+
+  for (const fileName of sheetFiles) {
+    const xml = await zip.file(fileName)?.async("string")
+    if (!xml) continue
+
+    const rows = Array.from(xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)).map((rowMatch) => {
+      const rowXml = rowMatch[1]
+      const cells = Array.from(rowXml.matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)).map((cellMatch) => {
+        const attrs = cellMatch[1] || ""
+        const cellXml = cellMatch[2] || ""
+        const value = cellXml.match(/<v>([\s\S]*?)<\/v>/)?.[1] || cellXml.match(/<t[^>]*>([\s\S]*?)<\/t>/)?.[1] || ""
+        if (/\bt="s"/.test(attrs)) {
+          const idx = Number(value)
+          return Number.isFinite(idx) ? sharedStrings[idx] || "" : value
+        }
+        return decodeXmlEntities(value)
+      }).filter(Boolean)
+      return cells.join(" | ")
+    }).filter(Boolean)
+
+    if (rows.length) {
+      sheets.push(rows.join("\n"))
+    }
+  }
+
+  return cleanExtractedText(sheets.join("\n\n---\n\n"))
+}
+
 async function convertOfficeFileToText(buffer: Buffer, attachment: UploadedAttachment, mimeType: string) {
   const extension = attachment.name.split(".").pop()?.toLowerCase() || ""
   let text = ""
@@ -243,6 +289,12 @@ async function convertOfficeFileToText(buffer: Buffer, attachment: UploadedAttac
   } else if (mimeType === "application/msword" || extension === "doc") {
     text = extractLegacyOfficeText(buffer)
   } else if (mimeType === "application/vnd.ms-powerpoint" || extension === "ppt") {
+    text = extractLegacyOfficeText(buffer)
+  } else if (mimeType === "text/csv" || extension === "csv") {
+    text = extractCsvText(buffer)
+  } else if (mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || extension === "xlsx") {
+    text = await extractXlsxText(buffer)
+  } else if (mimeType === "application/vnd.ms-excel" || extension === "xls") {
     text = extractLegacyOfficeText(buffer)
   }
 
@@ -287,7 +339,10 @@ async function fetchAttachmentPart(attachment: UploadedAttachment): Promise<Gemi
     mimeType === "application/msword" ||
     mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     mimeType === "application/vnd.ms-powerpoint" ||
-    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mimeType === "text/csv" ||
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   ) {
     return convertOfficeFileToText(buffer, attachment, mimeType)
   }
@@ -403,7 +458,7 @@ export async function analyzeAttachmentsWithGemini(params: {
     "You are EduPilot, an AI tutor helping a student understand uploaded study material.",
     "Read the uploaded files carefully and answer the user in a clear, structured way.",
     "If the upload is a ZIP, inspect whatever content is available inside it and explain the important files first.",
-    "For DOC, DOCX, PPT, and PPTX uploads, the file may be pre-converted into plain text before reaching you, so preserve the original meaning even if formatting is simplified.",
+    "For DOC, DOCX, PPT, PPTX, CSV, XLS, and XLSX uploads, the file may be pre-converted into plain text before reaching you, so preserve the original meaning even if formatting is simplified.",
     "If the user asked a question, answer it directly. If not, summarize the uploaded material and suggest next study steps.",
     params.webContext ? `Web search notes for extra context:\n${params.webContext}` : "",
     `User request: ${message}`,
@@ -411,37 +466,50 @@ export async function analyzeAttachmentsWithGemini(params: {
     .filter(Boolean)
     .join("\n\n")
 
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }, ...inlineParts],
+let lastError = "Failed to analyze uploaded files with Gemini."
+
+  for (const model of GEMINI_TEXT_MODELS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
           },
-        ],
-      }),
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: prompt }, ...inlineParts],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.2,
+            },
+          }),
+        }
+      )
+
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        lastError = (payload as { error?: { message?: string } })?.error?.message || lastError
+        continue
+      }
+
+      const text = extractTextFromGeminiResponse(payload)
+      if (text) {
+        return text
+      }
+
+      lastError = `Gemini returned an empty analysis for ${model}.`
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError
     }
-  )
-
-  const payload = await response.json()
-
-  if (!response.ok) {
-    const message = payload?.error?.message || "Failed to analyze uploaded files with Gemini."
-    throw new Error(message)
   }
 
-  const text = extractTextFromGeminiResponse(payload)
-  if (!text) {
-    throw new Error("Gemini returned an empty analysis for the uploaded files.")
-  }
-
-  return text
+  throw new Error(lastError)
 }
 
 export async function searchWithTavily(query: string): Promise<TavilySearchResult[]> {

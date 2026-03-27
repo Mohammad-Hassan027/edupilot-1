@@ -19,6 +19,8 @@ type NoteTab = {
   content: string
 }
 
+const GEMINI_TEXT_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
 }
@@ -31,37 +33,54 @@ function getGeminiKey() {
 
 async function callGeminiJson(prompt: string) {
   const key = getGeminiKey()
+  let lastError = "Failed to generate notes with Gemini"
 
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
+  for (const model of GEMINI_TEXT_MODELS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.3,
+            },
+          }),
+        }
+      )
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        lastError = (data as { error?: { message?: string } })?.error?.message || lastError
+        continue
+      }
+
+      const text =
+        (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]?.content?.parts
+          ?.map((part) => part?.text || "")
+          .join("\n")
+          .trim() || ""
+
+      if (!text) {
+        lastError = `Gemini returned an empty response for ${model}`
+        continue
+      }
+
+      const cleaned = text.replace(/```json\s*/gi, "").replace(/```/g, "").trim()
+      return JSON.parse(cleaned)
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError
     }
-  )
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || "Failed to generate notes with Gemini")
   }
 
-  const text =
-    data?.candidates?.[0]?.content?.parts
-      ?.map((part: { text?: string }) => part?.text || "")
-      .join("\n")
-      .trim() || ""
-
-  if (!text) throw new Error("Gemini returned an empty response")
-
-  const cleaned = text.replace(/```json\s*/gi, "").replace(/```/g, "").trim()
-  return JSON.parse(cleaned)
+  throw new Error(lastError)
 }
 
 function extractYouTubeId(url: string) {
@@ -192,13 +211,11 @@ export async function POST(req: NextRequest) {
       } catch {
         return NextResponse.json({ error: "Please enter a valid video URL." }, { status: 400 })
       }
-    } else {
-      if (!files.length) {
-        return NextResponse.json(
-          { error: `Please upload a ${sourceMode === "pdf" ? "PDF" : "spreadsheet"} first.` },
-          { status: 400 }
-        )
-      }
+    } else if (!files.length) {
+      return NextResponse.json(
+        { error: `Please upload a ${sourceMode === "pdf" ? "PDF" : "spreadsheet"} first.` },
+        { status: 400 }
+      )
     }
 
     let studyMaterial = ""
@@ -221,7 +238,6 @@ export async function POST(req: NextRequest) {
       sourceHint = videoUrl
     } else {
       const filesSummary = summarizeAttachments(files)
-
       const analysis = await analyzeAttachmentsWithGemini({
         message: `Generate complete study notes from these uploaded ${sourceMode === "pdf" ? "PDF" : "spreadsheet"} files.`,
         attachments: files,
@@ -262,9 +278,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[ai/notes] Error:", error)
 
-    const rawMessage =
-      error instanceof Error ? error.message : "Failed to generate notes"
-
+    const rawMessage = error instanceof Error ? error.message : "Failed to generate notes"
     const message = rawMessage.toLowerCase()
 
     if (
@@ -285,7 +299,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        error: "Failed to generate notes. Please try again.",
+        error: rawMessage || "Failed to generate notes. Please try again.",
       },
       { status: 500 }
     )
