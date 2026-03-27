@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Brain, Sparkles, Check, X, RefreshCw, Trophy, AlertTriangle, ChevronRight, BookOpen, ArrowRight, Loader2, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
-import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 
@@ -37,7 +37,6 @@ export default function QuizPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [showPlanModal, setShowPlanModal] = useState(false)
   const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
@@ -60,7 +59,7 @@ export default function QuizPage() {
     }
 
     if (!canUseQuiz) {
-      setShowPlanModal(true)
+      window.location.href = "/pricing?plan=premium&feature=quiz"
       return
     }
 
@@ -76,7 +75,7 @@ export default function QuizPage() {
 
       if (!res.ok) {
         if (data.code === "UNAUTHORIZED" || data.requiresLogin) { setShowLoginModal(true); return }
-        if (data.code === "NO_CREDITS" || data.requiresUpgrade) { setShowPlanModal(true); return }
+        if (data.code === "NO_CREDITS" || data.requiresUpgrade) { window.location.href = "/pricing?plan=premium&feature=quiz"; return }
         setError(data.error || "Failed to generate quiz. Please try again.")
         return
       }
@@ -170,8 +169,13 @@ export default function QuizPage() {
               <CardContent className="flex items-start gap-3 p-4 text-sm">
                 <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
                 <div>
-                  <p className="font-medium text-foreground">Quiz is a Pro feature.</p>
-                  <p className="mt-1 text-muted-foreground">Start Pro or Premium to unlock this feature instantly after successful payment.</p>
+                  <p className="font-medium text-foreground">Quiz is a Premium feature.</p>
+                  <p className="mt-1 text-muted-foreground">Upgrade on the Pricing page to unlock Quiz instantly after successful payment.</p>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/pricing?plan=premium&feature=quiz">View Pricing</Link>
+                  </Button>
+                </div>
                 </div>
               </CardContent>
             </Card>
@@ -229,15 +233,6 @@ export default function QuizPage() {
         </div>
 
         <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Quiz Generator" />
-        <ChoosePlanModal
-          open={showPlanModal}
-          onOpenChange={setShowPlanModal}
-          onPaymentSuccess={async () => {
-            await refetch()
-            setShowPlanModal(false)
-            setPendingGenerateClick(Boolean(topic.trim()))
-          }}
-        />
       </>
     )
   }

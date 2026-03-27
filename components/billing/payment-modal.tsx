@@ -160,7 +160,43 @@ export function PaymentModal({
           razorpay_signature: string
         }) => {
           try {
-            const verifyResponse = await fetch("/api/payments/verify-payment", {
+            const activateResponse = await fetch("/api/payments/activate-plan", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                planId: plan.id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+              }),
+            })
+
+            const activateData = await activateResponse.json().catch(() => ({}))
+
+            if (!activateResponse.ok || !activateData.success) {
+              throw new Error(activateData.error || "Plan activation failed")
+            }
+
+            setPaymentStatus("success")
+
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("edupilot-user-refresh", String(Date.now()))
+              } catch {}
+
+              window.dispatchEvent(
+                new CustomEvent("user-data-refresh", {
+                  detail: {
+                    subscription: activateData.subscription ?? null,
+                  },
+                })
+              )
+            }
+
+            await onPaymentSuccess()
+            onClose()
+            setIsOpeningCheckout(false)
+
+            fetch("/api/payments/verify-payment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -170,33 +206,35 @@ export function PaymentModal({
                 planId: plan.id,
               }),
             })
+              .then(async (res) => {
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok || !data.success) {
+                  console.error("[PaymentModal] Background verify failed:", data)
+                  return
+                }
 
-            const verifyData = await verifyResponse.json().catch(() => ({}))
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.setItem("edupilot-user-refresh", String(Date.now()))
+                  } catch {}
 
-            if (!verifyResponse.ok || !verifyData.success) {
-              throw new Error(verifyData.error || "Payment verification failed")
-            }
-
-            setPaymentStatus("success")
-
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("user-data-refresh", {
-                  detail: {
-                    subscription: verifyData.subscription ?? null,
-                  },
-                })
-              )
-            }
-
-            await onPaymentSuccess()
-            onClose()
+                  window.dispatchEvent(
+                    new CustomEvent("user-data-refresh", {
+                      detail: {
+                        subscription: data.subscription ?? activateData.subscription ?? null,
+                      },
+                    })
+                  )
+                }
+              })
+              .catch((err) => {
+                console.error("[PaymentModal] Background verify error:", err)
+              })
           } catch (err) {
             setError(
-              err instanceof Error ? err.message : "Payment verification failed"
+              err instanceof Error ? err.message : "Payment activation failed"
             )
             setPaymentStatus("error")
-          } finally {
             setIsOpeningCheckout(false)
           }
         },

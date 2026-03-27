@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Sparkles, Loader2, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
-import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
 import { hasPaidAccess } from "@/lib/plans"
 import { useUser } from "@/hooks/use-user"
 
@@ -34,7 +34,6 @@ export default function FlashcardsPage() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [planModalOpen, setPlanModalOpen] = useState(false)
   const [aiTopic, setAiTopic] = useState("")
   const [aiCount, setAiCount] = useState("10")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -62,7 +61,7 @@ export default function FlashcardsPage() {
     }
 
     if (!isPaidUser) {
-      setPlanModalOpen(true)
+      window.location.href = "/pricing?plan=pro&feature=flashcards"
       return
     }
 
@@ -132,7 +131,7 @@ export default function FlashcardsPage() {
           return
         }
         if (data.requiresUpgrade) {
-          setPlanModalOpen(true)
+          window.location.href = "/pricing?plan=pro&feature=flashcards"
           setDialogOpen(false)
           return
         }
@@ -189,8 +188,13 @@ export default function FlashcardsPage() {
               <div>
                 <p className="font-medium text-foreground">Flashcards is a paid feature.</p>
                 <p className="text-muted-foreground mt-1">
-                  Start Pro or Premium to unlock this feature instantly after successful payment.
+                  Upgrade on the Pricing page to unlock Flashcards instantly after successful payment.
                 </p>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/pricing?plan=pro&feature=flashcards">View Pricing</Link>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -286,16 +290,6 @@ export default function FlashcardsPage() {
       </Dialog>
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Flashcards" />
-      <ChoosePlanModal
-        open={planModalOpen}
-        onOpenChange={setPlanModalOpen}
-        onPaymentSuccess={async () => {
-          await refetch()
-          setPlanModalOpen(false)
-          setPendingGenerateClick(false)
-          setDialogOpen(true)
-        }}
-      />
     </>
   )
 }

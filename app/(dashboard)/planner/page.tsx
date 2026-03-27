@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { LoginGateModal } from "@/components/login-gate-modal"
-import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -98,7 +98,6 @@ export default function PlannerPage() {
   const [aiHours, setAiHours] = useState("4")
   const [aiGenerated, setAiGenerated] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [showPlanModal, setShowPlanModal] = useState(false)
   const [pendingPlannerAction, setPendingPlannerAction] = useState<null | "open_task" | "open_ai">(null)
   const canUsePlanner = canAccessFeature(subscription, "planner")
   const activePlanName = canUsePlanner ? (subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null) : null
@@ -114,7 +113,7 @@ export default function PlannerPage() {
     }
     if (!canUsePlanner) {
       setPendingPlannerAction(action)
-      setShowPlanModal(true)
+      window.location.href = "/pricing?plan=premium&feature=planner"
       return false
     }
     return true
@@ -236,7 +235,7 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
     }
 
     if (!canUsePlanner) {
-      setShowPlanModal(true)
+      window.location.href = "/pricing?plan=premium&feature=planner"
       return
     }
 
@@ -352,7 +351,12 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
             <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <div>
               <p className="font-medium text-foreground">Planner is a Premium feature.</p>
-              <p className="mt-1 text-muted-foreground">Upgrade to Premium to unlock Planner instantly after successful payment.</p>
+              <p className="mt-1 text-muted-foreground">Upgrade on the Pricing page to unlock Planner instantly after successful payment.</p>
+              <div className="mt-3">
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/pricing?plan=premium&feature=planner">View Pricing</Link>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -553,24 +557,6 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
     </div>
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Study Planner" />
-      <ChoosePlanModal
-        open={showPlanModal}
-        onOpenChange={setShowPlanModal}
-        onPaymentSuccess={async () => {
-          await refetch()
-          setShowPlanModal(false)
-
-          if (pendingPlannerAction === "open_task") {
-            setIsAddingTask(true)
-          }
-
-          if (pendingPlannerAction === "open_ai") {
-            setShowAISuggestions(true)
-          }
-
-          setPendingPlannerAction(null)
-        }}
-      />
     </>
   )
 }

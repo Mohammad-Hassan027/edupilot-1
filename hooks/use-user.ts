@@ -41,11 +41,15 @@ const INITIAL_STATE: UseUserState = {
   error: null,
 }
 
+const STORAGE_REFRESH_KEY = "edupilot-user-refresh"
+
 export function useUser() {
   const [state, setState] = useState<UseUserState>(INITIAL_STATE)
 
-  const refetch = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }))
+  const refetch = useCallback(async (silent = false) => {
+    if (!silent) {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+    }
 
     try {
       const res = await fetch("/api/user/profile", {
@@ -53,7 +57,7 @@ export function useUser() {
         credentials: "include",
         cache: "no-store",
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
           Pragma: "no-cache",
         },
       })
@@ -116,19 +120,50 @@ export function useUser() {
         }))
       }
 
-      void refetch()
+      try {
+        localStorage.setItem(STORAGE_REFRESH_KEY, String(Date.now()))
+      } catch {}
+
+      void refetch(true)
     }
 
     const handleFocus = () => {
-      void refetch()
+      void refetch(true)
     }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void refetch(true)
+      }
+    }
+
+    const handlePageShow = () => {
+      void refetch(true)
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_REFRESH_KEY) {
+        void refetch(true)
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refetch(true)
+    }, 15000)
 
     window.addEventListener("user-data-refresh", handleRefresh)
     window.addEventListener("focus", handleFocus)
+    window.addEventListener("pageshow", handlePageShow)
+    window.addEventListener("storage", handleStorage)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
       window.removeEventListener("user-data-refresh", handleRefresh)
       window.removeEventListener("focus", handleFocus)
+      window.removeEventListener("pageshow", handlePageShow)
+      window.removeEventListener("storage", handleStorage)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.clearInterval(intervalId)
     }
   }, [refetch])
 

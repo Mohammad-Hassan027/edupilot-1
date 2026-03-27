@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     const subscription = await getSubscription(user.id)
     const paidTrialActive = await isTrialActive(user.id)
-    const hasPaidPlan = subscription?.plan_id === "pro" || subscription?.plan_id === "premium"
+    const hasPaidPlan = subscription?.plan_id === "premium"
     const canUseQuiz = Boolean(
       hasPaidPlan && (paidTrialActive || subscription?.status === "active" || subscription?.status === "trial")
     )
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     if (!canUseQuiz) {
       return NextResponse.json(
         {
-          error: "Quiz is available on Pro and Premium plans only. Upgrade your plan to continue.",
+          error: "Quiz is available on Premium plan only. Upgrade your plan to continue.",
           code: "PLAN_REQUIRED",
           requiresUpgrade: true,
         },

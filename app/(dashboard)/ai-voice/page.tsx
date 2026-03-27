@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Mic, Volume2, Loader2, MessageSquare, Trash2, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
-import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 
@@ -33,7 +33,6 @@ export default function AIVoicePage() {
   const [transcript, setTranscript] = useState("")
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [showPlanModal, setShowPlanModal] = useState(false)
   const [pendingVoiceAction, setPendingVoiceAction] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
@@ -73,7 +72,7 @@ export default function AIVoicePage() {
     }
 
     if (!canUseVoice) {
-      setShowPlanModal(true)
+      window.location.href = "/pricing?plan=pro&feature=ai-voice"
       return
     }
 
@@ -181,8 +180,13 @@ export default function AIVoicePage() {
               <div>
                 <p className="font-medium text-foreground">AI Voice is a Pro feature.</p>
                 <p className="mt-1 text-muted-foreground">
-                  Start Pro or Premium to unlock this feature instantly after successful payment.
+                  Upgrade on the Pricing page to unlock AI Voice instantly after successful payment.
                 </p>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/pricing?plan=pro&feature=ai-voice">View Pricing</Link>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -288,16 +292,6 @@ export default function AIVoicePage() {
       </div>
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="AI Voice" />
-      <ChoosePlanModal
-        open={showPlanModal}
-        onOpenChange={setShowPlanModal}
-        onPaymentSuccess={async () => {
-          setShowPlanModal(false)
-          await refetch()
-          setShowPlanModal(false)
-          setPendingVoiceAction(false)
-        }}
-      />
     </>
   )
 }

@@ -216,13 +216,41 @@ async function syncSubscriptionPlanFromPayments(userId: string, planId: "free" |
     updated_at: now.toISOString(),
   }
 
+  const existing = await admin
+    .from("subscriptions")
+    .select("id,user_id")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (existing.data?.id) {
+    const { data, error } = await admin
+      .from("subscriptions")
+      .update(payload)
+      .eq("user_id", userId)
+      .select()
+      .single()
+
+    if (error) throw new Error(`Subscription update failed: ${error.message}`)
+    return data as Subscription
+  }
+
   const { data, error } = await admin
     .from("subscriptions")
-    .upsert(payload, { onConflict: "user_id" })
+    .insert(payload)
     .select()
     .single()
 
-  if (error) throw new Error(`Subscription sync failed: ${error.message}`)
+  if (error) {
+    const fallback = await admin
+      .from("subscriptions")
+      .upsert(payload, { onConflict: "user_id" })
+      .select()
+      .single()
+
+    if (fallback.error) throw new Error(`Subscription sync failed: ${fallback.error.message}`)
+    return fallback.data as Subscription
+  }
+
   return data as Subscription
 }
 
