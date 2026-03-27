@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { ThemeProvider } from '@/components/theme-provider'
-import { SessionTimeoutManager } from '@/components/session-timeout-manager'
+import { AppProviders } from '@/components/providers/app-providers'
 import './globals.css'
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
@@ -24,10 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body className={`${geist.className} min-h-screen bg-background antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <SessionTimeoutManager />
-          {children}
-        </ThemeProvider>
+        <AppProviders>{children}</AppProviders>
         <Analytics />
       </body>
     </html>

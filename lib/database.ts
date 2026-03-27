@@ -56,7 +56,10 @@ export async function upsertProfile(userId: string, updates: Partial<Profile>) {
   const admin = await getSupabaseAdmin()
   const { data, error } = await admin
     .from("profiles")
-    .upsert({ user_id: userId, ...updates, updated_at: new Date().toISOString() })
+    .upsert(
+      { user_id: userId, ...updates, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
     .select()
     .single()
 

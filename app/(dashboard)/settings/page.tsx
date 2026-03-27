@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Sun, Moon, Bell, Lock, Trash2, Shield, Mail, Smartphone,
@@ -44,7 +44,6 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const displayName = profile?.full_name || email?.split("@")[0] || "User"
-  const initials = displayName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
   const currentPlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : "Free"
   const planLabel = subscription?.trial_active ? `${currentPlanName} Trial Active` :
     subscription?.status === "active" ? `${currentPlanName} Plan` : "Free Plan"
@@ -112,10 +111,7 @@ export default function SettingsPage() {
               {isLoading ? (
                 <div className="h-14 w-14 rounded-full bg-secondary animate-pulse" />
               ) : (
-                <Avatar className="h-14 w-14">
-                  <AvatarImage src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-lg">{initials}</AvatarFallback>
-                </Avatar>
+                <UserAvatar src={profile?.avatar_url} alt={displayName} className="h-14 w-14" iconClassName="h-9 w-9" />
               )}
               <div>
                 <h3 className="font-semibold text-foreground">{isLoading ? "Loading..." : displayName}</h3>

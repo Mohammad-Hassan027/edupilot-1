@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+"use client"
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import type { Credits, Profile, Subscription } from "@/types"
 
 type UserPayload = {
@@ -25,6 +36,14 @@ type SubscriptionUpdatedDetail = {
   authName?: string | null
 }
 
+type UserContextValue = UseUserState & {
+  fullName: string
+  loading: boolean
+  user: { email: string; plan: string } | null
+  refetch: (silent?: boolean, force?: boolean) => Promise<UserPayload | null>
+  setUserState: (updater: Partial<UseUserState> | ((prev: UseUserState) => UseUserState)) => void
+}
+
 declare global {
   interface WindowEventMap {
     "user-data-refresh": CustomEvent<SubscriptionUpdatedDetail>
@@ -42,75 +61,129 @@ const INITIAL_STATE: UseUserState = {
 }
 
 const STORAGE_REFRESH_KEY = "edupilot-user-refresh"
+const USER_CACHE_TTL = 60_000
 
-export function useUser() {
-  const [state, setState] = useState<UseUserState>(INITIAL_STATE)
+let sharedUserState: UseUserState = INITIAL_STATE
+let sharedFetchedAt = 0
+let inflightRequest: Promise<UserPayload | null> | null = null
 
-  const refetch = useCallback(async (silent = false) => {
-    if (!silent) {
-      setState((prev) => ({ ...prev, isLoading: true, error: null }))
-    }
+const UserContext = createContext<UserContextValue | null>(null)
 
-    try {
-      const res = await fetch("/api/user/profile", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          Pragma: "no-cache",
-        },
-      })
+async function fetchUserProfile(): Promise<UserPayload | null> {
+  const res = await fetch("/api/user/profile", {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
+    },
+  })
 
-      if (res.status === 401) {
-        setState({
-          ...INITIAL_STATE,
-          isLoading: false,
-          error: "not_authenticated",
-        })
-        return null
-      }
+  if (res.status === 401) {
+    throw new Error("not_authenticated")
+  }
 
-      const json = await res.json().catch(() => null)
+  const json = await res.json().catch(() => null)
 
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error || "Failed to load user data")
-      }
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || "Failed to load user data")
+  }
 
-      const payload = (json.data ?? {}) as UserPayload
+  return (json.data ?? {}) as UserPayload
+}
 
-      setState({
-        profile: payload.profile ?? null,
-        credits: payload.credits ?? null,
-        subscription: payload.subscription ?? null,
-        email: payload.email ?? null,
-        authName: payload.authName ?? null,
-        isLoading: false,
-        error: null,
-      })
+export function UserDataProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<UseUserState>(sharedUserState)
+  const mountedRef = useRef(false)
 
-      return payload
-    } catch (error) {
-      console.error("[useUser] Failed to fetch user data:", error)
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to load user data",
-      }))
-      return null
-    }
+  const applyState = useCallback((next: UseUserState) => {
+    sharedUserState = next
+    setState(next)
   }, [])
 
+  const setUserState: UserContextValue["setUserState"] = useCallback((updater) => {
+    setState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : { ...prev, ...updater }
+      sharedUserState = next
+      return next
+    })
+  }, [])
+
+  const refetch = useCallback(async (silent = false, force = false) => {
+    const now = Date.now()
+    const hasFreshCache = sharedFetchedAt > 0 && now - sharedFetchedAt < USER_CACHE_TTL
+
+    if (!force && hasFreshCache && !sharedUserState.error) {
+      if (!silent) {
+        applyState({ ...sharedUserState, isLoading: false })
+      }
+      return {
+        profile: sharedUserState.profile,
+        credits: sharedUserState.credits,
+        subscription: sharedUserState.subscription,
+        email: sharedUserState.email,
+        authName: sharedUserState.authName,
+      }
+    }
+
+    if (!silent) {
+      applyState({ ...sharedUserState, isLoading: true, error: null })
+    }
+
+    if (!inflightRequest) {
+      inflightRequest = fetchUserProfile()
+        .then((payload) => {
+          const nextState: UseUserState = {
+            profile: payload?.profile ?? null,
+            credits: payload?.credits ?? null,
+            subscription: payload?.subscription ?? null,
+            email: payload?.email ?? null,
+            authName: payload?.authName ?? null,
+            isLoading: false,
+            error: null,
+          }
+          sharedFetchedAt = Date.now()
+          sharedUserState = nextState
+          setState(nextState)
+          return payload
+        })
+        .catch((error) => {
+          const nextState: UseUserState = {
+            ...INITIAL_STATE,
+            isLoading: false,
+            error: error instanceof Error ? error.message : "Failed to load user data",
+          }
+          sharedFetchedAt = Date.now()
+          sharedUserState = nextState
+          setState(nextState)
+          return null
+        })
+        .finally(() => {
+          inflightRequest = null
+        })
+    }
+
+    return inflightRequest
+  }, [applyState])
+
   useEffect(() => {
-    void refetch()
+    if (mountedRef.current) return
+    mountedRef.current = true
+    void refetch(false)
   }, [refetch])
 
   useEffect(() => {
+    const forceRefresh = () => {
+      sharedFetchedAt = 0
+      void refetch(true, true)
+    }
+
     const handleRefresh = (event: WindowEventMap["user-data-refresh"]) => {
       const detail = event.detail
 
       if (detail?.subscription || detail?.email || detail?.authName) {
-        setState((prev) => ({
+        setUserState((prev) => ({
           ...prev,
           subscription: detail.subscription ?? prev.subscription,
           email: detail.email ?? prev.email,
@@ -124,32 +197,32 @@ export function useUser() {
         localStorage.setItem(STORAGE_REFRESH_KEY, String(Date.now()))
       } catch {}
 
-      void refetch(true)
+      forceRefresh()
     }
 
     const handleFocus = () => {
-      void refetch(true)
+      if (Date.now() - sharedFetchedAt > USER_CACHE_TTL) {
+        forceRefresh()
+      }
     }
 
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        void refetch(true)
+      if (!document.hidden && Date.now() - sharedFetchedAt > USER_CACHE_TTL) {
+        forceRefresh()
       }
     }
 
     const handlePageShow = () => {
-      void refetch(true)
+      if (Date.now() - sharedFetchedAt > USER_CACHE_TTL) {
+        forceRefresh()
+      }
     }
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_REFRESH_KEY) {
-        void refetch(true)
+        forceRefresh()
       }
     }
-
-    const intervalId = window.setInterval(() => {
-      void refetch(true)
-    }, 15000)
 
     window.addEventListener("user-data-refresh", handleRefresh)
     window.addEventListener("focus", handleFocus)
@@ -163,15 +236,14 @@ export function useUser() {
       window.removeEventListener("pageshow", handlePageShow)
       window.removeEventListener("storage", handleStorage)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      window.clearInterval(intervalId)
     }
-  }, [refetch])
+  }, [refetch, setUserState])
 
   const fullName = useMemo(() => {
     return state.profile?.full_name || state.authName || state.email?.split("@")[0] || "User"
   }, [state.profile?.full_name, state.authName, state.email])
 
-  return {
+  const value = useMemo<UserContextValue>(() => ({
     ...state,
     fullName,
     user: state.email
@@ -182,5 +254,18 @@ export function useUser() {
       : null,
     loading: state.isLoading,
     refetch,
+    setUserState,
+  }), [state, fullName, refetch, setUserState])
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>
+}
+
+export function useUser() {
+  const context = useContext(UserContext)
+
+  if (!context) {
+    throw new Error("useUser must be used within UserDataProvider")
   }
+
+  return context
 }

@@ -8,7 +8,7 @@ import {
   Layers, HelpCircle, Calendar, BookOpen, Settings, Mic, User, CreditCard,
   LogOut, Clock, TrendingUp, Lightbulb, LogIn
 } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -75,13 +75,6 @@ export function DashboardHeader() {
 
   const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
   const firstName = displayName.split(" ")[0]
-  const initials = displayName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
-  const avatarSeed = email || displayName
   const planLabel = getPlanLabel(subscription?.status, subscription?.trial_active ?? false, subscription?.plan_id)
 
   useEffect(() => {
@@ -326,15 +319,7 @@ export function DashboardHeader() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="hidden sm:flex items-center gap-3 rounded-full border border-border bg-secondary py-1.5 pl-1.5 pr-4 hover:border-primary/50 hover:bg-secondary/80 transition-all cursor-pointer">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage
-                      src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
-                      alt={displayName}
-                    />
-                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar src={profile?.avatar_url} alt={displayName} className="h-8 w-8" />
                   <div className="hidden text-left sm:block">
                     <p className="text-sm font-medium leading-none text-foreground">
                       {isLoading ? "Loading..." : displayName}
@@ -357,15 +342,7 @@ export function DashboardHeader() {
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 sm:hidden cursor-pointer">
-                  <AvatarImage
-                    src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`}
-                    alt={displayName}
-                  />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar src={profile?.avatar_url} alt={displayName} className="h-8 w-8 cursor-pointer sm:hidden" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-card border-border">
                 {userMenuItems}
