@@ -240,9 +240,9 @@ export default function BillingPage() {
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         plan={plans[0]}
-        onPaymentSuccess={() => {
+        onPaymentSuccess={async () => {
           setShowPaymentModal(false)
-          refetch()
+          await refetch()
         }}
       />
     </div>

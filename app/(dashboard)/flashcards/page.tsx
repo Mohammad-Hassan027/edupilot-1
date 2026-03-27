@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,7 @@ export default function FlashcardsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [genError, setGenError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
@@ -49,7 +50,10 @@ export default function FlashcardsPage() {
   const handleGenerateClick = () => {
     setGenError("")
 
-    if (isLoading) return
+    if (isLoading) {
+      setPendingGenerateClick(true)
+      return
+    }
 
     if (error === "not_authenticated" || !email) {
       setShowLoginModal(true)
@@ -63,6 +67,13 @@ export default function FlashcardsPage() {
 
     setDialogOpen(true)
   }
+
+
+  useEffect(() => {
+    if (!pendingGenerateClick || isLoading) return
+    setPendingGenerateClick(false)
+    handleGenerateClick()
+  }, [pendingGenerateClick, isLoading, error, email, isPaidUser])
 
   const handleNext = () => {
     if (currentIndex < cards.length - 1) {
@@ -267,8 +278,9 @@ export default function FlashcardsPage() {
       <ChoosePlanModal
         open={planModalOpen}
         onOpenChange={setPlanModalOpen}
-        onPaymentSuccess={() => {
-          refetch()
+        onPaymentSuccess={async () => {
+          await refetch()
+          setPlanModalOpen(false)
           setDialogOpen(true)
         }}
       />

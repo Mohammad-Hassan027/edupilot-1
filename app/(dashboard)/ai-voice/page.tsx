@@ -280,9 +280,9 @@ export default function AIVoicePage() {
       <ChoosePlanModal
         open={showPlanModal}
         onOpenChange={setShowPlanModal}
-        onPaymentSuccess={() => {
+        onPaymentSuccess={async () => {
           setShowPlanModal(false)
-          refetch()
+          await refetch()
         }}
       />
     </>

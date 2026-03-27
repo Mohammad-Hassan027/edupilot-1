@@ -24,7 +24,7 @@ interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
   plan: Plan
-  onPaymentSuccess: () => void
+  onPaymentSuccess: () => void | Promise<void>
 }
 
 export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: PaymentModalProps) {
@@ -148,8 +148,8 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             }
 
             setPaymentStatus("success")
-            setTimeout(() => {
-              onPaymentSuccess()
+            setTimeout(async () => {
+              await onPaymentSuccess()
               onClose()
             }, 900)
           } catch (err) {

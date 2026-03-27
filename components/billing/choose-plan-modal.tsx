@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 interface ChoosePlanModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onPaymentSuccess: () => void
+  onPaymentSuccess: () => void | Promise<void>
 }
 
 export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: ChoosePlanModalProps) {
@@ -128,10 +128,10 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
             price: String(selectedPlan.price),
             period: selectedPlan.period,
           }}
-          onPaymentSuccess={() => {
+          onPaymentSuccess={async () => {
             setSelectedPlanId(null)
             onOpenChange(false)
-            onPaymentSuccess()
+            await onPaymentSuccess()
           }}
         />
       )}

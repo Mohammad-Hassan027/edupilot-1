@@ -532,9 +532,9 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
       <ChoosePlanModal
         open={showPlanModal}
         onOpenChange={setShowPlanModal}
-        onPaymentSuccess={() => {
+        onPaymentSuccess={async () => {
           setShowPlanModal(false)
-          refetch()
+          await refetch()
         }}
       />
     </>
