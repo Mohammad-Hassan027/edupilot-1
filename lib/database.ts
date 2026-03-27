@@ -335,6 +335,17 @@ export async function updatePaymentRecord(
 
 
 // ─── Saved Notes ───────────────────────────────────────────────────────────
+// ─── Saved Notes ───────────────────────────────────────────────────────────
+
+function isMissingColumnError(message?: string | null) {
+  if (!message) return false
+  return (
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("column") ||
+    message.includes("does not exist")
+  )
+}
 
 export async function saveGeneratedNote(
   userId: string,
@@ -347,25 +358,64 @@ export async function saveGeneratedNote(
   }
 ) {
   const admin = await getSupabaseAdmin()
-  const { data, error } = await admin
-    .from("saved_notes")
-    .insert({
+
+  const now = new Date().toISOString()
+
+  const attempts = [
+    {
       user_id: userId,
       source_type: payload.sourceType,
       source_title: payload.sourceTitle,
       source_label: payload.sourceLabel ?? null,
       source_hint: payload.sourceHint ?? null,
       tabs: payload.tabs,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single()
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      user_id: userId,
+      source_type: payload.sourceType,
+      source_title: payload.sourceTitle,
+      tabs: payload.tabs,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      user_id: userId,
+      source_type: payload.sourceType,
+      tabs: payload.tabs,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      user_id: userId,
+      source_type: payload.sourceType,
+      tabs: payload.tabs,
+    },
+  ]
 
-  if (error) throw new Error(`Saved note creation failed: ${error.message}`)
-  return data as SavedNoteRecord
+  let lastError: string | null = null
+
+  for (const insertPayload of attempts) {
+    const { data, error } = await admin
+      .from("saved_notes")
+      .insert(insertPayload)
+      .select("*")
+      .single()
+
+    if (!error) {
+      return data as SavedNoteRecord
+    }
+
+    lastError = error.message
+
+    if (!isMissingColumnError(error.message)) {
+      throw new Error(`Saved note creation failed: ${error.message}`)
+    }
+  }
+
+  throw new Error(`Saved note creation failed: ${lastError ?? "Unknown database error"}`)
 }
-
 
 export async function getSavedNoteById(userId: string, noteId: string) {
   const admin = await getSupabaseAdmin()

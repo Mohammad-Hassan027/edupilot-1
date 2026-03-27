@@ -257,15 +257,21 @@ export async function POST(req: NextRequest) {
 
     const user = await getUser()
     let savedNote = null
+    let saveWarning: string | null = null
 
     if (user) {
-      savedNote = await saveGeneratedNote(user.id, {
-        sourceType: sourceMode,
-        sourceTitle: generated.title || sourceTitle,
-        sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
-        sourceHint: generated.sourceHint || sourceHint,
-        tabs: generated.tabs,
-      })
+      try {
+        savedNote = await saveGeneratedNote(user.id, {
+          sourceType: sourceMode,
+          sourceTitle: generated.title || sourceTitle,
+          sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
+          sourceHint: generated.sourceHint || sourceHint,
+          tabs: generated.tabs,
+        })
+      } catch (saveError) {
+        console.error("[ai/notes] Save warning:", saveError)
+        saveWarning = saveError instanceof Error ? saveError.message : "Failed to save note history"
+      }
     }
 
     return NextResponse.json({
@@ -274,6 +280,7 @@ export async function POST(req: NextRequest) {
       sourceHint: generated.sourceHint || sourceHint,
       tabs: generated.tabs,
       savedNote,
+      saveWarning,
     })
   } catch (error) {
     console.error("[ai/notes] Error:", error)
