@@ -14,11 +14,11 @@ import { useUser } from "@/hooks/use-user"
 
 const plans = [
   {
-    id: "standard",
-    name: "Standard",
+    id: "pro",
+    name: "Pro",
     price: "1",
-    period: "14-day trial",
-    description: "₹1 account verification — refunded instantly",
+    period: "verification charge",
+    description: "₹1 account verification — refunded instantly, then Pro trial starts",
     features: [
       "Unlimited AI Tutor sessions",
       "Unlimited quiz generation",
@@ -207,7 +207,7 @@ export default function BillingPage() {
             <div>
               <p className="text-sm text-muted-foreground">Current plan</p>
               <Badge className="mt-1">
-                {isTrial ? "Trial" : isPro ? "Pro" : "Free"}
+                {isTrial ? `${subscription?.plan_id === "premium" ? "Premium" : "Pro"} Trial` : isPro ? `${subscription?.plan_id === "premium" ? "Premium" : "Pro"}` : "Free"}
               </Badge>
             </div>
           </div>

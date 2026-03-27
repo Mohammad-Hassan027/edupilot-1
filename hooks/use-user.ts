@@ -43,7 +43,9 @@ export function useUser(): UserData {
   // Phase 2: fetch full profile data (credits, subscription, etc.)
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/user/profile", { cache: "no-store" })
+      setIsLoading(true)
+      setError(null)
+      const res = await fetch(`/api/user/profile?t=${Date.now()}`, { cache: "no-store" })
       if (!res.ok) {
         if (res.status === 401) { setError("not_authenticated"); return }
         throw new Error("Failed to load user data")

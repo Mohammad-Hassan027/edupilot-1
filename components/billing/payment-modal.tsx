@@ -24,7 +24,7 @@ interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
   plan: Plan
-  onPaymentSuccess: () => void
+  onPaymentSuccess: () => void | Promise<void>
 }
 
 export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: PaymentModalProps) {
@@ -148,8 +148,8 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             }
 
             setPaymentStatus("success")
-            setTimeout(() => {
-              onPaymentSuccess()
+            setTimeout(async () => {
+              await onPaymentSuccess()
               onClose()
             }, 900)
           } catch (err) {
@@ -235,7 +235,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             <Alert className="border-accent/50 bg-accent/10">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <AlertDescription className="text-accent">
-                Opening Razorpay checkout...
+Please wait for a while while processing payment. Opening Razorpay checkout...
               </AlertDescription>
             </Alert>
           )}
@@ -247,7 +247,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
               disabled={busy || paymentStatus === "success" || !scriptReady}
             >
               {isOpeningCheckout ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
+                <><Loader2 className="h-4 w-4 animate-spin" />Please wait while processing payment...</>
               ) : (
                 <><CreditCard className="h-4 w-4" />Pay in Test Mode</>
               )}
