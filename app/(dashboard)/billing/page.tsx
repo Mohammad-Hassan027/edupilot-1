@@ -145,29 +145,33 @@ export default function BillingPage() {
               </CardHeader>
 
               <CardContent className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-secondary/40 p-4">
-                    <p className="text-sm text-muted-foreground">Plan</p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">{currentPlan.name}</p>
-                  </div>
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                      <p className="text-sm text-muted-foreground">Plan</p>
+                      <p className="mt-1 text-lg font-semibold text-foreground">{currentPlan.name}</p>
+                    </div>
 
-                  <div className="rounded-xl border border-border bg-secondary/40 p-4">
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">
-                      {isTrialActive ? "Trial Active" : isPaidActive ? "Active" : "Free"}
-                    </p>
-                  </div>
+                    <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <p className="mt-1 text-lg font-semibold text-foreground">
+                        {isTrialActive ? "Trial Active" : isPaidActive ? "Active" : "Free"}
+                      </p>
+                    </div>
 
-                  <div className="rounded-xl border border-border bg-secondary/40 p-4">
-                    <p className="text-sm text-muted-foreground">Trial / Renewal</p>
-                    <p className="mt-1 text-base font-semibold text-foreground">
-                      {isTrialActive ? formatDate(subscription?.trial_expiry) : formatDate(subscription?.subscription_end)}
-                    </p>
+                    <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                      <p className="text-sm text-muted-foreground">Trial / Renewal</p>
+                      <p className="mt-1 text-base font-semibold text-foreground">
+                        {isTrialActive
+                          ? formatDate(subscription?.trial_expiry)
+                          : formatDate(subscription?.subscription_end)}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-border bg-secondary/40 p-4">
                     <p className="text-sm text-muted-foreground">Billing email</p>
-                    <p className="mt-1 text-sm font-semibold leading-6 text-foreground break-words">
+                    <p className="mt-1 text-sm font-medium text-foreground md:text-base">
                       {email || "—"}
                     </p>
                   </div>
