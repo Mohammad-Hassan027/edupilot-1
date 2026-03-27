@@ -105,44 +105,28 @@ export function PublicHeader() {
           <ThemeToggle />
           <div className="hidden items-center gap-2 sm:flex">
             {!authReady ? (
-              <div className="h-8 w-20 rounded-lg bg-secondary animate-pulse" />
-            ) : authUser ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 hover:border-primary/50 transition-all cursor-pointer">
-                      <Avatar className="h-7 w-7">
-                        <AvatarImage src={authUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.email}`} alt={authUser.fullName ?? "User"} />
-                        <AvatarFallback className="bg-primary text-primary-foreground text-xs">{initials}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium text-foreground max-w-[120px] truncate">{authUser.fullName}</span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 bg-card border-border">
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/profile" className="flex items-center gap-2 cursor-pointer"><User className="h-4 w-4" /> Profile</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleLogout}>
-                      <LogOut className="h-4 w-4 mr-2" /> Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
-                  <Link href="/dashboard">Get Started</Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" asChild><Link href="/login">Sign In</Link></Button>
-                <Button asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
-                  <Link href="/register">Get Started</Link>
-                </Button>
-              </>
-            )}
+                <div className="h-8 w-20 rounded-lg bg-secondary animate-pulse" />
+              ) : authUser ? (
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link href="/profile">Profile</Link>
+                  </Button>
+
+                  <Button asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
+                    <Link href="/dashboard">Get Started</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link href="/login">Sign In</Link>
+                  </Button>
+
+                  <Button asChild className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
+                    <Link href="/register">Get Started</Link>
+                  </Button>
+                </>
+              )}
           </div>
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
