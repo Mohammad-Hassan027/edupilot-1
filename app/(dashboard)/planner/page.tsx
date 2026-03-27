@@ -46,29 +46,23 @@ const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const currentDate = new Date()
 const currentMonth = currentDate.toLocaleString("default", { month: "long", year: "numeric" })
 
-const generateCalendarDays = () => {
+const generateCalendarDays = (eventDays: Set<number>) => {
   const days = []
   const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay()
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
-  
+
   for (let i = 0; i < firstDay; i++) {
     days.push({ day: null, events: 0 })
   }
-  
+
   for (let i = 1; i <= daysInMonth; i++) {
-    days.push({ day: i, events: Math.random() > 0.7 ? Math.floor(Math.random() * 3) + 1 : 0 })
+    days.push({ day: i, events: eventDays.has(i) ? 1 : 0 })
   }
-  
+
   return days
 }
 
-const initialTasks: Task[] = [
-  { id: "1", title: "Mathematics Study", time: "09:00", duration: "2h", subject: "Mathematics", completed: false },
-  { id: "2", title: "Physics Review", time: "11:30", duration: "1.5h", subject: "Physics", completed: false },
-  { id: "3", title: "Lunch Break", time: "13:00", duration: "1h", subject: "Break", completed: true },
-  { id: "4", title: "Chemistry Lab", time: "14:30", duration: "2h", subject: "Chemistry", completed: false },
-  { id: "5", title: "AI Tutor Session", time: "17:00", duration: "1h", subject: "AI Study", completed: false },
-]
+const initialTasks: Task[] = []
 
 const subjectColors: Record<string, string> = {
   Mathematics: "border-l-primary bg-primary/5",
@@ -89,6 +83,7 @@ const aiSuggestionsData: AIScheduleItem[] = [
 export default function PlannerPage() {
   const { subscription, refetch, isLoading, error: userError, email } = useUser()
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [taskDays, setTaskDays] = useState<Record<string, number>>({})
   const [selectedDay, setSelectedDay] = useState(currentDate.getDate())
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [showAISuggestions, setShowAISuggestions] = useState(false)
@@ -97,7 +92,7 @@ export default function PlannerPage() {
   const [newTaskTime, setNewTaskTime] = useState("")
   const [newTaskDuration, setNewTaskDuration] = useState("1h")
   const [newTaskSubject, setNewTaskSubject] = useState("")
-  const calendarDays = generateCalendarDays()
+  const calendarDays = generateCalendarDays(new Set(Object.values(taskDays)))
   const [aiLoading, setAiLoading] = useState(false)
   const [aiGoal, setAiGoal] = useState("")
   const [aiHours, setAiHours] = useState("4")
@@ -106,7 +101,7 @@ export default function PlannerPage() {
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [pendingPlannerAction, setPendingPlannerAction] = useState<null | "open_task" | "open_ai">(null)
   const canUsePlanner = canAccessFeature(subscription, "planner")
-  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
+  const activePlanName = canUsePlanner ? (subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null) : null
 
   const guardPlannerAccess = (action: "open_task" | "open_ai") => {
     if (isLoading) {
@@ -118,6 +113,7 @@ export default function PlannerPage() {
       return false
     }
     if (!canUsePlanner) {
+      setPendingPlannerAction(action)
       setShowPlanModal(true)
       return false
     }
@@ -134,8 +130,10 @@ export default function PlannerPage() {
       return
     }
 
+    const taskId = Date.now().toString()
+
     const newTask: Task = {
-      id: Date.now().toString(),
+      id: taskId,
       title: newTaskTitle,
       time: newTaskTime,
       duration: newTaskDuration,
@@ -144,6 +142,7 @@ export default function PlannerPage() {
     }
 
     setTasks([...tasks, newTask])
+    setTaskDays((prev) => ({ ...prev, [taskId]: selectedDay }))
     setNewTaskTitle("")
     setNewTaskTime("")
     setNewTaskDuration("1h")
@@ -162,16 +161,26 @@ export default function PlannerPage() {
   const handleApplySchedule = () => {
     const selectedItems = aiSuggestions.filter((item) => item.selected)
     
-    const newTasks = selectedItems.map((item) => ({
-      id: Date.now().toString() + Math.random(),
-      title: item.activity,
-      time: item.time.split(" - ")[0],
-      duration: "1h",
-      subject: item.activity.split("(")[0].trim(),
-      completed: false,
-    }))
+    const newTasks = selectedItems.map((item) => {
+      const taskId = Date.now().toString() + Math.random()
+      return {
+        id: taskId,
+        title: item.activity,
+        time: item.time.split(" - ")[0],
+        duration: "1h",
+        subject: item.activity.split("(")[0].trim(),
+        completed: false,
+      }
+    })
 
     setTasks([...tasks, ...newTasks])
+    setTaskDays((prev) => {
+      const next = { ...prev }
+      newTasks.forEach((task) => {
+        next[task.id] = selectedDay
+      })
+      return next
+    })
     setAiSuggestions(aiSuggestionsData)
     setShowAISuggestions(false)
   }
@@ -406,12 +415,16 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
               </div>
               <div>
                 <CardTitle className="text-base">March {selectedDay}, 2026</CardTitle>
-                <p className="text-xs text-muted-foreground">{tasks.length} tasks scheduled</p>
+                <p className="text-xs text-muted-foreground">{tasks.filter((task) => taskDays[task.id] === selectedDay).length} tasks scheduled</p>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {tasks.map((task) => (
+            {tasks.filter((task) => taskDays[task.id] === selectedDay).length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-6 text-center text-sm text-muted-foreground">
+                No tasks added for this day yet. Click <span className="font-medium text-foreground">Add Task</span> to create your first planner item.
+              </div>
+            ) : tasks.filter((task) => taskDays[task.id] === selectedDay).map((task) => (
               <div
                 key={task.id}
                 className={cn(
@@ -544,9 +557,17 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
         open={showPlanModal}
         onOpenChange={setShowPlanModal}
         onPaymentSuccess={async () => {
-          setShowPlanModal(false)
           await refetch()
           setShowPlanModal(false)
+
+          if (pendingPlannerAction === "open_task") {
+            setIsAddingTask(true)
+          }
+
+          if (pendingPlannerAction === "open_ai") {
+            setShowAISuggestions(true)
+          }
+
           setPendingPlannerAction(null)
         }}
       />

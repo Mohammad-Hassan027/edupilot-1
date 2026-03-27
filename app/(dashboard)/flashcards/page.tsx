@@ -292,9 +292,7 @@ export default function FlashcardsPage() {
         onPaymentSuccess={async () => {
           await refetch()
           setPlanModalOpen(false)
-          setDialogOpen(false)
           setPendingGenerateClick(false)
-          setPlanModalOpen(false)
           setDialogOpen(true)
         }}
       />

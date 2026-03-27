@@ -233,10 +233,9 @@ export default function QuizPage() {
           open={showPlanModal}
           onOpenChange={setShowPlanModal}
           onPaymentSuccess={async () => {
-            setShowPlanModal(false)
             await refetch()
             setShowPlanModal(false)
-            setPendingGenerateClick(false)
+            setPendingGenerateClick(Boolean(topic.trim()))
           }}
         />
       </>
