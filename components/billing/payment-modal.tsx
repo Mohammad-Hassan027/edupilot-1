@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle, CheckCircle, ShieldCheck, CreditCard } from "lucide-react"
-import { useUser } from "@/hooks/use-user"
+import { persistSubscriptionOverride, useUser } from "@/hooks/use-user"
 
 interface Plan {
   id: string
@@ -34,6 +34,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false)
   const isMountedRef = useRef(true)
+  const hasCompletedPaymentRef = useRef(false)
   const { email, profile } = useUser()
 
   useEffect(() => {
@@ -85,6 +86,8 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
 
   const handlePayment = async () => {
     try {
+      if (hasCompletedPaymentRef.current) return
+
       setIsOpeningCheckout(true)
       setError(null)
       setPaymentStatus("processing")
@@ -128,6 +131,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         theme: { color: "#f59e0b" },
         modal: {
           ondismiss: () => {
+            if (hasCompletedPaymentRef.current) return
             if (isMountedRef.current) {
               setIsOpeningCheckout(false)
               setPaymentStatus("idle")
@@ -161,19 +165,22 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
               throw new Error(verifyData.error || "Payment verification failed")
             }
 
+            hasCompletedPaymentRef.current = true
+            persistSubscriptionOverride(plan.id as "pro" | "premium")
+
             if (isMountedRef.current) {
               setPaymentStatus("success")
+              setIsLaunchingCheckout(false)
             }
+
+            await onPaymentSuccess()
             if (typeof window !== "undefined") {
               window.dispatchEvent(new Event("user-data-refresh"))
             }
-            setTimeout(async () => {
-              await onPaymentSuccess()
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(new Event("user-data-refresh"))
-              }
+
+            window.setTimeout(() => {
               onClose()
-            }, 900)
+            }, 350)
           } catch (err) {
             if (isMountedRef.current) {
               setError(err instanceof Error ? err.message : "Payment verification failed")
@@ -200,9 +207,9 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
         setIsLaunchingCheckout(true)
       }
 
-      window.setTimeout(() => {
+      window.requestAnimationFrame(() => {
         rzp.open()
-      }, 120)
+      })
     } catch (err) {
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : "Payment failed. Please try again.")

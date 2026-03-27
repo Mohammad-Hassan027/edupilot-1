@@ -34,6 +34,7 @@ export default function AIVoicePage() {
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [pendingVoiceAction, setPendingVoiceAction] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -60,7 +61,10 @@ export default function AIVoicePage() {
   }
 
   const handleVoiceToggle = () => {
-    if (isLoading) return
+    if (isLoading) {
+      setPendingVoiceAction(true)
+      return
+    }
 
     if (userError === "not_authenticated" || !email) {
       setShowLoginModal(true)
@@ -137,6 +141,13 @@ export default function AIVoicePage() {
     recognition.start()
   }
 
+
+  useEffect(() => {
+    if (!pendingVoiceAction || isLoading) return
+    setPendingVoiceAction(false)
+    handleVoiceToggle()
+  }, [pendingVoiceAction, isLoading, userError, email, canUseVoice, voiceState])
+
   const stateLabel = {
     idle: "Tap to speak",
     listening: "Listening...",
@@ -188,7 +199,7 @@ export default function AIVoicePage() {
 
               <button
                 onClick={handleVoiceToggle}
-                disabled={isLoading}
+
                 className={cn(
                   "relative z-10 flex h-24 w-24 items-center justify-center rounded-full shadow-2xl transition-all duration-300",
                   voiceState === "idle" && "bg-primary hover:scale-105 hover:bg-primary/90",

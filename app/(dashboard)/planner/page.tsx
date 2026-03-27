@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
 import { useUser } from "@/hooks/use-user"
@@ -104,22 +104,31 @@ export default function PlannerPage() {
   const [aiGenerated, setAiGenerated] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [pendingPlannerAction, setPendingPlannerAction] = useState<null | "open_task" | "open_ai">(null)
   const canUsePlanner = canAccessFeature(subscription, "planner")
+
+  const guardPlannerAccess = (action: "open_task" | "open_ai") => {
+    if (isLoading) {
+      setPendingPlannerAction(action)
+      return false
+    }
+    if (userError === "not_authenticated" || !email) {
+      setShowLoginModal(true)
+      return false
+    }
+    if (!canUsePlanner) {
+      setShowPlanModal(true)
+      return false
+    }
+    return true
+  }
 
   const toggleTask = (id: string) => {
     setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
   }
 
   const handleAddTask = () => {
-    if (isLoading) return
-    if (userError === "not_authenticated" || !email) {
-      setShowLoginModal(true)
-      return
-    }
-    if (!canUsePlanner) {
-      setShowPlanModal(true)
-      return
-    }
+    if (!guardPlannerAccess("open_task")) return
     if (!newTaskTitle.trim() || !newTaskTime || !newTaskSubject.trim()) {
       return
     }
@@ -168,15 +177,7 @@ export default function PlannerPage() {
 
   const handleGenerateAIPlan = async () => {
     if (!aiGoal.trim()) return
-    if (isLoading) return
-    if (userError === "not_authenticated" || !email) {
-      setShowLoginModal(true)
-      return
-    }
-    if (!canUsePlanner) {
-      setShowPlanModal(true)
-      return
-    }
+    if (!guardPlannerAccess("open_ai")) return
     setAiLoading(true)
     try {
       const prompt = `You are a study planner AI. Create a daily study schedule for a student.
@@ -212,6 +213,32 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
     }
   }
 
+
+  useEffect(() => {
+    if (!pendingPlannerAction || isLoading) return
+
+    const action = pendingPlannerAction
+    setPendingPlannerAction(null)
+
+    if (userError === "not_authenticated" || !email) {
+      setShowLoginModal(true)
+      return
+    }
+
+    if (!canUsePlanner) {
+      setShowPlanModal(true)
+      return
+    }
+
+    if (action === "open_task") {
+      setIsAddingTask(true)
+      return
+    }
+
+    setShowAISuggestions(true)
+  }, [pendingPlannerAction, isLoading, userError, email, canUsePlanner])
+
+
   return (
     <>
     <div className="p-4 md:p-6 space-y-6">
@@ -223,9 +250,7 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="gap-2" onClick={() => {
-            if (isLoading) return
-            if (userError === "not_authenticated" || !email) { setShowLoginModal(true); return }
-            if (!canUsePlanner) { setShowPlanModal(true); return }
+            if (!guardPlannerAccess("open_ai")) return
             setShowAISuggestions(true)
           }}>
             <Sparkles className="h-4 w-4" />
@@ -233,7 +258,13 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
           </Button>
           <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2" onClick={(e) => {
+                if (!guardPlannerAccess("open_task")) {
+                  e.preventDefault()
+                  return
+                }
+                setIsAddingTask(true)
+              }}>
                 <Plus className="h-4 w-4" />
                 Add Task
               </Button>

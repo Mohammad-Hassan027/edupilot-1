@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,7 @@ export default function QuizPage() {
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
   const currentQuestion = questions[currentIndex]
@@ -47,7 +48,10 @@ export default function QuizPage() {
 
   const handleGenerateQuiz = async () => {
     if (!topic.trim()) return
-    if (isLoading) return
+    if (isLoading) {
+      setPendingGenerateClick(true)
+      return
+    }
 
     if (userError === "not_authenticated" || !email) {
       setShowLoginModal(true)
@@ -88,6 +92,13 @@ export default function QuizPage() {
       setIsGenerating(false)
     }
   }
+
+
+  useEffect(() => {
+    if (!pendingGenerateClick || isLoading || !topic.trim()) return
+    setPendingGenerateClick(false)
+    void handleGenerateQuiz()
+  }, [pendingGenerateClick, isLoading, topic, userError, email, canUseQuiz])
 
   const handleSubmitAnswer = () => {
     if (selectedAnswer === null) return
@@ -189,7 +200,7 @@ export default function QuizPage() {
                 </Select>
               </div>
 
-              <Button className="w-full gap-2" size="lg" onClick={handleGenerateQuiz} disabled={!topic.trim() || isGenerating || isLoading}>
+              <Button className="w-full gap-2" size="lg" onClick={handleGenerateQuiz} disabled={!topic.trim() || isGenerating}>
                 {isGenerating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
