@@ -3,25 +3,25 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Clock, Flame, HelpCircle, MessageSquareText } from "lucide-react"
+import { Clock, Flame, HelpCircle, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Stats {
   streak: number
   learningHours: string
   quizzesTaken: number
-  aiChats: number
+  totalActivities: number
   weekTrend: string
-  thisWeekCount: number
+  activeDaysThisMonth: number
 }
 
 export function QuickStats() {
-  const [stats, setStats]     = useState<Stats | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     fetch("/api/user/stats")
-      .then((r) => r.ok ? r.json() : null)
+      .then((response) => (response.ok ? response.json() : null))
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setIsLoading(false))
@@ -30,8 +30,8 @@ export function QuickStats() {
   if (isLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="border-border bg-card">
+        {[1, 2, 3, 4].map((item) => (
+          <Card key={item} className="border-border bg-card">
             <CardContent className="flex items-center gap-4 p-4">
               <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
               <div className="flex-1 space-y-2">
@@ -48,39 +48,40 @@ export function QuickStats() {
 
   const cards = [
     {
-      label:   "Learning Streak",
-      value:   String(stats?.streak ?? 0),
-      unit:    "days",
-      change:  (stats?.streak ?? 0) >= 7 ? "🔥 Keep it up!" : (stats?.streak ?? 0) > 0 ? "Going strong!" : "Start today!",
-      icon:    Flame,
-      color:   "text-orange-500",
+      label: "Learning Streak",
+      value: String(stats?.streak ?? 0),
+      unit: "days",
+      change:
+        (stats?.streak ?? 0) >= 7 ? "🔥 Keep it up!" : (stats?.streak ?? 0) > 0 ? "Going strong!" : "Start today!",
+      icon: Flame,
+      color: "text-orange-500",
       bgColor: "bg-orange-500/10",
     },
     {
-      label:   "Learning Hours",
-      value:   stats?.learningHours ?? "0.0",
-      unit:    "hrs",
-      change:  `${stats?.weekTrend ?? "0%"} vs last week`,
-      icon:    Clock,
-      color:   "text-primary",
+      label: "Learning Hours",
+      value: stats?.learningHours ?? "0.0",
+      unit: "hrs",
+      change: `${stats?.weekTrend ?? "0%"} vs last week`,
+      icon: Clock,
+      color: "text-primary",
       bgColor: "bg-primary/10",
     },
     {
-      label:   "AI Chats",
-      value:   String(stats?.aiChats ?? 0),
-      unit:    "chats",
-      change:  stats?.thisWeekCount ? `${stats.thisWeekCount} this week` : "No activity yet",
-      icon:    MessageSquareText,
-      color:   "text-emerald-500",
+      label: "Monthly Activity",
+      value: String(stats?.totalActivities ?? 0),
+      unit: "actions",
+      change: `${stats?.activeDaysThisMonth ?? 0} active days this month`,
+      icon: Activity,
+      color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
     },
     {
-      label:   "Quizzes Taken",
-      value:   String(stats?.quizzesTaken ?? 0),
-      unit:    "tests",
-      change:  (stats?.quizzesTaken ?? 0) > 0 ? `${stats!.quizzesTaken} total` : "Try a quiz!",
-      icon:    HelpCircle,
-      color:   "text-violet-500",
+      label: "Quizzes Taken",
+      value: String(stats?.quizzesTaken ?? 0),
+      unit: "tests",
+      change: (stats?.quizzesTaken ?? 0) > 0 ? `${stats?.quizzesTaken ?? 0} total` : "Try a quiz!",
+      icon: HelpCircle,
+      color: "text-violet-500",
       bgColor: "bg-violet-500/10",
     },
   ]

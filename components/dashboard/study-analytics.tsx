@@ -10,27 +10,35 @@ interface StatsData {
   streak: number
   learningHours: string
   weekTrend: string
-  weeklyActivity: Array<{ day: string; count: number }>
+  activeDaysThisWeek: number
+  weeklyActivity: Array<{ label: string; count: number }>
 }
 
 export function StudyAnalytics() {
-  const [data, setData]       = useState<StatsData | null>(null)
+  const [data, setData] = useState<StatsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     fetch("/api/user/stats")
-      .then(r => r.ok ? r.json() : null)
+      .then((response) => (response.ok ? response.json() : null))
       .then(setData)
       .catch(() => setData(null))
       .finally(() => setIsLoading(false))
   }, [])
 
-  const stats = data ? [
-    { label: "Study Streak",  value: `${data.streak} days`,      icon: Flame,    color: "text-orange-500" },
-    { label: "This Week",     value: `${data.learningHours} hrs`, icon: Clock,    color: "text-primary"    },
-    { label: "vs Last Week",  value: data.weekTrend,              icon: TrendingUp,color:"text-violet-500" },
-    { label: "Active Days",   value: data.weeklyActivity?.filter(d => d.count > 0).length + " days", icon: Target, color: "text-emerald-500" },
-  ] : []
+  const stats = data
+    ? [
+        { label: "Study Streak", value: `${data.streak} days`, icon: Flame, color: "text-orange-500" },
+        { label: "This Week", value: `${data.learningHours} hrs`, icon: Clock, color: "text-primary" },
+        { label: "vs Last Week", value: data.weekTrend, icon: TrendingUp, color: "text-violet-500" },
+        {
+          label: "Active Days",
+          value: `${data.activeDaysThisWeek} days`,
+          icon: Target,
+          color: "text-emerald-500",
+        },
+      ]
+    : []
 
   return (
     <Card className="border-border bg-card">
@@ -41,14 +49,16 @@ export function StudyAnalytics() {
         {isLoading ? (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+              {[1, 2, 3, 4].map((item) => (
+                <Skeleton key={item} className="h-16 rounded-xl" />
+              ))}
             </div>
             <Skeleton className="h-[140px]" />
           </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
-              {stats.map(stat => (
+              {stats.map((stat) => (
                 <div key={stat.label} className="rounded-xl border border-border bg-secondary/50 p-3">
                   <div className="flex items-center gap-2">
                     <stat.icon className={`h-4 w-4 ${stat.color}`} />
@@ -60,23 +70,39 @@ export function StudyAnalytics() {
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Weekly Activity</p>
-              {data?.weeklyActivity && data.weeklyActivity.some(d => d.count > 0) ? (
+              {data?.weeklyActivity && data.weeklyActivity.some((day) => day.count > 0) ? (
                 <div className="h-[140px] w-full min-w-0">
                   <ResponsiveContainer width="100%" height={140}>
                     <AreaChart data={data.weeklyActivity} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                       <defs>
                         <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
                           <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
+                      <XAxis
+                        dataKey="label"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                      />
                       <YAxis hide />
                       <Tooltip
-                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }}
-                        formatter={(v: number) => [`${v} actions`, "Activity"]}
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                          color: "hsl(var(--foreground))",
+                        }}
+                        formatter={(value: number) => [`${value} actions`, "Activity"]}
                       />
-                      <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#actGrad)" />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        fill="url(#actGrad)"
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
