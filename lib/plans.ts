@@ -76,6 +76,8 @@ export function getPlanById(planId: string | null | undefined) {
   return LEARNING_PLANS.find((plan) => plan.id === planId) ?? LEARNING_PLANS[0]
 }
 
+export type FeatureAccessLevel = "free" | "pro" | "premium"
+
 export function hasPaidAccess(subscription: {
   status?: string | null
   plan_id?: string | null
@@ -100,4 +102,55 @@ export function hasPaidAccess(subscription: {
   )
 
   return hasLiveTrial || hasActiveSubscription
+}
+
+
+export function hasProAccess(subscription: {
+  status?: string | null
+  plan_id?: string | null
+  trial_active?: boolean | null
+  trial_expiry?: string | null
+  subscription_end?: string | null
+} | null | undefined) {
+  return hasPaidAccess(subscription)
+}
+
+export function hasPremiumAccess(subscription: {
+  status?: string | null
+  plan_id?: string | null
+  trial_active?: boolean | null
+  trial_expiry?: string | null
+  subscription_end?: string | null
+} | null | undefined) {
+  if (!subscription) return false
+
+  const now = Date.now()
+  const hasLivePremiumTrial = Boolean(
+    subscription.plan_id === "premium" &&
+    subscription.trial_active &&
+    subscription.trial_expiry &&
+    new Date(subscription.trial_expiry).getTime() > now
+  )
+
+  const hasActivePremiumSubscription = Boolean(
+    subscription.plan_id === "premium" &&
+    subscription.status === "active" &&
+    (!subscription.subscription_end || new Date(subscription.subscription_end).getTime() > now)
+  )
+
+  return hasLivePremiumTrial || hasActivePremiumSubscription
+}
+
+export function canAccessFeature(
+  subscription: {
+    status?: string | null
+    plan_id?: string | null
+    trial_active?: boolean | null
+    trial_expiry?: string | null
+    subscription_end?: string | null
+  } | null | undefined,
+  feature: "flashcards" | "ai_voice" | "quiz" | "planner"
+) {
+  if (feature === "planner") return hasPremiumAccess(subscription)
+  return hasProAccess(subscription)
 }

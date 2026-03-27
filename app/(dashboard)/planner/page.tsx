@@ -1,6 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { LoginGateModal } from "@/components/login-gate-modal"
+import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
+import { useUser } from "@/hooks/use-user"
+import { canAccessFeature } from "@/lib/plans"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +21,8 @@ import {
   Check,
   X,
   Brain,
-  Loader2
+  Loader2,
+  Crown
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -82,6 +87,7 @@ const aiSuggestionsData: AIScheduleItem[] = [
 ]
 
 export default function PlannerPage() {
+  const { subscription, refetch, isLoading, error: userError, email } = useUser()
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [selectedDay, setSelectedDay] = useState(currentDate.getDate())
   const [isAddingTask, setIsAddingTask] = useState(false)
@@ -96,12 +102,24 @@ export default function PlannerPage() {
   const [aiGoal, setAiGoal] = useState("")
   const [aiHours, setAiHours] = useState("4")
   const [aiGenerated, setAiGenerated] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const canUsePlanner = canAccessFeature(subscription, "planner")
 
   const toggleTask = (id: string) => {
     setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
   }
 
   const handleAddTask = () => {
+    if (isLoading) return
+    if (userError === "not_authenticated" || !email) {
+      setShowLoginModal(true)
+      return
+    }
+    if (!canUsePlanner) {
+      setShowPlanModal(true)
+      return
+    }
     if (!newTaskTitle.trim() || !newTaskTime || !newTaskSubject.trim()) {
       return
     }
@@ -150,6 +168,15 @@ export default function PlannerPage() {
 
   const handleGenerateAIPlan = async () => {
     if (!aiGoal.trim()) return
+    if (isLoading) return
+    if (userError === "not_authenticated" || !email) {
+      setShowLoginModal(true)
+      return
+    }
+    if (!canUsePlanner) {
+      setShowPlanModal(true)
+      return
+    }
     setAiLoading(true)
     try {
       const prompt = `You are a study planner AI. Create a daily study schedule for a student.
@@ -186,6 +213,7 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
   }
 
   return (
+    <>
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -194,7 +222,12 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
           <p className="text-muted-foreground">Plan and organize your study schedule</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowAISuggestions(true)}>
+          <Button variant="outline" className="gap-2" onClick={() => {
+            if (isLoading) return
+            if (userError === "not_authenticated" || !email) { setShowLoginModal(true); return }
+            if (!canUsePlanner) { setShowPlanModal(true); return }
+            setShowAISuggestions(true)
+          }}>
             <Sparkles className="h-4 w-4" />
             AI Planner
           </Button>
@@ -261,6 +294,18 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
           </Dialog>
         </div>
       </div>
+
+      {!canUsePlanner && (
+        <Card className="border-amber-500/30 bg-amber-500/10">
+          <CardContent className="flex items-start gap-3 p-4 text-sm">
+            <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <div>
+              <p className="font-medium text-foreground">Planner is a Premium feature.</p>
+              <p className="mt-1 text-muted-foreground">Pro users can use Flashcards, AI Voice, and Quiz, but Planner unlocks only after starting a Premium 14-day free trial.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Calendar */}
@@ -451,5 +496,16 @@ Generate 5-6 schedule items that fit within ${aiHours} hours total. Make times r
         </DialogContent>
       </Dialog>
     </div>
+
+      <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Study Planner" />
+      <ChoosePlanModal
+        open={showPlanModal}
+        onOpenChange={setShowPlanModal}
+        onPaymentSuccess={() => {
+          setShowPlanModal(false)
+          refetch()
+        }}
+      />
+    </>
   )
 }

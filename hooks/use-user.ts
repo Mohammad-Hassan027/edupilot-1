@@ -76,7 +76,34 @@ export function useUser(): UserData {
 
   useEffect(() => {
     fetchData()
-  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { profile, credits, subscription, email, fullName, isLoading, error, refetch: fetchData }
+    const handleRefresh = () => {
+      fetchData()
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchData()
+      }
+    }
+
+    window.addEventListener("user-data-refresh", handleRefresh)
+    window.addEventListener("focus", handleRefresh)
+    document.addEventListener("visibilitychange", handleVisibility)
+
+    return () => {
+      window.removeEventListener("user-data-refresh", handleRefresh)
+      window.removeEventListener("focus", handleRefresh)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
+  }, [fetchData])
+
+  const refetch = useCallback(() => {
+    fetchData()
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("user-data-refresh"))
+    }
+  }, [fetchData])
+
+  return { profile, credits, subscription, email, fullName, isLoading, error, refetch }
 }

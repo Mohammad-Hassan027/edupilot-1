@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, RotateCcw, Check, Shuffle, Sparkles, Loader2
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { ChoosePlanModal } from "@/components/billing/choose-plan-modal"
-import { hasPaidAccess } from "@/lib/plans"
+import { canAccessFeature } from "@/lib/plans"
 import { useUser } from "@/hooks/use-user"
 
 interface Flashcard {
@@ -44,7 +44,7 @@ export default function FlashcardsPage() {
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
-  const isPaidUser = hasPaidAccess(subscription)
+  const canUseFlashcards = canAccessFeature(subscription, "flashcards")
 
   const handleGenerateClick = () => {
     setGenError("")
@@ -56,7 +56,7 @@ export default function FlashcardsPage() {
       return
     }
 
-    if (!isPaidUser) {
+    if (!canUseFlashcards) {
       setPlanModalOpen(true)
       return
     }
@@ -160,7 +160,7 @@ export default function FlashcardsPage() {
           </Button>
         </div>
 
-        {!isPaidUser && (
+        {!canUseFlashcards && (
           <Card className="border-amber-500/30 bg-amber-500/10">
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />

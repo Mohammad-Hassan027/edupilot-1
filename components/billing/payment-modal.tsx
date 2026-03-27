@@ -164,8 +164,14 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
             if (isMountedRef.current) {
               setPaymentStatus("success")
             }
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("user-data-refresh"))
+            }
             setTimeout(async () => {
               await onPaymentSuccess()
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new Event("user-data-refresh"))
+              }
               onClose()
             }, 900)
           } catch (err) {
@@ -216,7 +222,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentSuccess }: Paymen
           <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-amber-500" />
           <div className="space-y-1">
             <p className="font-medium text-foreground">Please wait for a while while processing payment.</p>
-            <p className="text-sm text-muted-foreground">Razorpay checkout is opening. This screen stays clickable only after the checkout fully appears.</p>
+            <p className="text-sm text-muted-foreground">Razorpay checkout is opening. Please wait a moment while your payment window loads.</p>
           </div>
         </div>
       </div>
