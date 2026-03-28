@@ -160,20 +160,21 @@ export function PaymentModal({
           razorpay_signature: string
         }) => {
           try {
-            const activateResponse = await fetch("/api/payments/activate-plan", {
+            const verifyResponse = await fetch("/api/payments/verify-payment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 planId: plan.id,
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
               }),
             })
 
-            const activateData = await activateResponse.json().catch(() => ({}))
+            const verifyData = await verifyResponse.json().catch(() => ({}))
 
-            if (!activateResponse.ok || !activateData.success) {
-              throw new Error(activateData.error || "Plan activation failed")
+            if (!verifyResponse.ok || !verifyData.success) {
+              throw new Error(verifyData.error || "Payment verification failed")
             }
 
             setPaymentStatus("success")
@@ -186,7 +187,7 @@ export function PaymentModal({
               window.dispatchEvent(
                 new CustomEvent("user-data-refresh", {
                   detail: {
-                    subscription: activateData.subscription ?? null,
+                    subscription: verifyData.subscription ?? null,
                   },
                 })
               )
@@ -195,41 +196,6 @@ export function PaymentModal({
             await onPaymentSuccess()
             onClose()
             setIsOpeningCheckout(false)
-
-            fetch("/api/payments/verify-payment", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                planId: plan.id,
-              }),
-            })
-              .then(async (res) => {
-                const data = await res.json().catch(() => ({}))
-                if (!res.ok || !data.success) {
-                  console.error("[PaymentModal] Background verify failed:", data)
-                  return
-                }
-
-                if (typeof window !== "undefined") {
-                  try {
-                    localStorage.setItem("edupilot-user-refresh", String(Date.now()))
-                  } catch {}
-
-                  window.dispatchEvent(
-                    new CustomEvent("user-data-refresh", {
-                      detail: {
-                        subscription: data.subscription ?? activateData.subscription ?? null,
-                      },
-                    })
-                  )
-                }
-              })
-              .catch((err) => {
-                console.error("[PaymentModal] Background verify error:", err)
-              })
           } catch (err) {
             setError(
               err instanceof Error ? err.message : "Payment activation failed"

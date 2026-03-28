@@ -6,7 +6,7 @@ export async function POST() {
   return NextResponse.json(
     {
       success: false,
-      error: "Direct plan activation is disabled. Verify Razorpay payment first.",
+      error: "Direct plan activation is disabled. Complete payment verification first.",
     },
     { status: 400 }
   )

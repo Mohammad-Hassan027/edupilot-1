@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
-import crypto from "crypto"
 import { getUser } from "@/lib/auth-server"
 import {
   activatePlanSubscription,
@@ -10,7 +9,7 @@ import {
   createSubscription,
   getSubscription,
 } from "@/lib/database"
-import { fetchRazorpayPayment } from "@/lib/payments"
+import { fetchRazorpayPayment, verifyRazorpaySignature } from "@/lib/payments"
 
 export async function POST(req: Request) {
   try {
@@ -38,13 +37,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Invalid plan selected" }, { status: 400 })
     }
 
-    const sign = `${razorpay_order_id}|${razorpay_payment_id}`
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY!)
-      .update(sign)
-      .digest("hex")
+    const isValidSignature = verifyRazorpaySignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    )
 
-    if (expectedSignature !== razorpay_signature) {
+    if (!isValidSignature) {
       await updatePaymentRecord(razorpay_order_id, {
         razorpay_payment_id,
         razorpay_signature,
@@ -54,21 +53,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Invalid payment signature" }, { status: 400 })
     }
 
-    const razorpayPayment = await fetchRazorpayPayment(razorpay_payment_id).catch(() => null)
-    const paymentStatus = typeof razorpayPayment?.status === "string" ? razorpayPayment.status : null
-    const paymentCaptured = paymentStatus === "captured" || paymentStatus === "authorized"
+    const payment = await fetchRazorpayPayment(razorpay_payment_id)
 
-    if (!paymentCaptured) {
+    if (!payment || payment.order_id !== razorpay_order_id) {
       await updatePaymentRecord(razorpay_order_id, {
         razorpay_payment_id,
         razorpay_signature,
         status: "failed",
       }).catch(() => {})
 
-      return NextResponse.json(
-        { success: false, error: "Payment was not captured successfully by Razorpay." },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: "Payment order mismatch" }, { status: 400 })
+    }
+
+    if (!["captured", "authorized"].includes(payment.status)) {
+      await updatePaymentRecord(razorpay_order_id, {
+        razorpay_payment_id,
+        razorpay_signature,
+        status: "failed",
+      }).catch(() => {})
+
+      return NextResponse.json({ success: false, error: `Payment is ${payment.status}. Please complete the test payment.` }, { status: 400 })
     }
 
     const existingSubscription = await getSubscription(user.id)
@@ -80,6 +84,8 @@ export async function POST(req: Request) {
       razorpay_payment_id,
       razorpay_signature,
       status: "captured",
+    }).catch((error) => {
+      console.error("[verify-payment] Payment record update warning:", error)
     })
 
     await activatePlanSubscription(user.id, planId)
@@ -88,8 +94,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `You are on ${planId === "premium" ? "Premium" : "Pro"}`,
+      message: `${planId === "premium" ? "Premium" : "Pro"} plan activated successfully`,
       subscription,
+      paymentStatus: payment.status,
     })
   } catch (error) {
     console.error("[verify-payment] Error:", error)
