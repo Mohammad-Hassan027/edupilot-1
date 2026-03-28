@@ -90,7 +90,19 @@ async function fetchUserProfile(): Promise<UserPayload | null> {
     throw new Error(json?.error || "Failed to load user data")
   }
 
-  return (json.data ?? {}) as UserPayload
+  const raw = json?.data ?? {}
+
+  if (raw && typeof raw === "object" && "user_id" in raw && "full_name" in raw) {
+    return {
+      profile: raw as UserPayload["profile"],
+      credits: null,
+      subscription: null,
+      email: null,
+      authName: (raw as { full_name?: string | null }).full_name ?? null,
+    }
+  }
+
+  return raw as UserPayload
 }
 
 export function UserDataProvider({ children }: { children: ReactNode }) {

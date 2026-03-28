@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server"
 import { getUser as getCurrentUser } from "@/lib/auth-server"
-import { getProfile, createProfile, upsertProfile } from "@/lib/database"
+import {
+  getProfile,
+  createProfile,
+  upsertProfile,
+  getCredits,
+  createCredits,
+  getSubscription,
+  createSubscription,
+} from "@/lib/database"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
+
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
@@ -12,7 +22,6 @@ export async function GET() {
     }
 
     let profile = await getProfile(user.id)
-
     if (!profile) {
       profile = await createProfile(
         user.id,
@@ -21,8 +30,33 @@ export async function GET() {
       )
     }
 
-    return NextResponse.json({ success: true, data: profile })
+    let credits = await getCredits(user.id)
+    if (!credits) {
+      credits = await createCredits(user.id)
+    }
+
+    let subscription = await getSubscription(user.id)
+    if (!subscription) {
+      subscription = await createSubscription(user.id)
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        profile,
+        credits,
+        subscription,
+        email: user.email ?? null,
+        authName:
+          profile?.full_name ||
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email?.split("@")[0] ||
+          null,
+      },
+    })
   } catch (error) {
+    console.error("[user/profile][GET]", error)
     return NextResponse.json(
       {
         success: false,
@@ -45,8 +79,7 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = {}
 
     if ("full_name" in body) {
-      updates.full_name =
-        typeof body.full_name === "string" ? body.full_name.trim() : null
+      updates.full_name = typeof body.full_name === "string" ? body.full_name.trim() : null
     }
 
     if ("bio" in body) {
@@ -69,13 +102,14 @@ export async function PATCH(request: Request) {
             name: updates.full_name ?? "",
           },
         })
-      } catch {
-        // profile save should still succeed even if auth metadata sync fails
+      } catch (metadataError) {
+        console.error("[user/profile][PATCH][metadata-sync]", metadataError)
       }
     }
 
     return NextResponse.json({ success: true, data: profile })
   } catch (error) {
+    console.error("[user/profile][PATCH]", error)
     return NextResponse.json(
       {
         success: false,
