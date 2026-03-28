@@ -40,8 +40,8 @@ export default function QuizPage() {
   const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
-  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
-  const currentQuestion = questions[currentIndex]
+  // const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
+  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : null  
   const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
   const correctCount = answers.filter((a, i) => a === questions[i]?.answer).length
   const score = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0
@@ -154,7 +154,7 @@ export default function QuizPage() {
             <p className="text-muted-foreground">Enter a topic and let AI create a personalized quiz for you</p>
           </div>
 
-          {activePlanName ? (
+          {subscription?.plan_id === "premium" ? (
             <Card className="border-emerald-500/30 bg-emerald-500/10">
               <CardContent className="flex items-start gap-3 p-4 text-sm">
                 <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
