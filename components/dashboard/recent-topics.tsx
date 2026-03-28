@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Calendar,
-  Clock,
   FileText,
   HelpCircle,
   Layers,
@@ -35,17 +34,6 @@ const featureConfig: Record<string, { icon: typeof FileText; label: string; colo
   ai_voice: { icon: Mic, label: "AI Voice", color: "text-sky-500", href: "/ai-voice" },
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "Just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
-}
-
 function getTopic(entry: ActivityEntry) {
   const meta = entry.metadata as Record<string, unknown> | null
 
@@ -64,6 +52,10 @@ function getHref(entry: ActivityEntry) {
 
   if (entry.feature === "notes") {
     return `/notes?saved=${entry.id}`
+  }
+
+  if (entry.feature === "flashcards") {
+    return `/flashcards?set=${entry.id}`
   }
 
   return featureConfig[entry.feature]?.href || "/dashboard"
@@ -96,6 +88,7 @@ export function RecentTopics() {
           </Link>
         </div>
       </CardHeader>
+
       <CardContent>
         {isLoading ? (
           <div className="space-y-3">
@@ -104,7 +97,6 @@ export function RecentTopics() {
                 <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
                 <div className="flex-1 space-y-1.5">
                   <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/3" />
                 </div>
               </div>
             ))}
@@ -139,13 +131,11 @@ export function RecentTopics() {
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary group-hover:bg-background transition-colors shrink-0">
                       <Icon className={`h-4 w-4 ${cfg.color}`} />
                     </div>
+
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate capitalize">{topic}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Clock className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">{timeAgo(entry.created_at)}</span>
-                      </div>
                     </div>
+
                     <Badge variant="secondary" className="text-xs shrink-0">
                       {cfg.label}
                     </Badge>

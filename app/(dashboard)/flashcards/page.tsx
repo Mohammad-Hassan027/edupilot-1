@@ -20,7 +20,6 @@ import {
   Crown,
   Layers,
   History,
-  Clock3,
   Eye,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -53,16 +52,16 @@ const DEMO_CARD: Flashcard = {
   mastered: false,
 }
 
-function formatRelativeTime(value: string) {
-  const diff = Date.now() - new Date(value).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "Just now"
-  if (mins < 60) return `${mins} min ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} hr ago`
-  const days = Math.floor(hours / 24)
-  return `${days} day${days > 1 ? "s" : ""} ago`
-}
+// function formatRelativeTime(value: string) {
+//   const diff = Date.now() - new Date(value).getTime()
+//   const mins = Math.floor(diff / 60000)
+//   if (mins < 1) return "Just now"
+//   if (mins < 60) return `${mins} min ago`
+//   const hours = Math.floor(mins / 60)
+//   if (hours < 24) return `${hours} hr ago`
+//   const days = Math.floor(hours / 24)
+//   return `${days} day${days > 1 ? "s" : ""} ago`
+// }
 
 export default function FlashcardsPage() {
   const { subscription, isLoading, error, email } = useUser()
@@ -458,10 +457,6 @@ export default function FlashcardsPage() {
                                 <Badge variant="secondary" className="text-[11px]">
                                   {item.card_count} cards
                                 </Badge>
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Clock3 className="h-3 w-3" />
-                                  {formatRelativeTime(item.created_at)}
-                                </span>
                               </div>
                             </div>
                           </div>
