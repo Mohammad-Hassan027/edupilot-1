@@ -79,7 +79,7 @@ export default function BillingPage() {
     ? `${currentPlan.name} trial is active${trialDaysLeft !== null ? ` · ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left` : ""}`
     : isPaidActive
       ? `${currentPlan.name} plan is active on your account`
-      : "You are currently on the Free plan"
+      : "Your account is ready for an upgrade"
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">

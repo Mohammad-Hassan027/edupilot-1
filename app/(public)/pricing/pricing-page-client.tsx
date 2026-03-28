@@ -65,10 +65,10 @@ export default function PricingPage() {
               You came here to unlock <span className="font-semibold">{featureLabel}</span>.
             </p>
           ) : null}
-          {user ? (
+          {user && currentPlanName !== "Free" ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm text-foreground">
               <Crown className="h-4 w-4 text-emerald-500" />
-              You are currently on <span className="font-semibold">{currentPlanName}</span>.
+              Active plan: <span className="font-semibold">{currentPlanName}</span>
             </div>
           ) : null}
         </div>
