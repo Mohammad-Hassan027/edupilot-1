@@ -40,12 +40,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const flashcards = await generateFlashcards(topic.trim(), Math.min(Number(count) || 10, 20))
+    const normalizedTopic = topic.trim()
+    const totalCards = Math.min(Number(count) || 10, 20)
+    const flashcards = await generateFlashcards(normalizedTopic, totalCards)
 
-    logUsage(user.id, "flashcards", "flashcards_generated", {
-      topic,
+    await logUsage(user.id, "flashcards", "flashcards_generated", {
+      topic: normalizedTopic,
       count: flashcards.length,
       planId: subscription?.plan_id,
+      firstCardFront: flashcards[0]?.front || null,
+      lastCardFront: flashcards[flashcards.length - 1]?.front || null,
+      lastGeneratedAt: new Date().toISOString(),
     }).catch(console.error)
 
     return NextResponse.json({ success: true, flashcards })

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { getUser } from "@/lib/auth-server"
 import { getSavedNotes } from "@/lib/database"
-import { BookOpen, ExternalLink } from "lucide-react"
+import { ExternalLink, FileText } from "lucide-react"
 
 export async function SavedNotesCard() {
   const user = await getUser()
@@ -31,7 +31,7 @@ export async function SavedNotesCard() {
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <BookOpen className="h-4 w-4 text-primary" />
+                    <FileText className="h-4 w-4 text-primary" />
                     <span className="truncate">{note.source_title}</span>
                   </div>
                   <p className="mt-1 truncate text-xs text-muted-foreground">

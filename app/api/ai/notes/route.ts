@@ -259,20 +259,43 @@ export async function POST(req: NextRequest) {
     let savedNote = null
     let saveWarning: string | null = null
 
-    if (user) {
+    // if (user) {
+    //   try {
+    //     savedNote = await saveGeneratedNote(user.id, {
+    //       sourceType: sourceMode,
+    //       sourceTitle: generated.title || sourceTitle,
+    //       sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
+    //       sourceHint: generated.sourceHint || sourceHint,
+    //       tabs: generated.tabs,
+    //     })
+
+    //     await logUsage(user.id, "notes", "notes_generated", {
+    //       sourceMode,
+    //       title: generated.title || sourceTitle,
+    //       tabCount: generated.tabs.length,
+    //     })
+    //   } catch (saveError) {
+    //     console.error("[ai/notes] Save warning:", saveError)
+    //     saveWarning = saveError instanceof Error ? saveError.message : "Failed to save note history"
+    //   }
+    // }
+
+      if (user) {
       try {
+        await logUsage(user.id, "notes", "notes_generated", {
+          sourceMode,
+          title: generated.title || sourceTitle,
+          tabCount: generated.tabs.length,
+          sourceHint: generated.sourceHint || sourceHint,
+          lastGeneratedAt: new Date().toISOString(),
+        })
+
         savedNote = await saveGeneratedNote(user.id, {
           sourceType: sourceMode,
           sourceTitle: generated.title || sourceTitle,
           sourceLabel: sourceMode === "pdf" ? "PDF" : sourceMode === "spreadsheet" ? "Spreadsheet" : "Video Link",
           sourceHint: generated.sourceHint || sourceHint,
           tabs: generated.tabs,
-        })
-
-        await logUsage(user.id, "notes", "notes_generated", {
-          sourceMode,
-          title: generated.title || sourceTitle,
-          tabCount: generated.tabs.length,
         })
       } catch (saveError) {
         console.error("[ai/notes] Save warning:", saveError)

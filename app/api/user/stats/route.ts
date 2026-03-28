@@ -16,6 +16,13 @@ type ActivitySessionRow = {
   last_seen_at: string | null
 }
 
+type SavedNoteRow = {
+  id: string
+  created_at: string
+  source_title: string | null
+  source_type: string | null
+}
+
 type ChartPoint = {
   label: string
   count: number
@@ -39,7 +46,11 @@ function formatHours(seconds: number) {
   return (seconds / 3600).toFixed(1)
 }
 
-function buildWeeklyActivity(logs: UsageLogRow[], sessions: ActivitySessionRow[]): ChartPoint[] {
+function buildWeeklyActivity(
+  logs: UsageLogRow[],
+  sessions: ActivitySessionRow[],
+  savedNotes: SavedNoteRow[]
+): ChartPoint[] {
   const today = startOfDay(new Date())
 
   return Array.from({ length: 7 }).map((_, index) => {
@@ -49,15 +60,20 @@ function buildWeeklyActivity(logs: UsageLogRow[], sessions: ActivitySessionRow[]
 
     const usageCount = logs.filter((log) => toDayKey(log.created_at) === key).length
     const sessionCount = sessions.filter((session) => toDayKey(session.started_at) === key).length
+    const savedNotesCount = savedNotes.filter((note) => toDayKey(note.created_at) === key).length
 
     return {
       label: current.toLocaleString("en-US", { weekday: "short" }),
-      count: usageCount + sessionCount,
+      count: usageCount + sessionCount + savedNotesCount,
     }
   })
 }
 
-function buildMonthlyActivity(logs: UsageLogRow[], sessions: ActivitySessionRow[]): ChartPoint[] {
+function buildMonthlyActivity(
+  logs: UsageLogRow[],
+  sessions: ActivitySessionRow[],
+  savedNotes: SavedNoteRow[]
+): ChartPoint[] {
   const now = new Date()
 
   return Array.from({ length: 6 }).map((_, index) => {
@@ -75,14 +91,19 @@ function buildMonthlyActivity(logs: UsageLogRow[], sessions: ActivitySessionRow[
       return startedAt.getFullYear() === year && startedAt.getMonth() === month
     }).length
 
+    const savedNotesCount = savedNotes.filter((note) => {
+      const createdAt = new Date(note.created_at)
+      return createdAt.getFullYear() === year && createdAt.getMonth() === month
+    }).length
+
     return {
       label: formatMonthLabel(current),
-      count: usageCount + sessionCount,
+      count: usageCount + sessionCount + savedNotesCount,
     }
   })
 }
 
-function getFeatureUsageCounts(logs: UsageLogRow[]) {
+function getFeatureUsageCounts(logs: UsageLogRow[], savedNotes: SavedNoteRow[]) {
   const counts = {
     ai_tutor: 0,
     notes: 0,
@@ -99,6 +120,10 @@ function getFeatureUsageCounts(logs: UsageLogRow[]) {
     if (log.feature === "quiz") counts.quiz += 1
     if (log.feature === "study_plan") counts.planner += 1
     if (log.feature === "ai_voice") counts.ai_voice += 1
+  }
+
+  if (savedNotes.length > counts.notes) {
+    counts.notes = savedNotes.length
   }
 
   return counts
@@ -123,6 +148,7 @@ export async function GET() {
     const [
       { data: logs, error: logsError },
       { data: sessions, error: sessionsError },
+      { data: savedNotes, error: savedNotesError },
     ] = await Promise.all([
       admin
         .from("usage_logs")
@@ -134,6 +160,11 @@ export async function GET() {
         .select("duration_seconds, started_at, last_seen_at")
         .eq("user_id", user.id)
         .order("started_at", { ascending: false }),
+      admin
+        .from("saved_notes")
+        .select("id, created_at, source_title, source_type")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
     ])
 
     const usageTableMissing =
@@ -152,8 +183,18 @@ export async function GET() {
       throw new Error(sessionsError.message)
     }
 
+    const savedNotesTableMissing =
+      savedNotesError?.message?.toLowerCase().includes("saved_notes") ||
+      savedNotesError?.message?.toLowerCase().includes("column") ||
+      false
+
+    if (savedNotesError && !savedNotesTableMissing) {
+      throw new Error(savedNotesError.message)
+    }
+
     const allLogs = usageTableMissing ? [] : ((logs || []) as UsageLogRow[])
     const allSessions = sessionTableMissing ? [] : ((sessions || []) as ActivitySessionRow[])
+    const allSavedNotes = savedNotesTableMissing ? [] : ((savedNotes || []) as SavedNoteRow[])
 
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -161,8 +202,8 @@ export async function GET() {
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
     const quizzesTaken = allLogs.filter((log) => log.feature === "quiz").length
-    const totalActivities = allLogs.length
-    const featureUsage = getFeatureUsageCounts(allLogs)
+    const totalActivities = allLogs.length + allSavedNotes.length
+    const featureUsage = getFeatureUsageCounts(allLogs, allSavedNotes)
 
     const thisWeekLogs = allLogs.filter((log) => new Date(log.created_at) >= oneWeekAgo)
     const lastWeekLogs = allLogs.filter(
@@ -174,8 +215,14 @@ export async function GET() {
       (session) => new Date(session.started_at) >= twoWeeksAgo && new Date(session.started_at) < oneWeekAgo
     )
 
+    const thisWeekSavedNotes = allSavedNotes.filter((note) => new Date(note.created_at) >= oneWeekAgo)
+    const lastWeekSavedNotes = allSavedNotes.filter(
+      (note) => new Date(note.created_at) >= twoWeeksAgo && new Date(note.created_at) < oneWeekAgo
+    )
+
     const thisMonthSessions = allSessions.filter((session) => new Date(session.started_at) >= currentMonthStart)
     const thisMonthLogs = allLogs.filter((log) => new Date(log.created_at) >= currentMonthStart)
+    const thisMonthSavedNotes = allSavedNotes.filter((note) => new Date(note.created_at) >= currentMonthStart)
 
     const thisWeekSeconds = thisWeekSessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0)
     const lastWeekSeconds = lastWeekSessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0)
@@ -190,20 +237,20 @@ export async function GET() {
             ((thisWeekSeconds - lastWeekSeconds) / lastWeekSeconds) * 100
           )}%`
 
-    const weeklyActivity = buildWeeklyActivity(allLogs, allSessions)
-    const monthlyActivity = buildMonthlyActivity(allLogs, allSessions)
+    const weeklyActivity = buildWeeklyActivity(allLogs, allSessions, allSavedNotes)
+    const monthlyActivity = buildMonthlyActivity(allLogs, allSessions, allSavedNotes)
 
     const activeDaysThisWeek = new Set([
       ...thisWeekSessions.map((session) => toDayKey(session.started_at)),
       ...thisWeekLogs.map((log) => toDayKey(log.created_at)),
+      ...thisWeekSavedNotes.map((note) => toDayKey(note.created_at)),
     ]).size
 
     const activeDaysThisMonth = new Set([
       ...thisMonthSessions.map((session) => toDayKey(session.started_at)),
       ...thisMonthLogs.map((log) => toDayKey(log.created_at)),
+      ...thisMonthSavedNotes.map((note) => toDayKey(note.created_at)),
     ]).size
-
-    const engagementLevel = getEngagementLevel(thisWeekSeconds, activeDaysThisWeek, thisWeekLogs.length)
 
     return NextResponse.json({
       learningHours: formatHours(thisWeekSeconds),
@@ -213,14 +260,18 @@ export async function GET() {
       quizzesTaken,
       totalActivities,
       weekTrend,
-      thisWeekCount: thisWeekLogs.length,
-      lastWeekCount: lastWeekLogs.length,
+      thisWeekCount: thisWeekLogs.length + thisWeekSavedNotes.length,
+      lastWeekCount: lastWeekLogs.length + lastWeekSavedNotes.length,
       activeDaysThisWeek,
       activeDaysThisMonth,
       weeklyActivity,
       monthlyActivity,
       featureUsage,
-      engagementLevel,
+      engagementLevel: getEngagementLevel(
+        thisWeekSeconds,
+        activeDaysThisWeek,
+        thisWeekLogs.length + thisWeekSavedNotes.length
+      ),
     })
   } catch (err) {
     console.error("[user/stats] Error:", err)
@@ -259,7 +310,7 @@ export async function GET() {
         engagementLevel: "Low",
         error: "Failed to load stats",
       },
-      { status: 200 }
+      { status: 500 }
     )
   }
 }

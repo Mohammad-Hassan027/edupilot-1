@@ -1,33 +1,16 @@
-// export const dynamic = "force-dynamic"
-// import { NextResponse } from "next/server"
-// import { getUser } from "@/lib/auth-server"
-// import { getSupabaseAdmin } from "@/lib/supabase-server"
-
-// export async function GET() {
-//   try {
-//     const user = await getUser()
-//     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-//     const admin = await getSupabaseAdmin()
-
-//     const { data: logs } = await admin
-//       .from("usage_logs")
-//       .select("id, feature, action, metadata, created_at")
-//       .eq("user_id", user.id)
-//       .order("created_at", { ascending: false })
-//       .limit(20)
-
-//     return NextResponse.json({ activity: logs || [] })
-//   } catch (err) {
-//     console.error("[user/recent-activity]", err)
-//     return NextResponse.json({ activity: [] })
-//   }
-// }
 export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
+
+type ActivityItem = {
+  id: string
+  feature: string
+  action: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
 
 export async function GET() {
   try {
@@ -39,33 +22,92 @@ export async function GET() {
 
     const admin = await getSupabaseAdmin()
 
-    // const { data: sessions, error } = await admin
-    //   .from("chat_sessions")
-    //   .select("id, topic, title, last_message_at")
-    //   .eq("user_id", user.id)
-    //   .order("last_message_at", { ascending: false })
-    //   .limit(5)
-    const { data: sessions, error } = await admin
-      .from("chat_sessions")
-      .select("id, topic, title, last_message_at")
-      .eq("user_id", user.id)
-      .order("last_message_at", { ascending: false })
-      .limit(5)
+    const [
+      { data: sessions, error: sessionsError },
+      { data: logs, error: logsError },
+      { data: savedNotes, error: savedNotesError },
+    ] = await Promise.all([
+      admin
+        .from("chat_sessions")
+        .select("id, topic, title, last_message_at")
+        .eq("user_id", user.id)
+        .order("last_message_at", { ascending: false })
+        .limit(8),
+      admin
+        .from("usage_logs")
+        .select("id, feature, metadata, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      admin
+        .from("saved_notes")
+        .select("id, source_title, source_hint, source_label, source_type, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(8),
+    ])
 
-    if (error) {
-      console.error("[user/recent-activity]", error)
-      return NextResponse.json({ activity: [] })
+    if (sessionsError) {
+      console.error("[user/recent-activity] chat_sessions:", sessionsError)
     }
 
-    const activity = (sessions || []).map((s) => ({
-      id: s.id,
+    const logsTableMissing =
+      logsError?.message?.toLowerCase().includes("usage_logs") ||
+      logsError?.message?.toLowerCase().includes("column") ||
+      false
+
+    if (logsError && !logsTableMissing) {
+      console.error("[user/recent-activity] usage_logs:", logsError)
+    }
+
+    const savedNotesTableMissing =
+      savedNotesError?.message?.toLowerCase().includes("saved_notes") ||
+      savedNotesError?.message?.toLowerCase().includes("column") ||
+      false
+
+    if (savedNotesError && !savedNotesTableMissing) {
+      console.error("[user/recent-activity] saved_notes:", savedNotesError)
+    }
+
+    const chatActivity: ActivityItem[] = (sessions || []).map((session) => ({
+      id: session.id,
       feature: "ai_chat",
       action: "question_asked",
       metadata: {
-        topic: s.topic || s.title || "New Chat",
+        topic: session.topic || session.title || "New Chat",
       },
-      created_at: s.last_message_at,
+      created_at: session.last_message_at,
     }))
+
+    const usageActivity: ActivityItem[] = logsTableMissing
+      ? []
+      : (logs || []).map((log: any) => ({
+          id: log.id,
+          feature: log.feature,
+          action:
+            typeof log?.metadata?.action === "string"
+              ? log.metadata.action
+              : `${log.feature || "activity"}_used`,
+          metadata: log.metadata || null,
+          created_at: log.created_at,
+        }))
+
+    const noteActivity: ActivityItem[] = savedNotesTableMissing
+      ? []
+      : (savedNotes || []).map((note: any) => ({
+          id: note.id,
+          feature: "notes",
+          action: "notes_generated",
+          metadata: {
+            topic: note.source_title || note.source_label || note.source_type || "Saved Note",
+            sourceHint: note.source_hint || null,
+          },
+          created_at: note.created_at,
+        }))
+
+    const activity = [...chatActivity, ...usageActivity, ...noteActivity]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 20)
 
     return NextResponse.json({ activity })
   } catch (err) {

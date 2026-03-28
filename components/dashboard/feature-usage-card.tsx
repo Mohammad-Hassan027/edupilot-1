@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { BookOpen, Brain, Layers, Mic, Sparkles, HelpCircle } from "lucide-react"
+import { Calendar, FileText, HelpCircle, Layers, MessageSquareText, Mic } from "lucide-react"
 
 interface StatsResponse {
   featureUsage: {
@@ -18,11 +18,11 @@ interface StatsResponse {
 }
 
 const usageItems = [
-  { key: "ai_tutor", label: "AI Tutor", icon: Brain },
-  { key: "notes", label: "Notes", icon: BookOpen },
+  { key: "ai_tutor", label: "AI Tutor", icon: MessageSquareText },
+  { key: "notes", label: "Notes", icon: FileText },
   { key: "flashcards", label: "Flashcards", icon: Layers },
   { key: "quiz", label: "Quiz", icon: HelpCircle },
-  { key: "planner", label: "AI Planner", icon: Sparkles },
+  { key: "planner", label: "AI Planner", icon: Calendar },
   { key: "ai_voice", label: "AI Voice", icon: Mic },
 ] as const
 
