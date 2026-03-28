@@ -20,24 +20,19 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
   const admin = await getSupabaseAdmin()
-
-  const payload = {
-    id: userId,
-    user_id: userId,
-    full_name: fullName ?? email.split("@")[0],
-    email,
-    avatar_url: null,
-    bio: null,
-    updated_at: new Date().toISOString(),
-  }
-
   const { data, error } = await admin
     .from("profiles")
-    .upsert(payload, { onConflict: "user_id" })
+    .insert({
+      user_id: userId,
+      full_name: fullName ?? email.split("@")[0],
+      avatar_url: null,
+      bio: null,
+    })
     .select()
     .single()
 
@@ -51,35 +46,20 @@ export async function getProfile(userId: string) {
     .from("profiles")
     .select("*")
     .eq("user_id", userId)
-    .maybeSingle()
+    .single()
 
   if (error) return null
-  return (data ?? null) as Profile | null
+  return data as Profile
 }
 
 export async function upsertProfile(userId: string, updates: Partial<Profile>) {
   const admin = await getSupabaseAdmin()
-
-  const { data: existing, error: existingError } = await admin
-    .from("profiles")
-    .select("id,user_id,email,created_at")
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (existingError) {
-    throw new Error(`Profile lookup failed: ${existingError.message}`)
-  }
-
-  const payload = {
-    id: existing?.id ?? userId,
-    user_id: userId,
-    ...updates,
-    updated_at: new Date().toISOString(),
-  }
-
   const { data, error } = await admin
     .from("profiles")
-    .upsert(payload, { onConflict: "user_id" })
+    .upsert(
+      { user_id: userId, ...updates, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
     .select()
     .single()
 
@@ -230,6 +210,7 @@ async function syncSubscriptionPlanFromPayments(userId: string, planId: "free" |
   const payload = {
     user_id: userId,
     status: planId === "free" ? "free" : "trial",
+    plan: planId,
     plan_id: planId,
     trial_active: planId !== "free",
     trial_start: planId === "free" ? null : now.toISOString(),
@@ -351,7 +332,7 @@ export async function createPaymentRecord(
   planId: string
 ) {
   const admin = await getSupabaseAdmin()
-  const { data, error } = await admin
+  const primaryInsert = await admin
     .from("payments")
     .insert({
       user_id: userId,
@@ -363,12 +344,34 @@ export async function createPaymentRecord(
       status: "created",
       plan_id: planId,
       refunded: false,
+      updated_at: new Date().toISOString(),
+      provider: "razorpay",
     })
     .select()
     .single()
 
-  if (error) throw new Error(`Payment record creation failed: ${error.message}`)
-  return data
+  if (!primaryInsert.error) {
+    return primaryInsert.data
+  }
+
+  const fallbackInsert = await admin
+    .from("payments")
+    .insert({
+      user_id: userId,
+      amount,
+      currency: "INR",
+      status: "created",
+      plan_id: planId,
+      provider: `razorpay:${razorpayOrderId}`,
+    })
+    .select()
+    .single()
+
+  if (fallbackInsert.error) {
+    throw new Error(`Payment record creation failed: ${fallbackInsert.error.message}`)
+  }
+
+  return fallbackInsert.data
 }
 
 export async function updatePaymentRecord(
@@ -381,14 +384,34 @@ export async function updatePaymentRecord(
   }
 ) {
   const admin = await getSupabaseAdmin()
-  const { error } = await admin
+  const primaryUpdate = await admin
     .from("payments")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("razorpay_order_id", razorpayOrderId)
 
-  if (error) throw new Error(`Payment update failed: ${error.message}`)
+  if (!primaryUpdate.error) {
+    return
+  }
+
+  const fallbackPayload: Record<string, unknown> = {
+    status: updates.status,
+    provider: updates.razorpay_payment_id
+      ? `razorpay:${razorpayOrderId}:${updates.razorpay_payment_id}`
+      : `razorpay:${razorpayOrderId}`,
+  }
+
+  const fallbackUpdate = await admin
+    .from("payments")
+    .update(fallbackPayload)
+    .eq("provider", `razorpay:${razorpayOrderId}`)
+
+  if (fallbackUpdate.error) {
+    throw new Error(`Payment update failed: ${fallbackUpdate.error.message}`)
+  }
 }
 
+
+// ─── Saved Notes ───────────────────────────────────────────────────────────
 // ─── Saved Notes ───────────────────────────────────────────────────────────
 
 function isMissingColumnError(message?: string | null) {

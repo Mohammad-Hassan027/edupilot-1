@@ -91,8 +91,6 @@ export function PaymentModal({
     }
   }, [isOpen])
 
-  const verificationAmountLabel = "₹1"
-
   const planAmountLabel = useMemo(() => {
     return plan.price === "0" ? "Free" : `₹${plan.price}${plan.period}`
   }, [plan.period, plan.price])
@@ -136,7 +134,7 @@ export function PaymentModal({
         amount: orderData.amount,
         currency: orderData.currency,
         name: "EduPilot",
-        description: `${plan.name} Plan - ₹1 verification for 14-day free trial`,
+        description: `${plan.name} Plan - 14-day free trial`,
         prefill: {
           email: email ?? "",
           name: profile?.full_name ?? "",
@@ -233,7 +231,7 @@ export function PaymentModal({
         <DialogHeader>
           <DialogTitle>Activate {plan.name} Plan</DialogTitle>
           <DialogDescription>
-            Complete the ₹1 Razorpay verification payment to start your 14-day free trial and
+            Complete the Razorpay test payment to start your 14-day free trial and
             unlock the selected plan instantly across the app.
           </DialogDescription>
         </DialogHeader>
@@ -246,20 +244,15 @@ export function PaymentModal({
                 <p className="text-xl font-semibold text-foreground">{plan.name}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-muted-foreground">Plan price</p>
+                <p className="text-sm text-muted-foreground">Price</p>
                 <p className="text-lg font-bold text-foreground">{planAmountLabel}</p>
               </div>
             </div>
 
-            <div className="mt-3 space-y-3 border-t border-border pt-3 text-sm text-muted-foreground">
-              <div className="flex items-center justify-between gap-4 rounded-md border border-border/60 bg-background/50 px-3 py-2">
-                <span>Verification charge</span>
-                <span className="font-semibold text-foreground">{verificationAmountLabel}</span>
-              </div>
-              <p>
-                Your plan starts with a <span className="font-medium text-foreground">14-day free trial</span>
-                {}after successful ₹1 payment verification.
-              </p>
+            <div className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+              Your plan starts with a{" "}
+              <span className="font-medium text-foreground">14-day free trial</span>{" "}
+              after successful payment verification.
             </div>
           </div>
 
@@ -320,7 +313,7 @@ export function PaymentModal({
               ) : (
                 <>
                   <CreditCard className="h-4 w-4" />
-                  Pay ₹1 in Test Mode
+                  Pay in Test Mode
                 </>
               )}
             </Button>
