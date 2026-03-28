@@ -234,6 +234,10 @@ export default function QuizPage() {
       setHistory((prev) => [savedAttempt, ...prev.filter((item) => item.id !== savedAttempt.id)].slice(0, 12))
 
       if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("quiz-score-updated"))
+      }
+
+      if (typeof window !== "undefined") {
         const url = new URL(window.location.href)
         url.searchParams.set("attempt", savedAttempt.id)
         window.history.replaceState({}, "", url.toString())
