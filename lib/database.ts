@@ -20,19 +20,24 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
-
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
   const admin = await getSupabaseAdmin()
+
+  const payload = {
+    id: userId,
+    user_id: userId,
+    full_name: fullName ?? email.split("@")[0],
+    email,
+    avatar_url: null,
+    bio: null,
+    updated_at: new Date().toISOString(),
+  }
+
   const { data, error } = await admin
     .from("profiles")
-    .insert({
-      user_id: userId,
-      full_name: fullName ?? email.split("@")[0],
-      avatar_url: null,
-      bio: null,
-    })
+    .upsert(payload, { onConflict: "user_id" })
     .select()
     .single()
 
@@ -46,20 +51,35 @@ export async function getProfile(userId: string) {
     .from("profiles")
     .select("*")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (error) return null
-  return data as Profile
+  return (data ?? null) as Profile | null
 }
 
 export async function upsertProfile(userId: string, updates: Partial<Profile>) {
   const admin = await getSupabaseAdmin()
+
+  const { data: existing, error: existingError } = await admin
+    .from("profiles")
+    .select("id,user_id,email,created_at")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (existingError) {
+    throw new Error(`Profile lookup failed: ${existingError.message}`)
+  }
+
+  const payload = {
+    id: existing?.id ?? userId,
+    user_id: userId,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  }
+
   const { data, error } = await admin
     .from("profiles")
-    .upsert(
-      { user_id: userId, ...updates, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    )
+    .upsert(payload, { onConflict: "user_id" })
     .select()
     .single()
 
@@ -368,7 +388,6 @@ export async function updatePaymentRecord(
 
   if (error) throw new Error(`Payment update failed: ${error.message}`)
 }
-
 
 // ─── Saved Notes ───────────────────────────────────────────────────────────
 // ─── Saved Notes ───────────────────────────────────────────────────────────
