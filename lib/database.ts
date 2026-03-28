@@ -205,6 +205,22 @@ export async function deleteSavedVoiceHistory(userId: string, historyId: string)
   return { success: true }
 }
 
+create table if not exists public.saved_quiz_attempts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  topic text not null,
+  total_questions integer not null default 0,
+  score integer not null default 0,
+  percentage numeric(5,2) not null default 0,
+  questions jsonb not null default '[]'::jsonb,
+  answers jsonb not null default '[]'::jsonb,
+  created_at timestamp without time zone not null default now(),
+  updated_at timestamp without time zone not null default now()
+);
+
+create index if not exists idx_saved_quiz_attempts_user_created_at
+  on public.saved_quiz_attempts (user_id, created_at desc);
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {

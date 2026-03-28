@@ -1,367 +1,542 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Brain, Sparkles, Check, X, RefreshCw, Trophy, AlertTriangle, ChevronRight, BookOpen, ArrowRight, Loader2, Crown } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { LoginGateModal } from "@/components/login-gate-modal"
+import { Progress } from "@/components/ui/progress"
+import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
+import { LoginGateModal } from "@/components/login-gate-modal"
 
-interface Question {
-  question: string
-  options: string[]
-  answer: string
-  explanation: string
+type QuizOption = {
+  id: string
+  text: string
 }
 
-type QuizState = "setup" | "active" | "results"
+type QuizQuestion = {
+  id: string
+  question: string
+  options: QuizOption[]
+  correctOptionId: string
+  explanation?: string | null
+}
+
+type QuizAnswer = {
+  questionId: string
+  selectedOptionId: string | null
+  isCorrect?: boolean
+}
+
+type QuizAttempt = {
+  id: string
+  topic: string
+  total_questions: number
+  score: number
+  percentage: number
+  questions: QuizQuestion[]
+  answers: QuizAnswer[]
+  created_at: string
+}
 
 export default function QuizPage() {
-  const { subscription, refetch, isLoading, error: userError, email } = useUser()
-  const [quizState, setQuizState] = useState<QuizState>("setup")
-  const [topic, setTopic] = useState("")
-  const [questionCount, setQuestionCount] = useState("5")
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
-  const [isAnswered, setIsAnswered] = useState(false)
-  const [answers, setAnswers] = useState<string[]>([])
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState("")
+  const { subscription, isLoading, error, email } = useUser()
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [pendingGenerateClick, setPendingGenerateClick] = useState(false)
+
+  const [topic, setTopic] = useState("")
+  const [count, setCount] = useState("5")
+  const [generating, setGenerating] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  const [quizTopic, setQuizTopic] = useState("")
+  const [questions, setQuestions] = useState<QuizQuestion[]>([])
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  const [submittedAttempt, setSubmittedAttempt] = useState<QuizAttempt | null>(null)
+
+  const [history, setHistory] = useState<QuizAttempt[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null)
+  const [pageError, setPageError] = useState("")
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
-  // const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
-  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : null  
-  const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
-  const correctCount = answers.filter((a, i) => a === questions[i]?.answer).length
-  const score = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0
+  const activePlanName =
+    subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
-  const handleGenerateQuiz = async () => {
-    if (!topic.trim()) return
-    if (isLoading) {
-      setPendingGenerateClick(true)
+  useEffect(() => {
+    void loadHistory()
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const attemptId = new URLSearchParams(window.location.search).get("attempt")
+    if (!attemptId) return
+
+    const existing = history.find((item) => item.id === attemptId)
+    if (existing) {
+      openAttempt(existing)
       return
     }
 
-    if (userError === "not_authenticated" || !email) {
+    if (!historyLoading) {
+      void loadAttempt(attemptId)
+    }
+  }, [history, historyLoading])
+
+  const scorePreview = useMemo(() => {
+    if (!submittedAttempt) return null
+    return `${submittedAttempt.score}/${submittedAttempt.total_questions}`
+  }, [submittedAttempt])
+
+  async function loadHistory() {
+    try {
+      setHistoryLoading(true)
+      const response = await fetch("/api/ai/quiz", { cache: "no-store" })
+      const data = await response.json().catch(() => ({ attempts: [] }))
+      if (response.ok) {
+        setHistory(data.attempts || [])
+      }
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  async function loadAttempt(attemptId: string) {
+    try {
+      const response = await fetch(`/api/ai/quiz/${attemptId}`, { cache: "no-store" })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.attempt) return
+
+      const attempt = data.attempt as QuizAttempt
+      setHistory((prev) => (prev.some((item) => item.id === attempt.id) ? prev : [attempt, ...prev]))
+      openAttempt(attempt)
+    } catch {
+      //
+    }
+  }
+
+  function openAttempt(attempt: QuizAttempt) {
+    setSubmittedAttempt(attempt)
+    setQuizTopic(attempt.topic)
+    setQuestions(attempt.questions)
+    setCurrentAttemptId(attempt.id)
+
+    const mapped: Record<string, string> = {}
+    for (const answer of attempt.answers || []) {
+      if (answer.selectedOptionId) {
+        mapped[answer.questionId] = answer.selectedOptionId
+      }
+    }
+    setSelectedAnswers(mapped)
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("attempt", attempt.id)
+      window.history.replaceState({}, "", url.toString())
+    }
+  }
+
+  async function handleGenerateQuiz() {
+    setPageError("")
+
+    if (isLoading) return
+    if (error === "not_authenticated" || !email) {
       setShowLoginModal(true)
       return
     }
-
     if (!canUseQuiz) {
       window.location.href = "/pricing?plan=premium&feature=quiz"
       return
     }
+    if (!topic.trim()) return
 
-    setIsGenerating(true)
-    setError("")
     try {
-      const res = await fetch("/api/ai/quiz", {
+      setGenerating(true)
+      setSubmittedAttempt(null)
+      setCurrentAttemptId(null)
+
+      const response = await fetch("/api/ai/quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), count: parseInt(questionCount, 10) }),
+        body: JSON.stringify({ topic: topic.trim(), count: Number(count) }),
       })
-      const data = await res.json()
 
-      if (!res.ok) {
-        if (data.code === "UNAUTHORIZED" || data.requiresLogin) { setShowLoginModal(true); return }
-        if (data.code === "NO_CREDITS" || data.requiresUpgrade) { window.location.href = "/pricing?plan=premium&feature=quiz"; return }
-        setError(data.error || "Failed to generate quiz. Please try again.")
-        return
+      const data = await response.json()
+
+      if (!response.ok) {
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          return
+        }
+        if (data.requiresUpgrade) {
+          window.location.href = "/pricing?plan=premium&feature=quiz"
+          return
+        }
+        throw new Error(data.error || "Failed to generate quiz")
       }
 
-      setQuestions(data.questions)
-      setCurrentIndex(0)
-      setSelectedAnswer(null)
-      setIsAnswered(false)
-      setAnswers([])
-      setQuizState("active")
-    } catch {
-      setError("Network error. Please check your connection.")
+      setQuizTopic(data.quiz.topic)
+      setQuestions(data.quiz.questions || [])
+      setSelectedAnswers({})
+      setSubmittedAttempt(null)
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href)
+        url.searchParams.delete("attempt")
+        window.history.replaceState({}, "", url.toString())
+      }
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : "Failed to generate quiz")
     } finally {
-      setIsGenerating(false)
+      setGenerating(false)
     }
   }
 
-
-  useEffect(() => {
-    if (!pendingGenerateClick || isLoading || !topic.trim()) return
-    setPendingGenerateClick(false)
-    void handleGenerateQuiz()
-  }, [pendingGenerateClick, isLoading, topic, userError, email, canUseQuiz])
-
-  const handleSubmitAnswer = () => {
-    if (selectedAnswer === null) return
-    setAnswers((prev) => [...prev, selectedAnswer])
-    setIsAnswered(true)
+  function handleSelect(questionId: string, optionId: string) {
+    if (submittedAttempt) return
+    setSelectedAnswers((prev) => ({ ...prev, [questionId]: optionId }))
   }
 
-  const handleNextQuestion = () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-      setSelectedAnswer(null)
-      setIsAnswered(false)
-    } else {
-      setQuizState("results")
-      saveQuizScore()
-    }
-  }
+  async function handleSubmitQuiz() {
+    if (!questions.length) return
 
-  const saveQuizScore = async () => {
     try {
-      await fetch("/api/usage/track", {
+      setSubmitting(true)
+      const answers = questions.map((question) => ({
+        questionId: question.id,
+        selectedOptionId: selectedAnswers[question.id] || null,
+      }))
+
+      const response = await fetch("/api/ai/quiz/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feature: "quiz", action: "quiz_completed", metadata: { topic, score, total: questions.length, count: questions.length } }),
+        body: JSON.stringify({
+          topic: quizTopic,
+          questions,
+          answers,
+        }),
       })
-    } catch {}
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit quiz")
+      }
+
+      const savedAttempt = data.result.savedAttempt as QuizAttempt
+      setSubmittedAttempt(savedAttempt)
+      setCurrentAttemptId(savedAttempt.id)
+      setHistory((prev) => [savedAttempt, ...prev.filter((item) => item.id !== savedAttempt.id)].slice(0, 12))
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href)
+        url.searchParams.set("attempt", savedAttempt.id)
+        window.history.replaceState({}, "", url.toString())
+      }
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : "Failed to submit quiz")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleRetry = () => {
-    setQuizState("setup")
-    setCurrentIndex(0)
-    setSelectedAnswer(null)
-    setIsAnswered(false)
-    setAnswers([])
-    setTopic("")
-    setError("")
+  async function handleDeleteHistory(attemptId: string) {
+    try {
+      const response = await fetch(`/api/ai/quiz/${attemptId}`, {
+        method: "DELETE",
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete quiz history")
+      }
+
+      setHistory((prev) => prev.filter((item) => item.id !== attemptId))
+
+      if (currentAttemptId === attemptId) {
+        setCurrentAttemptId(null)
+        setSubmittedAttempt(null)
+        setQuestions([])
+        setSelectedAnswers({})
+        setQuizTopic("")
+      }
+    } catch (err) {
+      setPageError(err instanceof Error ? err.message : "Failed to delete quiz history")
+    }
   }
 
-  const handleRetakeQuiz = () => {
-    setCurrentIndex(0)
-    setSelectedAnswer(null)
-    setIsAnswered(false)
-    setAnswers([])
-    setQuizState("active")
+  function getAnswerResult(questionId: string) {
+    return submittedAttempt?.answers?.find((answer) => answer.questionId === questionId) || null
   }
 
-  if (quizState === "setup") {
-    return (
-      <>
-        <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold text-foreground">Quiz Generator</h1>
-            <p className="text-muted-foreground">Enter a topic and let AI create a personalized quiz for you</p>
-          </div>
+  return (
+    <>
+      <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold text-foreground">Quiz Generator</h1>
+          <p className="text-muted-foreground">Generate AI quizzes, check answers, and track your improvement</p>
+        </div>
 
-          {subscription?.plan_id === "premium" ? (
-            <Card className="border-emerald-500/30 bg-emerald-500/10">
-              <CardContent className="flex items-start gap-3 p-4 text-sm">
-                <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
-                <div>
-                  <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
-                  <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : !canUseQuiz ? (
-            <Card className="border-amber-500/30 bg-amber-500/10">
-              <CardContent className="flex items-start gap-3 p-4 text-sm">
-                <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-                <div>
-                  <p className="font-medium text-foreground">Quiz is a Premium feature.</p>
-                  <p className="mt-1 text-muted-foreground">Upgrade on the Pricing page to unlock Quiz instantly after successful payment.</p>
+        {activePlanName ? (
+          <Card className="border-emerald-500/30 bg-emerald-500/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+              <div>
+                <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
+                <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-amber-500/30 bg-amber-500/10">
+            <CardContent className="flex items-start gap-3 p-4 text-sm">
+              <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              <div>
+                <p className="font-medium text-foreground">Quiz is a Premium feature.</p>
+                <p className="text-muted-foreground mt-1">
+                  Upgrade on the Pricing page to unlock Quiz instantly after successful payment.
+                </p>
                 <div className="mt-3">
                   <Button asChild size="sm" variant="outline">
                     <Link href="/pricing?plan=premium&feature=quiz">View Pricing</Link>
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-6">
+            <Card className="border-border bg-card">
+              <CardContent className="p-6 space-y-5">
+                <div className="flex justify-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                    <Brain className="h-8 w-8 text-primary" />
+                  </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Quiz Topic</Label>
+                  <Input
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g., Calculus, Machine Learning, World History..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Number of Questions</Label>
+                  <Select value={count} onValueChange={setCount}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["5", "7", "10"].map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value} Questions
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {pageError ? <p className="text-sm text-destructive">{pageError}</p> : null}
+
+                <Button
+                  className="w-full"
+                  onClick={handleGenerateQuiz}
+                  disabled={!topic.trim() || generating}
+                >
+                  {generating ? "Generating Quiz..." : "Generate Quiz"}
+                </Button>
               </CardContent>
             </Card>
-          ) : null}
 
-          <Card className="border-border bg-card">
-            <CardContent className="space-y-6 p-6">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Brain className="h-8 w-8 text-primary" />
-              </div>
+            {submittedAttempt ? (
+              <Card className="border-border bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-primary" />
+                    Quiz Result
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                      <p className="text-sm text-muted-foreground">Score</p>
+                      <p className="text-2xl font-bold text-foreground">{scorePreview}</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                      <p className="text-sm text-muted-foreground">Percentage</p>
+                      <p className="text-2xl font-bold text-foreground">{submittedAttempt.percentage}%</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                      <p className="text-sm text-muted-foreground">Topic</p>
+                      <p className="text-lg font-semibold text-foreground truncate">{submittedAttempt.topic}</p>
+                    </div>
+                  </div>
+                  <Progress value={submittedAttempt.percentage} />
+                </CardContent>
+              </Card>
+            ) : null}
 
-              {error && <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+            {questions.length > 0 ? (
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle>{quizTopic || "Quiz"}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {questions.map((question, index) => {
+                    const answerResult = getAnswerResult(question.id)
 
-              <div className="space-y-3">
-                <Label htmlFor="topic">Quiz Topic</Label>
-                <Input
-                  id="topic"
-                  placeholder="e.g., Calculus, Machine Learning, World History..."
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !isGenerating && handleGenerateQuiz()}
-                  className="border-border bg-secondary"
-                />
-              </div>
+                    return (
+                      <div key={question.id} className="rounded-xl border border-border p-4 space-y-4">
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">Question {index + 1}</p>
+                          <p className="font-medium text-foreground">{question.question}</p>
+                        </div>
 
-              <div className="space-y-3">
-                <Label>Number of Questions</Label>
-                <Select value={questionCount} onValueChange={setQuestionCount}>
-                  <SelectTrigger className="border-border bg-secondary">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[5, 10, 15, 20].map((num) => (
-                      <SelectItem key={num} value={num.toString()}>{num} Questions</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                        <div className="space-y-2">
+                          {question.options.map((option) => {
+                            const isSelected = selectedAnswers[question.id] === option.id
+                            const isCorrect = question.correctOptionId === option.id
+                            const showResults = Boolean(submittedAttempt)
 
-              <Button className="w-full gap-2" size="lg" onClick={handleGenerateQuiz} disabled={!topic.trim() || isGenerating}>
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating Quiz with AI...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    Generate Quiz
-                  </>
-                )}
-              </Button>
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => handleSelect(question.id, option.id)}
+                                className={cn(
+                                  "w-full rounded-lg border px-4 py-3 text-left transition",
+                                  isSelected && !showResults && "border-primary bg-primary/10",
+                                  showResults && isCorrect && "border-emerald-500 bg-emerald-500/10",
+                                  showResults && isSelected && !isCorrect && "border-destructive bg-destructive/10",
+                                  !isSelected && !showResults && "border-border hover:border-primary/40"
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-sm text-foreground">{option.text}</span>
+                                  {submittedAttempt && isCorrect ? (
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                  ) : null}
+                                  {submittedAttempt && isSelected && !isCorrect ? (
+                                    <XCircle className="h-4 w-4 text-destructive" />
+                                  ) : null}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {submittedAttempt ? (
+                          <div className="rounded-lg bg-secondary/30 p-3 text-sm">
+                            <p className="font-medium text-foreground mb-1">
+                              {answerResult?.isCorrect ? "Correct Answer" : "Review"}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {question.explanation || "Review this concept and try again to improve your score."}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+
+                  {!submittedAttempt ? (
+                    <Button onClick={handleSubmitQuiz} disabled={submitting}>
+                      {submitting ? "Checking Answers..." : "Submit Quiz"}
+                    </Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+
+          <Card className="border-border bg-card h-fit">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <History className="h-5 w-5 text-primary" />
+                Quiz History
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-3">
+              {historyLoading ? (
+                <div className="text-sm text-muted-foreground">Loading quiz history...</div>
+              ) : history.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+                  <Brain className="h-8 w-8 text-primary mx-auto mb-3" />
+                  <p className="font-medium text-foreground">No quiz history yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Complete a quiz and it will appear here.
+                  </p>
+                </div>
+              ) : (
+                history.map((item) => {
+                  const isActive = currentAttemptId === item.id
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "rounded-xl border transition-all p-3",
+                        isActive
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-background/40 hover:border-primary/40 hover:bg-primary/5"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openAttempt(item)}
+                          className="flex flex-1 min-w-0 items-start gap-3 text-left"
+                        >
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card">
+                            <Brain className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">{item.topic}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge variant="secondary" className="text-[11px]">
+                                {item.score}/{item.total_questions}
+                              </Badge>
+                              <Badge variant="secondary" className="text-[11px]">
+                                {item.percentage}%
+                              </Badge>
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openAttempt(item)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteHistory(item.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </CardContent>
           </Card>
         </div>
-
-        <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Quiz Generator" />
-      </>
-    )
-  }
-
-  if (quizState === "results") {
-    const isLowScore = score < 60
-    const scoreColor = score >= 80 ? "text-emerald-500" : score >= 60 ? "text-amber-500" : "text-destructive"
-
-    return (
-      <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
-        <div className="mb-6 space-y-2 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Quiz Complete!</h1>
-          <p className="text-muted-foreground">Here are your results</p>
-        </div>
-
-        <Card className="border-border bg-card">
-          <CardContent className="space-y-6 p-6">
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                <Trophy className="h-10 w-10 text-primary" />
-              </div>
-              <p className={`mb-2 text-5xl font-bold ${scoreColor}`}>{score}%</p>
-              <p className="text-muted-foreground">Your Score</p>
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-4">
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Topic</span><span className="font-medium capitalize text-foreground">{topic}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Correct Answers</span><span className="font-medium text-foreground">{correctCount}/{questions.length}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Questions</span><span className="font-medium text-foreground">{questions.length}</span></div>
-            </div>
-
-            <div className="space-y-2 border-t border-border pt-2">
-              <p className="mb-3 text-sm font-medium text-foreground">Question Review</p>
-              {questions.map((q, i) => {
-                const userAnswer = answers[i]
-                const isCorrect = userAnswer === q.answer
-                return (
-                  <div key={i} className={`rounded-lg border p-3 text-sm ${isCorrect ? "border-emerald-500/20 bg-emerald-500/5" : "border-destructive/20 bg-destructive/5"}`}>
-                    <div className="flex items-start gap-2">
-                      {isCorrect ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" /> : <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />}
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground">{q.question}</p>
-                        {!isCorrect && <p className="mt-1 text-xs text-emerald-600">✓ Correct: {q.answer}</p>}
-                        {q.explanation && <p className="mt-1 text-xs text-muted-foreground">{q.explanation}</p>}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {isLowScore && (
-              <div className="space-y-3 border-t border-border pt-4">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  <p className="text-sm font-medium text-foreground">Need more practice?</p>
-                </div>
-                <Button className="w-full gap-2" onClick={() => (window.location.href = `/ai-tutor?q=${encodeURIComponent(`Explain ${topic} in detail`)}`)}>
-                  <BookOpen className="h-4 w-4" />
-                  Study this topic with AI Tutor
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={handleRetry}>New Topic</Button>
-          <Button className="flex-1 gap-2" onClick={handleRetakeQuiz}><RefreshCw className="h-4 w-4" />Retry Quiz</Button>
-        </div>
-      </div>
-    )
-  }
-
-  const isCorrectAnswer = selectedAnswer === currentQuestion?.answer
-
-  return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-6">
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Question {currentIndex + 1} of {questions.length}</span>
-          <span className="font-medium capitalize text-foreground">{topic}</span>
-        </div>
-        <Progress value={progress} className="h-2" />
       </div>
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-6 p-6">
-          <h2 className="text-lg font-semibold leading-snug text-foreground">{currentQuestion?.question}</h2>
-
-          <RadioGroup value={selectedAnswer ?? ""} onValueChange={(value) => !isAnswered && setSelectedAnswer(value)}>
-            <div className="space-y-3">
-              {currentQuestion?.options.map((option, index) => {
-                const isCorrect = option === currentQuestion.answer
-                const isSelected = selectedAnswer === option
-                return (
-                  <div key={index} className={cn("flex cursor-pointer items-center space-x-3 rounded-lg border p-4 transition-all", isAnswered && isCorrect && "border-emerald-500 bg-emerald-500/10", isAnswered && isSelected && !isCorrect && "border-destructive bg-destructive/10", !isAnswered && isSelected && "border-primary bg-primary/5", !isAnswered && !isSelected && "border-border hover:border-primary/50")}>
-                    <RadioGroupItem value={option} id={`opt-${index}`} disabled={isAnswered} />
-                    <Label htmlFor={`opt-${index}`} className={cn("flex-1 cursor-pointer text-foreground", isAnswered && "cursor-default")}>{option}</Label>
-                    {isAnswered && isCorrect && <Check className="h-5 w-5 shrink-0 text-emerald-500" />}
-                    {isAnswered && isSelected && !isCorrect && <X className="h-5 w-5 shrink-0 text-destructive" />}
-                  </div>
-                )
-              })}
-            </div>
-          </RadioGroup>
-
-          {isAnswered && currentQuestion?.explanation && (
-            <div className="rounded-lg bg-secondary p-4">
-              <p className="mb-1 text-sm font-medium text-foreground">Explanation:</p>
-              <p className="text-sm text-muted-foreground">{currentQuestion.explanation}</p>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {answers.filter((a, i) => a === questions[i]?.answer).length} correct so far
-            </span>
-            {!isAnswered ? (
-              <Button onClick={handleSubmitAnswer} disabled={selectedAnswer === null}>Submit Answer</Button>
-            ) : (
-              <Button onClick={handleNextQuestion} className="gap-2">
-                {currentIndex < questions.length - 1 ? <>Next Question <ChevronRight className="h-4 w-4" /></> : "View Results"}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Quiz" />
+    </>
   )
 }

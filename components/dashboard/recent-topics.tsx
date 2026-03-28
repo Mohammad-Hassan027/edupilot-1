@@ -62,6 +62,10 @@ function getHref(entry: ActivityEntry) {
     return `/ai-voice?history=${entry.id}`
   }
 
+  if (entry.feature === "quiz") {
+    return `/quiz?attempt=${entry.id}`
+  }
+
   return featureConfig[entry.feature]?.href || "/dashboard"
 }
 

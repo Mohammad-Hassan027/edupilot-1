@@ -23,6 +23,14 @@ type SavedNoteRow = {
   source_type: string | null
 }
 
+type SavedQuizAttemptRow = {
+  id: string
+  created_at: string
+  score: number
+  total_questions: number
+  percentage: number
+}
+
 type ChartPoint = {
   label: string
   count: number
@@ -49,7 +57,8 @@ function formatHours(seconds: number) {
 function buildWeeklyActivity(
   logs: UsageLogRow[],
   sessions: ActivitySessionRow[],
-  savedNotes: SavedNoteRow[]
+  savedNotes: SavedNoteRow[],
+  quizAttempts: SavedQuizAttemptRow[]
 ): ChartPoint[] {
   const today = startOfDay(new Date())
 
@@ -61,10 +70,11 @@ function buildWeeklyActivity(
     const usageCount = logs.filter((log) => toDayKey(log.created_at) === key).length
     const sessionCount = sessions.filter((session) => toDayKey(session.started_at) === key).length
     const savedNotesCount = savedNotes.filter((note) => toDayKey(note.created_at) === key).length
+    const quizCount = quizAttempts.filter((attempt) => toDayKey(attempt.created_at) === key).length
 
     return {
       label: current.toLocaleString("en-US", { weekday: "short" }),
-      count: usageCount + sessionCount + savedNotesCount,
+      count: usageCount + sessionCount + savedNotesCount + quizCount,
     }
   })
 }
@@ -72,7 +82,8 @@ function buildWeeklyActivity(
 function buildMonthlyActivity(
   logs: UsageLogRow[],
   sessions: ActivitySessionRow[],
-  savedNotes: SavedNoteRow[]
+  savedNotes: SavedNoteRow[],
+  quizAttempts: SavedQuizAttemptRow[]
 ): ChartPoint[] {
   const now = new Date()
 
@@ -96,14 +107,23 @@ function buildMonthlyActivity(
       return createdAt.getFullYear() === year && createdAt.getMonth() === month
     }).length
 
+    const quizCount = quizAttempts.filter((attempt) => {
+      const createdAt = new Date(attempt.created_at)
+      return createdAt.getFullYear() === year && createdAt.getMonth() === month
+    }).length
+
     return {
       label: formatMonthLabel(current),
-      count: usageCount + sessionCount + savedNotesCount,
+      count: usageCount + sessionCount + savedNotesCount + quizCount,
     }
   })
 }
 
-function getFeatureUsageCounts(logs: UsageLogRow[], savedNotes: SavedNoteRow[]) {
+function getFeatureUsageCounts(
+  logs: UsageLogRow[],
+  savedNotes: SavedNoteRow[],
+  quizAttempts: SavedQuizAttemptRow[]
+) {
   const counts = {
     ai_tutor: 0,
     notes: 0,
@@ -117,7 +137,6 @@ function getFeatureUsageCounts(logs: UsageLogRow[], savedNotes: SavedNoteRow[]) 
     if (log.feature === "ai_chat") counts.ai_tutor += 1
     if (log.feature === "notes") counts.notes += 1
     if (log.feature === "flashcards") counts.flashcards += 1
-    if (log.feature === "quiz") counts.quiz += 1
     if (log.feature === "study_plan") counts.planner += 1
     if (log.feature === "ai_voice") counts.ai_voice += 1
   }
@@ -125,6 +144,8 @@ function getFeatureUsageCounts(logs: UsageLogRow[], savedNotes: SavedNoteRow[]) 
   if (savedNotes.length > counts.notes) {
     counts.notes = savedNotes.length
   }
+
+  counts.quiz = quizAttempts.length
 
   return counts
 }
@@ -146,9 +167,10 @@ export async function GET() {
     const admin = await getSupabaseAdmin()
 
     const [
-      { data: logs, error: logsError },
-      { data: sessions, error: sessionsError },
-      { data: savedNotes, error: savedNotesError },
+      { data: logs },
+      { data: sessions },
+      { data: savedNotes },
+      { data: quizAttempts },
     ] = await Promise.all([
       admin
         .from("usage_logs")
@@ -165,45 +187,39 @@ export async function GET() {
         .select("id, created_at, source_title, source_type")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
+      admin
+        .from("saved_quiz_attempts")
+        .select("id, created_at, score, total_questions, percentage")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
     ])
 
-    const usageTableMissing =
-      logsError?.message?.toLowerCase().includes("usage_logs") ||
-      logsError?.message?.toLowerCase().includes("column") ||
-      false
-
-    if (logsError && !usageTableMissing) {
-      throw new Error(logsError.message)
-    }
-
-    const sessionTableMissing =
-      sessionsError?.message?.toLowerCase().includes("user_activity_sessions") || false
-
-    if (sessionsError && !sessionTableMissing) {
-      throw new Error(sessionsError.message)
-    }
-
-    const savedNotesTableMissing =
-      savedNotesError?.message?.toLowerCase().includes("saved_notes") ||
-      savedNotesError?.message?.toLowerCase().includes("column") ||
-      false
-
-    if (savedNotesError && !savedNotesTableMissing) {
-      throw new Error(savedNotesError.message)
-    }
-
-    const allLogs = usageTableMissing ? [] : ((logs || []) as UsageLogRow[])
-    const allSessions = sessionTableMissing ? [] : ((sessions || []) as ActivitySessionRow[])
-    const allSavedNotes = savedNotesTableMissing ? [] : ((savedNotes || []) as SavedNoteRow[])
+    const allLogs = (logs || []) as UsageLogRow[]
+    const allSessions = (sessions || []) as ActivitySessionRow[]
+    const allSavedNotes = (savedNotes || []) as SavedNoteRow[]
+    const allQuizAttempts = (quizAttempts || []) as SavedQuizAttemptRow[]
 
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    const quizzesTaken = allLogs.filter((log) => log.feature === "quiz").length
-    const totalActivities = allLogs.length + allSavedNotes.length
-    const featureUsage = getFeatureUsageCounts(allLogs, allSavedNotes)
+    const quizzesTaken = allQuizAttempts.length
+    const averageQuizScore = allQuizAttempts.length
+      ? Number(
+          (
+            allQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.percentage || 0), 0) /
+            allQuizAttempts.length
+          ).toFixed(1)
+        )
+      : 0
+
+    const bestQuizScore = allQuizAttempts.length
+      ? Math.max(...allQuizAttempts.map((attempt) => Number(attempt.percentage || 0)))
+      : 0
+
+    const totalActivities = allLogs.length + allSavedNotes.length + allQuizAttempts.length
+    const featureUsage = getFeatureUsageCounts(allLogs, allSavedNotes, allQuizAttempts)
 
     const thisWeekLogs = allLogs.filter((log) => new Date(log.created_at) >= oneWeekAgo)
     const lastWeekLogs = allLogs.filter(
@@ -220,9 +236,15 @@ export async function GET() {
       (note) => new Date(note.created_at) >= twoWeeksAgo && new Date(note.created_at) < oneWeekAgo
     )
 
+    const thisWeekQuizAttempts = allQuizAttempts.filter((attempt) => new Date(attempt.created_at) >= oneWeekAgo)
+    const lastWeekQuizAttempts = allQuizAttempts.filter(
+      (attempt) => new Date(attempt.created_at) >= twoWeeksAgo && new Date(attempt.created_at) < oneWeekAgo
+    )
+
     const thisMonthSessions = allSessions.filter((session) => new Date(session.started_at) >= currentMonthStart)
     const thisMonthLogs = allLogs.filter((log) => new Date(log.created_at) >= currentMonthStart)
     const thisMonthSavedNotes = allSavedNotes.filter((note) => new Date(note.created_at) >= currentMonthStart)
+    const thisMonthQuizAttempts = allQuizAttempts.filter((attempt) => new Date(attempt.created_at) >= currentMonthStart)
 
     const thisWeekSeconds = thisWeekSessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0)
     const lastWeekSeconds = lastWeekSessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0)
@@ -237,19 +259,21 @@ export async function GET() {
             ((thisWeekSeconds - lastWeekSeconds) / lastWeekSeconds) * 100
           )}%`
 
-    const weeklyActivity = buildWeeklyActivity(allLogs, allSessions, allSavedNotes)
-    const monthlyActivity = buildMonthlyActivity(allLogs, allSessions, allSavedNotes)
+    const weeklyActivity = buildWeeklyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
+    const monthlyActivity = buildMonthlyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
 
     const activeDaysThisWeek = new Set([
       ...thisWeekSessions.map((session) => toDayKey(session.started_at)),
       ...thisWeekLogs.map((log) => toDayKey(log.created_at)),
       ...thisWeekSavedNotes.map((note) => toDayKey(note.created_at)),
+      ...thisWeekQuizAttempts.map((attempt) => toDayKey(attempt.created_at)),
     ]).size
 
     const activeDaysThisMonth = new Set([
       ...thisMonthSessions.map((session) => toDayKey(session.started_at)),
       ...thisMonthLogs.map((log) => toDayKey(log.created_at)),
       ...thisMonthSavedNotes.map((note) => toDayKey(note.created_at)),
+      ...thisMonthQuizAttempts.map((attempt) => toDayKey(attempt.created_at)),
     ]).size
 
     return NextResponse.json({
@@ -258,10 +282,12 @@ export async function GET() {
       trackedSecondsThisWeek: thisWeekSeconds,
       totalTrackedSeconds,
       quizzesTaken,
+      averageQuizScore,
+      bestQuizScore,
       totalActivities,
       weekTrend,
-      thisWeekCount: thisWeekLogs.length + thisWeekSavedNotes.length,
-      lastWeekCount: lastWeekLogs.length + lastWeekSavedNotes.length,
+      thisWeekCount: thisWeekLogs.length + thisWeekSavedNotes.length + thisWeekQuizAttempts.length,
+      lastWeekCount: lastWeekLogs.length + lastWeekSavedNotes.length + lastWeekQuizAttempts.length,
       activeDaysThisWeek,
       activeDaysThisMonth,
       weeklyActivity,
@@ -270,7 +296,7 @@ export async function GET() {
       engagementLevel: getEngagementLevel(
         thisWeekSeconds,
         activeDaysThisWeek,
-        thisWeekLogs.length + thisWeekSavedNotes.length
+        thisWeekLogs.length + thisWeekSavedNotes.length + thisWeekQuizAttempts.length
       ),
     })
   } catch (err) {
@@ -283,6 +309,8 @@ export async function GET() {
         trackedSecondsThisWeek: 0,
         totalTrackedSeconds: 0,
         quizzesTaken: 0,
+        averageQuizScore: 0,
+        bestQuizScore: 0,
         totalActivities: 0,
         weekTrend: "0%",
         thisWeekCount: 0,
