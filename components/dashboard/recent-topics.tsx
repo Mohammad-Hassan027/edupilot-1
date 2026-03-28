@@ -58,6 +58,10 @@ function getHref(entry: ActivityEntry) {
     return `/flashcards?set=${entry.id}`
   }
 
+  if (entry.feature === "ai_voice") {
+    return `/ai-voice?history=${entry.id}`
+  }
+
   return featureConfig[entry.feature]?.href || "/dashboard"
 }
 

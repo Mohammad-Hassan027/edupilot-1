@@ -27,6 +27,7 @@ export async function GET() {
       { data: logs, error: logsError },
       { data: savedNotes, error: savedNotesError },
       { data: savedFlashcards, error: savedFlashcardsError },
+      { data: savedVoiceHistory, error: savedVoiceHistoryError },
     ] = await Promise.all([
       admin
         .from("chat_sessions")
@@ -40,6 +41,7 @@ export async function GET() {
         .select("id, feature, metadata, created_at")
         .eq("user_id", user.id)
         .neq("feature", "flashcards")
+        .neq("feature", "ai_voice")
         .order("created_at", { ascending: false })
         .limit(20),
 
@@ -53,6 +55,13 @@ export async function GET() {
       admin
         .from("saved_flashcard_sets")
         .select("id, topic, card_count, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(8),
+
+      admin
+        .from("saved_voice_history")
+        .select("id, title, prompt, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(8),
@@ -87,6 +96,15 @@ export async function GET() {
 
     if (savedFlashcardsError && !savedFlashcardsTableMissing) {
       console.error("[user/recent-activity] saved_flashcard_sets:", savedFlashcardsError)
+    }
+
+    const savedVoiceHistoryTableMissing =
+      savedVoiceHistoryError?.message?.toLowerCase().includes("saved_voice_history") ||
+      savedVoiceHistoryError?.message?.toLowerCase().includes("column") ||
+      false
+
+    if (savedVoiceHistoryError && !savedVoiceHistoryTableMissing) {
+      console.error("[user/recent-activity] saved_voice_history:", savedVoiceHistoryError)
     }
 
     const chatActivity: ActivityItem[] = (sessions || []).map((session) => ({
@@ -138,7 +156,19 @@ export async function GET() {
           created_at: set.created_at,
         }))
 
-    const activity = [...chatActivity, ...usageActivity, ...noteActivity, ...flashcardActivity]
+    const voiceActivity: ActivityItem[] = savedVoiceHistoryTableMissing
+      ? []
+      : (savedVoiceHistory || []).map((item: any) => ({
+          id: item.id,
+          feature: "ai_voice",
+          action: "voice_prompt_completed",
+          metadata: {
+            topic: item.title || item.prompt || "Voice Prompt",
+          },
+          created_at: item.created_at,
+        }))
+
+    const activity = [...chatActivity, ...usageActivity, ...noteActivity, ...flashcardActivity, ...voiceActivity]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 20)
 

@@ -106,6 +106,89 @@ export async function getSavedFlashcardSetById(userId: string, setId: string) {
   return (data || null) as SavedFlashcardSetRecord | null
 }
 
+export type SavedVoiceHistoryRecord = {
+  id: string
+  user_id: string
+  prompt: string
+  title: string
+  response: string
+  created_at: string
+  updated_at: string
+}
+
+export async function saveVoiceHistory(
+  userId: string,
+  input: {
+    prompt: string
+    title: string
+    response: string
+  }
+) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    prompt: input.prompt,
+    title: input.title,
+    response: input.response,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("saved_voice_history")
+    .insert(payload)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save voice history: ${error.message}`)
+  }
+
+  return data as SavedVoiceHistoryRecord
+}
+
+export async function getSavedVoiceHistory(userId: string, limit = 12) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_voice_history")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_voice_history")) {
+      return []
+    }
+    throw new Error(`Failed to load voice history: ${error.message}`)
+  }
+
+  return (data || []) as SavedVoiceHistoryRecord[]
+}
+
+export async function getSavedVoiceHistoryById(userId: string, historyId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_voice_history")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", historyId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_voice_history")) {
+      return null
+    }
+    throw new Error(`Failed to load voice history item: ${error.message}`)
+  }
+
+  return (data || null) as SavedVoiceHistoryRecord | null
+}
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
