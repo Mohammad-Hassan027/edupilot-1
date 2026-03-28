@@ -639,6 +639,174 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
           </Card>
         ) : null}
 
+        {/* <div className="grid gap-6 lg:grid-cols-4">
+          <Card className="lg:col-span-1 border-border bg-card h-[620px] flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base">{currentMonth}</CardTitle>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
+                {daysOfWeek.map((day) => (
+                  <div key={day} className="py-1">{day}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((item, index) => (
+                  <button
+                    key={index}
+                    disabled={!item.day}
+                    onClick={() => item.day && setSelectedDay(item.day)}
+                    className={cn(
+                      "aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-all relative",
+                      !item.day && "invisible",
+                      item.day === selectedDay && "bg-primary text-primary-foreground",
+                      item.day === currentDate.getDate() && item.day !== selectedDay && "border border-primary",
+                      item.day && item.day !== selectedDay && "hover:bg-secondary"
+                    )}
+                  >
+                    {item.day}
+                    {item.events > 0 && item.day !== selectedDay && (
+                      <div className="absolute bottom-1 flex gap-0.5">
+                        {Array.from({ length: Math.min(item.events, 3) }).map((_, i) => (
+                          <div key={i} className="h-1 w-1 rounded-full bg-primary" />
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 border-border bg-card h-[620px] flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
+                  <Calendar className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">March {selectedDay}, 2026</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {visibleTasks.length} tasks scheduled
+                    {savingPlan ? " • saving..." : ""}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
+              {visibleTasks.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-6 text-center text-sm text-muted-foreground">
+                  No tasks added for this day yet. Click <span className="font-medium text-foreground">Add Task</span> to create your first planner item.
+                </div>
+              ) : (
+                visibleTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={cn(
+                      "flex items-center gap-4 rounded-lg border-l-4 p-4 transition-all",
+                      subjectColors[task.subject] || "border-l-border bg-secondary/30",
+                      task.completed && "opacity-60"
+                    )}
+                  >
+                    <button
+                      onClick={() => toggleTask(task.id)}
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                        task.completed
+                          ? "border-emerald-500 bg-emerald-500"
+                          : "border-muted-foreground hover:border-primary"
+                      )}
+                    >
+                      {task.completed && <Check className="h-4 w-4 text-white" />}
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("font-medium text-foreground", task.completed && "line-through")}>
+                        {task.title}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{task.subject}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      {task.time} • {task.duration}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-1 border-border bg-card h-[620px] flex flex-col">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4 text-primary" />
+                Planner History
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
+              {historyLoading ? (
+                <div className="text-sm text-muted-foreground">Loading history...</div>
+              ) : history.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-4 text-sm text-muted-foreground">
+                  No planner history yet.
+                </div>
+              ) : (
+                history.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className={cn(
+                      "rounded-lg border p-3",
+                      currentPlanId === plan.id ? "border-primary bg-primary/5" : "border-border bg-secondary/20"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{plan.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(plan.tasks || []).length} tasks • {formatRelativeTime(plan.updated_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openSavedPlan(plan)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-400 hover:text-red-300"
+                          onClick={() => handleDeleteHistory(plan.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {plan.goal ? (
+                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{plan.goal}</p>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div> */}
         <div className="grid gap-6 lg:grid-cols-4">
           <Card className="lg:col-span-1 border-border bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -688,7 +856,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2 border-border bg-card">
+          <Card className="lg:col-span-2 border-border bg-card h-[620px] flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
@@ -704,7 +872,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
               {visibleTasks.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-6 text-center text-sm text-muted-foreground">
                   No tasks added for this day yet. Click <span className="font-medium text-foreground">Add Task</span> to create your first planner item.
@@ -748,7 +916,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-1 border-border bg-card">
+          <Card className="lg:col-span-1 border-border bg-card h-[620px] flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="h-4 w-4 text-primary" />
@@ -756,7 +924,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
               </CardTitle>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
               {historyLoading ? (
                 <div className="text-sm text-muted-foreground">Loading history...</div>
               ) : history.length === 0 ? (

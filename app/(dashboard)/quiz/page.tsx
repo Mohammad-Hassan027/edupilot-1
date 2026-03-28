@@ -166,24 +166,24 @@ export default function QuizPage() {
         body: JSON.stringify({ topic: topic.trim(), count: Number(count) }),
       })
 
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
-        if (data.requiresLogin) {
-          setShowLoginModal(true)
-          return
+        if (!response.ok) {
+          if (data.requiresLogin) {
+            setShowLoginModal(true)
+            return
+          }
+          if (data.requiresUpgrade) {
+            window.location.href = "/pricing?plan=premium&feature=quiz"
+            return
+          }
+          throw new Error(data.error || "Failed to generate quiz")
         }
-        if (data.requiresUpgrade) {
-          window.location.href = "/pricing?plan=premium&feature=quiz"
-          return
-        }
-        throw new Error(data.error || "Failed to generate quiz")
-      }
 
-      setQuizTopic(data.quiz.topic)
-      setQuestions(data.quiz.questions || [])
-      setSelectedAnswers({})
-      setSubmittedAttempt(null)
+        setQuizTopic(data.quiz?.topic || topic.trim())
+        setQuestions(data.quiz?.questions || [])
+        setSelectedAnswers({})
+        setSubmittedAttempt(null)
 
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href)
