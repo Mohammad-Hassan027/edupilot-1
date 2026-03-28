@@ -22,15 +22,21 @@ export default function ProfilePage() {
   const [statusMsg, setStatusMsg] = useState("")
   const [fullName, setFullName] = useState("")
   const [bio, setBio] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setFullName(profile?.full_name || userFullName || "")
     setBio(profile?.bio || "")
-  }, [profile?.full_name, profile?.bio, userFullName])
+    setAvatarUrl(profile?.avatar_url || null)
+  }, [profile?.full_name, profile?.bio, profile?.avatar_url, userFullName])
 
-  const displayName = profile?.full_name || userFullName || email?.split("@")[0] || "User"
-  const hasUnsavedChanges = isEditing && (fullName !== (profile?.full_name || userFullName || "") || bio !== (profile?.bio || ""))
+  const displayName = fullName || profile?.full_name || userFullName || email?.split("@")[0] || "User"
+
+  const hasUnsavedChanges =
+    isEditing &&
+    (fullName !== (profile?.full_name || userFullName || "") ||
+      bio !== (profile?.bio || ""))
 
   const updateProfileState = (updates: Record<string, unknown>) => {
     setUserState((prev) => ({
@@ -41,9 +47,18 @@ export default function ProfilePage() {
         : ({
             id: "temp-profile",
             user_id: "",
-            full_name: typeof updates.full_name === "string" ? updates.full_name : null,
-            avatar_url: typeof updates.avatar_url === "string" ? updates.avatar_url : null,
-            bio: typeof updates.bio === "string" ? updates.bio : null,
+            full_name:
+              typeof updates.full_name === "string"
+                ? updates.full_name
+                : fullName || userFullName || null,
+            avatar_url:
+              Object.prototype.hasOwnProperty.call(updates, "avatar_url")
+                ? (updates.avatar_url as string | null)
+                : avatarUrl,
+            bio:
+              Object.prototype.hasOwnProperty.call(updates, "bio")
+                ? (updates.bio as string | null)
+                : bio || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           } as typeof prev.profile),
@@ -105,15 +120,21 @@ export default function ProfilePage() {
     setIsEditing(false)
     setFullName(profile?.full_name || userFullName || "")
     setBio(profile?.bio || "")
+    setAvatarUrl(profile?.avatar_url || null)
     setStatus("idle")
   }
 
-  const updatePhoto = async (avatarUrl: string | null, successMessage: string) => {
+  const updatePhoto = async (nextAvatarUrl: string | null, successMessage: string) => {
+    const previousAvatarUrl = avatarUrl
+
+    setAvatarUrl(nextAvatarUrl)
+    updateProfileState({ avatar_url: nextAvatarUrl })
+
     try {
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatar_url: avatarUrl }),
+        body: JSON.stringify({ avatar_url: nextAvatarUrl }),
       })
 
       const data = await res.json().catch(() => null)
@@ -122,10 +143,19 @@ export default function ProfilePage() {
         throw new Error(data?.error || "Failed to update photo")
       }
 
-      updateProfileState({ avatar_url: data.data?.avatar_url ?? avatarUrl })
+      const finalAvatarUrl =
+        Object.prototype.hasOwnProperty.call(data.data ?? {}, "avatar_url")
+          ? (data.data.avatar_url as string | null)
+          : nextAvatarUrl
+
+      setAvatarUrl(finalAvatarUrl)
+      updateProfileState({ avatar_url: finalAvatarUrl })
+
       showMessage("success", successMessage, 2000)
       await refetch(true, true)
     } catch (err) {
+      setAvatarUrl(previousAvatarUrl)
+      updateProfileState({ avatar_url: previousAvatarUrl })
       setStatus("error")
       setStatusMsg(err instanceof Error ? err.message : "Failed to update photo.")
     }
@@ -176,7 +206,9 @@ export default function ProfilePage() {
       {status !== "idle" && (
         <Alert className={status === "success" ? "border-emerald-500/30 bg-emerald-500/10" : "border-destructive/30 bg-destructive/10"}>
           <CheckCircle className={`h-4 w-4 ${status === "success" ? "text-emerald-500" : "text-destructive"}`} />
-          <AlertDescription className={status === "success" ? "text-emerald-600" : "text-destructive"}>{statusMsg}</AlertDescription>
+          <AlertDescription className={status === "success" ? "text-emerald-600" : "text-destructive"}>
+            {statusMsg}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -191,15 +223,27 @@ export default function ProfilePage() {
           {isEditing ? (
             <>
               <Button variant="outline" className="gap-2" onClick={handleCancel} disabled={isSaving}>
-                <X className="h-4 w-4" />Cancel
+                <X className="h-4 w-4" />
+                Cancel
               </Button>
               <Button className="gap-2" onClick={handleSave} disabled={isSaving || !hasUnsavedChanges}>
-                {isSaving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <><Save className="h-4 w-4" />Save Changes</>}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
               </Button>
             </>
           ) : (
             <Button variant="outline" className="gap-2" onClick={() => setIsEditing(true)}>
-              <Edit2 className="h-4 w-4" />Edit Profile
+              <Edit2 className="h-4 w-4" />
+              Edit Profile
             </Button>
           )}
         </div>
@@ -209,7 +253,13 @@ export default function ProfilePage() {
         <Card className="border-border bg-card">
           <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
             <div className="relative">
-              <UserAvatar src={profile?.avatar_url} alt={displayName} className="h-28 w-28 border border-border" iconClassName="h-16 w-16" />
+              <UserAvatar
+                src={avatarUrl}
+                alt={displayName}
+                className="h-28 w-28 border border-border"
+                iconClassName="h-16 w-16"
+              />
+
               {isEditing && (
                 <button
                   type="button"
@@ -219,22 +269,30 @@ export default function ProfilePage() {
                   <Camera className="h-4 w-4" />
                 </button>
               )}
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
             </div>
 
             <div>
               <h2 className="text-xl font-semibold text-foreground">{displayName}</h2>
-              <p className="text-sm text-muted-foreground break-all">{email}</p>
+              <p className="break-all text-sm text-muted-foreground">{email}</p>
             </div>
 
-            {isEditing && profile?.avatar_url ? (
+            {isEditing && avatarUrl ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="w-full gap-1.5 text-destructive hover:text-destructive"
                 onClick={() => updatePhoto(null, "Profile photo removed.")}
               >
-                <Trash2 className="h-4 w-4" />Remove Photo
+                <Trash2 className="h-4 w-4" />
+                Remove Photo
               </Button>
             ) : null}
           </CardContent>
@@ -243,13 +301,17 @@ export default function ProfilePage() {
         <Card className="border-border bg-card lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4 text-primary" />Personal Information
+              <User className="h-4 w-4 text-primary" />
+              Personal Information
             </CardTitle>
             <CardDescription>Your existing profile data is loaded here automatically.</CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Full Name <span className="text-destructive">*</span></Label>
+              <Label>
+                Full Name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -261,10 +323,18 @@ export default function ProfilePage() {
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Mail className="h-3.5 w-3.5 text-muted-foreground" />Email
+                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                Email
               </Label>
-              <Input type="email" value={email ?? ""} disabled className="border-border bg-secondary/50 opacity-70" />
-              <p className="text-xs text-muted-foreground">Email is managed by authentication and cannot be changed here.</p>
+              <Input
+                type="email"
+                value={email ?? ""}
+                disabled
+                className="border-border bg-secondary/50 opacity-70"
+              />
+              <p className="text-xs text-muted-foreground">
+                Email is managed by authentication and cannot be changed here.
+              </p>
             </div>
 
             <div className="space-y-2">
