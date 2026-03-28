@@ -15,8 +15,13 @@ type UserAvatarProps = {
 export function UserAvatar({ src, alt = "User avatar", className, iconClassName }: UserAvatarProps) {
   const normalizedSrc = useMemo(() => {
     if (!src) return null
+
     const value = String(src).trim()
-    if (!value || value === "null" || value === "undefined") return null
+
+    if (!value || value === "null" || value === "undefined") {
+      return null
+    }
+
     return value
   }, [src])
 
