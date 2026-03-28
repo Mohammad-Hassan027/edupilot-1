@@ -1,17 +1,24 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
-import { Bot, Loader2, MessageSquare, Send, Sparkles, X } from "lucide-react"
+import Link from "next/link"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Bot, Loader2, Send, Sparkles, X, ArrowUpRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
+type RelatedPage = {
+  label: string
+  href: string
+}
+
 type ChatMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  relatedPages?: RelatedPage[]
 }
 
 const DEFAULT_SUGGESTIONS = [
@@ -20,6 +27,15 @@ const DEFAULT_SUGGESTIONS = [
   "How does Quiz work?",
   "How do I use Planner?",
 ]
+
+function formatAssistantContent(content: string) {
+  const lines = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  return lines
+}
 
 export function EduPilotGuideChatbot() {
   const [open, setOpen] = useState(false)
@@ -32,13 +48,26 @@ export function EduPilotGuideChatbot() {
       id: "welcome",
       role: "assistant",
       content:
-        "Hi! I’m EduPilot Guide. I can help you understand how to use EduPilot features like AI Tutor, Notes, Flashcards, Quiz, Planner, Dashboard, and plans.",
+        "Hi! I’m EduPilot Guide.\n\nStep 1: Ask me about any EduPilot feature.\nStep 2: I’ll explain how to use it in simple steps.\nStep 3: Open the related page and try it directly.\n\nTry this next: Ask “How do I use AI Tutor?”",
+      relatedPages: [
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "AI Tutor", href: "/ai-tutor" },
+        { label: "Notes", href: "/notes" },
+      ],
     },
   ])
 
-  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading])
+
+  useEffect(() => {
+    if (!open) return
+
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+    })
+  }, [messages, loading, open])
 
   async function sendMessage(messageText?: string) {
     const finalMessage = (messageText ?? input).trim()
@@ -65,14 +94,13 @@ export function EduPilotGuideChatbot() {
 
       const data = await response.json().catch(() => null)
 
-      const reply =
-        data?.reply ||
-        "I can help with EduPilot features and usage only. Try asking about AI Tutor, Notes, Quiz, or Planner."
-
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: reply,
+        content:
+          data?.reply ||
+          "I can help with EduPilot usage only.\n\nStep 1: Ask about a feature.\nStep 2: Follow the steps I give.\nStep 3: Open the related EduPilot page.\n\nTry this next: Ask about AI Tutor, Notes, Quiz, or Planner.",
+        relatedPages: Array.isArray(data?.relatedPages) ? data.relatedPages.slice(0, 4) : [],
       }
 
       setMessages((prev) => [...prev, assistantMessage])
@@ -89,33 +117,35 @@ export function EduPilotGuideChatbot() {
           id: `assistant-${Date.now()}`,
           role: "assistant",
           content:
-            "Something went wrong. Please try again. I can help with EduPilot usage, such as AI Tutor, Notes, Quiz, Planner, and Dashboard.",
+            "Something went wrong.\n\nStep 1: Try asking again.\nStep 2: Keep your question about an EduPilot feature.\nStep 3: Open the related page from the links below.\n\nTry this next: Ask “How do I use Planner?”",
+          relatedPages: [
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "AI Tutor", href: "/ai-tutor" },
+            { label: "Planner", href: "/planner" },
+          ],
         },
       ])
     } finally {
       setLoading(false)
-
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
-      })
     }
   }
 
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-[9999] w-[360px] max-w-[calc(100vw-2rem)]">
-          <Card className="border-border bg-card shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15">
+        <div className="fixed inset-x-3 bottom-24 z-[9999] md:inset-x-auto md:right-4 md:bottom-24">
+          <Card className="w-full overflow-hidden border-border bg-card shadow-2xl md:w-[420px]">
+            <div className="flex items-center justify-between border-b border-border bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-white">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
                   <Sparkles className="h-4 w-4" />
                 </div>
+
                 <div className="min-w-0">
-                  <p className="font-semibold truncate">Ask EduPilot</p>
-                  <p className="text-xs text-white/80 truncate">App help and feature guidance</p>
+                  <p className="truncate text-sm font-semibold sm:text-base">Ask EduPilot</p>
+                  <p className="truncate text-xs text-white/80">
+                    App help, feature guidance, and quick links
+                  </p>
                 </div>
               </div>
 
@@ -123,15 +153,15 @@ export function EduPilotGuideChatbot() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="text-white hover:bg-white/10 hover:text-white"
+                className="h-9 w-9 text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setOpen(false)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
-            <ScrollArea className="h-[420px] px-3 py-3">
-              <div ref={scrollRef} className="space-y-3 pr-1">
+            <ScrollArea className="h-[min(60vh,520px)] md:h-[520px]">
+              <div className="space-y-4 px-3 py-3 sm:px-4">
                 {messages.map((message) => (
                   <div
                     key={message.id}
@@ -142,30 +172,78 @@ export function EduPilotGuideChatbot() {
                   >
                     <div
                       className={cn(
-                        "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6",
+                        "max-w-[92%] rounded-2xl px-3 py-3 text-sm leading-6 sm:max-w-[88%]",
                         message.role === "user"
                           ? "bg-primary text-primary-foreground"
                           : "bg-secondary text-secondary-foreground"
                       )}
                     >
-                      {message.content}
+                      <div className="space-y-2">
+                        {message.role === "assistant" ? (
+                          formatAssistantContent(message.content).map((line, index) => {
+                            const isStep = /^step\s*\d+\s*:/i.test(line)
+                            const isTips = /^tips\s*:/i.test(line)
+                            const isTryNext = /^try this next\s*:/i.test(line)
+
+                            return (
+                              <p
+                                key={`${message.id}-${index}`}
+                                className={cn(
+                                  "text-sm leading-6",
+                                  (isStep || isTips || isTryNext) && "font-medium"
+                                )}
+                              >
+                                {line}
+                              </p>
+                            )
+                          })
+                        ) : (
+                          <p className="text-sm leading-6">{message.content}</p>
+                        )}
+
+                        {message.role === "assistant" &&
+                          Array.isArray(message.relatedPages) &&
+                          message.relatedPages.length > 0 && (
+                            <div className="pt-1">
+                              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Related pages
+                              </p>
+
+                              <div className="flex flex-wrap gap-2">
+                                {message.relatedPages.map((page) => (
+                                  <Link
+                                    key={`${message.id}-${page.href}`}
+                                    href={page.href}
+                                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+                                    onClick={() => setOpen(false)}
+                                  >
+                                    <span>{page.label}</span>
+                                    <ArrowUpRight className="h-3 w-3" />
+                                  </Link>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                      </div>
                     </div>
                   </div>
                 ))}
 
                 {loading && (
                   <div className="flex justify-start">
-                    <div className="rounded-2xl bg-secondary px-3 py-2 text-sm text-secondary-foreground flex items-center gap-2">
+                    <div className="flex items-center gap-2 rounded-2xl bg-secondary px-3 py-2 text-sm text-secondary-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Thinking...
                     </div>
                   </div>
                 )}
+
+                <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
 
-            <div className="border-t border-border px-3 py-3 space-y-3">
-              <div className="flex flex-wrap gap-2">
+            <div className="border-t border-border px-3 py-3 sm:px-4">
+              <div className="mb-3 flex flex-wrap gap-2">
                 {suggestions.map((item) => (
                   <button
                     key={item}
@@ -183,6 +261,7 @@ export function EduPilotGuideChatbot() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask about EduPilot..."
+                  className="h-11"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
@@ -194,6 +273,7 @@ export function EduPilotGuideChatbot() {
                 <Button
                   type="button"
                   size="icon"
+                  className="h-11 w-11 shrink-0"
                   onClick={() => void sendMessage()}
                   disabled={!canSend}
                 >
@@ -208,10 +288,13 @@ export function EduPilotGuideChatbot() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="fixed bottom-4 right-4 z-[9999] inline-flex items-center gap-2 rounded-full border border-white/15 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-2xl transition hover:scale-[1.02]"
+        className={cn(
+          "fixed bottom-4 right-4 z-[9999] inline-flex h-14 items-center gap-2 rounded-full border border-white/15 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-sm font-semibold text-white shadow-2xl transition hover:scale-[1.02]",
+          "max-w-[calc(100vw-1.5rem)]"
+        )}
       >
         {open ? <X className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-        <span>{open ? "Close" : "Ask EduPilot"}</span>
+        <span className="truncate">{open ? "Close" : "Ask EduPilot"}</span>
       </button>
     </>
   )
