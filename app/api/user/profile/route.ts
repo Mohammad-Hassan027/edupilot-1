@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
+import { getUser as getCurrentUser } from "@/lib/auth-server"
 import { getProfile, createProfile, upsertProfile } from "@/lib/database"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 
@@ -45,7 +45,8 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = {}
 
     if ("full_name" in body) {
-      updates.full_name = typeof body.full_name === "string" ? body.full_name.trim() : null
+      updates.full_name =
+        typeof body.full_name === "string" ? body.full_name.trim() : null
     }
 
     if ("bio" in body) {
@@ -69,7 +70,7 @@ export async function PATCH(request: Request) {
           },
         })
       } catch {
-        // keep profile saved even if auth metadata sync fails
+        // profile save should still succeed even if auth metadata sync fails
       }
     }
 

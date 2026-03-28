@@ -31,12 +31,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const amountInRupees = planId === "premium" ? 499 : 199
+    const amountInRupees = 1
     const receipt = `ep_${user.id.slice(0, 8)}_${Date.now()}`.slice(0, 40)
     const order = await createRazorpayOrder(amountInRupees, receipt, {
       planId,
       userId: user.id,
-      email:  user.email ?? "",
+      email: user.email ?? "",
+      chargeType: "trial_verification",
+    
     })
 
     // Save payment record (non-fatal if DB write fails)

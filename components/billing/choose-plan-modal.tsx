@@ -29,7 +29,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
             <DialogHeader className="space-y-2 pr-8 text-left">
               <DialogTitle className="text-xl sm:text-2xl">Choose Your Learning Plan</DialogTitle>
               <DialogDescription className="max-w-3xl text-sm leading-6">
-                Choose the right plan for this feature. Pro unlocks Flashcards, AI Voice, and Quiz. Premium unlocks everything, including Planner.
+                Choose the right plan for this feature. Pro unlocks Flashcards and AI Voice. Premium unlocks Quiz and Planner, plus everything in Pro.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -37,7 +37,7 @@ export function ChoosePlanModal({ open, onOpenChange, onPaymentSuccess }: Choose
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-4 p-4 sm:space-y-5 sm:p-6">
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-600 dark:text-amber-400">
-                <span className="font-semibold">Test mode:</span> Use Razorpay test cards for checkout. Your selected plan starts with a 14-day free trial after successful payment verification.
+                <span className="font-semibold">Test mode:</span> Use Razorpay test cards for checkout. Only ₹1 is charged for account verification, and your selected plan starts with a 14-day free trial after successful payment verification.
               </div>
 
               <div className="grid gap-4 lg:grid-cols-3 lg:items-stretch">

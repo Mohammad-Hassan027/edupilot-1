@@ -19,7 +19,7 @@ const faqs = [
   },
   {
     question: "Do Pro and Premium include a free trial?",
-    answer: "Yes. Both paid plans start with a 14-day free trial in the current Razorpay test setup.",
+    answer: "Yes. Both paid plans start with a 14-day free trial, and in test mode only ₹1 is charged for account verification.",
   },
   {
     question: "What payment methods do you accept?",
@@ -27,7 +27,7 @@ const faqs = [
   },
   {
     question: "When does the plan activate?",
-    answer: "As soon as Razorpay reports payment success, the selected plan is activated across the app and verification continues in the background.",
+    answer: "As soon as Razorpay reports a successful ₹1 verification payment, the selected plan is activated across the app.",
   },
 ]
 
@@ -58,7 +58,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-8 max-w-3xl rounded-2xl border border-primary/20 bg-primary/5 p-6 text-center">
           <h2 className="mb-2 text-xl font-semibold text-foreground">Choose Your Learning Plan</h2>
           <p className="text-muted-foreground">
-            Free users get AI Tutor and Notes. Pro unlocks Flashcards and AI Voice. Premium unlocks Quiz and Planner.
+            Free users get AI Tutor and Notes. Pro unlocks Flashcards and AI Voice. Premium unlocks Quiz and Planner, plus all Pro features.
           </p>
           {featureLabel ? (
             <p className="mt-3 text-sm text-foreground">
@@ -76,7 +76,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-16 max-w-2xl text-center">
           <h1 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">Pricing for every learner</h1>
           <p className="mb-8 text-lg text-muted-foreground">
-            Select a plan and complete Razorpay test payment to activate it instantly.<br/>AFTER CLICKING ON “ACTIVATE ANY PLAN”, PLEASE WAIT FOR A WHILE FOR THE RAZORPAY PAYMENT PROCESS. 
+            Select a plan and complete the ₹1 Razorpay verification payment to activate it instantly.<br/>AFTER CLICKING ON “ACTIVATE ANY PLAN”, PLEASE WAIT FOR A WHILE FOR THE RAZORPAY PAYMENT PROCESS. 
           </p>
 
           <div className="inline-flex items-center gap-4 rounded-full border border-border bg-card p-1">
@@ -204,7 +204,7 @@ export default function PricingPage() {
             Flashcards and AI Voice are Pro features. Quiz and Planner are Premium features. AI Tutor and Notes stay free.
           </p>
           <p className="text-xs text-muted-foreground">
-            Current checkout is in Razorpay test mode. Use Razorpay test cards while testing the payment flow.
+            Current checkout is in Razorpay test mode. Only ₹1 is charged for verification during the 14-day trial. Use Razorpay test cards while testing the payment flow.
           </p>
         </div>
 

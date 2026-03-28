@@ -41,6 +41,7 @@ export const LEARNING_PLANS: LearningPlan[] = [
     description: "Unlock Flashcards and AI Voice",
     features: [
       "14-day free trial",
+      "₹1 verification charge",
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
@@ -55,9 +56,10 @@ export const LEARNING_PLANS: LearningPlan[] = [
     name: "Premium",
     price: 499,
     period: "/mo",
-    description: "Everything included",
+    description: "Quiz, Planner, and all Pro features",
     features: [
       "14-day free trial",
+      "₹1 verification charge",
       "Unlimited AI Tutor",
       "Unlimited Notes",
       "Unlimited Flashcards",
