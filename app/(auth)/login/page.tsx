@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 import Link from "next/link"
 import { GraduationCap, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,8 +28,21 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Login failed"); return }
-      router.push("/dashboard")
-      router.refresh()
+
+      try {
+        localStorage.setItem("edupilot-user-refresh", String(Date.now()))
+      } catch {}
+
+      try {
+        window.dispatchEvent(new CustomEvent("user-data-refresh", { detail: {} }))
+      } catch {}
+
+      try {
+        await getSupabaseBrowserClient().auth.getSession()
+      } catch {}
+
+      window.location.assign("/dashboard")
+      return
     } catch {
       setError("Something went wrong. Please try again.")
     } finally {

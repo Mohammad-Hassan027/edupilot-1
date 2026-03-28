@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
+import { useUser } from "@/hooks/use-user"
 import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 
 const navItems = [
@@ -19,81 +20,35 @@ const navItems = [
   { label: "Contact", href: "/contact" },
 ]
 
-interface AuthUser {
-  email: string | null
-  fullName: string | null
-  avatarUrl: string | null
-}
-
 export function PublicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [authReady, setAuthReady] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const { profile, email, fullName, isLoading, error } = useUser()
 
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient()
-
-    const setUserFromSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (session?.user) {
-        const u = session.user
-        const name =
-          u.user_metadata?.full_name ||
-          u.user_metadata?.name ||
-          u.email?.split("@")[0] ||
-          "User"
-
-        setAuthUser({
-          email: u.email ?? null,
-          fullName: name,
-          avatarUrl: u.user_metadata?.avatar_url ?? null,
-        })
-      } else {
-        setAuthUser(null)
+  const authReady = !isLoading
+  const isAuthenticated = !isLoading && error !== "not_authenticated" && Boolean(email)
+  const authUser = isAuthenticated
+    ? {
+        email: email ?? null,
+        fullName: fullName || profile?.full_name || email?.split("@")[0] || "User",
+        avatarUrl: profile?.avatar_url ?? null,
       }
-
-      setAuthReady(true)
-    }
-
-    setUserFromSession()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const u = session.user
-        const name =
-          u.user_metadata?.full_name ||
-          u.user_metadata?.name ||
-          u.email?.split("@")[0] ||
-          "User"
-
-        setAuthUser({
-          email: u.email ?? null,
-          fullName: name,
-          avatarUrl: u.user_metadata?.avatar_url ?? null,
-        })
-      } else {
-        setAuthUser(null)
-      }
-
-      setAuthReady(true)
-      router.refresh()
-    })
-
-    return () => subscription.unsubscribe()
-  }, [router])
+    : null
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" })
-    setAuthUser(null)
-    router.push("/")
-    router.refresh()
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+      await getSupabaseBrowserClient().auth.signOut()
+    } catch {
+      // no-op
+    } finally {
+      try {
+        localStorage.setItem("edupilot-user-refresh", String(Date.now()))
+      } catch {}
+      router.push("/")
+      router.refresh()
+    }
   }
 
   return (
