@@ -6,7 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { Mic, Volume2, Loader2, MessageSquare, Trash2, Crown, History, Eye } from "lucide-react"
+import {
+  Mic,
+  Volume2,
+  Loader2,
+  MessageSquare,
+  Trash2,
+  Crown,
+  History,
+  Eye,
+  Square,
+  Play,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { useUser } from "@/hooks/use-user"
@@ -38,6 +49,7 @@ interface VoiceHistoryItem {
 
 export default function AIVoicePage() {
   const { subscription, isLoading, error: userError, email } = useUser()
+
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
   const [messages, setMessages] = useState<Message[]>([])
   const [transcript, setTranscript] = useState("")
@@ -51,14 +63,17 @@ export default function AIVoicePage() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isSubmittingRef = useRef(false)
 
   const canUseVoice = canAccessFeature(subscription, "ai_voice")
-  const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
+  const activePlanName =
+    subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
   useEffect(() => {
     synthRef.current = window.speechSynthesis
     return () => {
       synthRef.current?.cancel()
+      recognitionRef.current?.stop()
     }
   }, [])
 
@@ -87,8 +102,26 @@ export default function AIVoicePage() {
     }
   }, [history, historyLoading])
 
+  const stopEverything = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      //
+    }
+
+    try {
+      synthRef.current?.cancel()
+    } catch {
+      //
+    }
+
+    isSubmittingRef.current = false
+    setVoiceState("idle")
+  }
+
   const speak = (text: string) => {
     if (!synthRef.current) return
+
     synthRef.current.cancel()
 
     const utter = new SpeechSynthesisUtterance(
@@ -101,7 +134,12 @@ export default function AIVoicePage() {
 
     utter.rate = 0.95
     utter.pitch = 1
-    utter.onend = () => setVoiceState("idle")
+    utter.onend = () => {
+      setVoiceState("idle")
+    }
+    utter.onerror = () => {
+      setVoiceState("idle")
+    }
 
     setVoiceState("speaking")
     synthRef.current.speak(utter)
@@ -164,6 +202,90 @@ export default function AIVoicePage() {
     }
   }
 
+  const runPrompt = async (userText: string) => {
+    const cleanText = userText.trim()
+    if (!cleanText || isSubmittingRef.current) return
+
+    isSubmittingRef.current = true
+    setError("")
+    setTranscript(cleanText)
+    setVoiceState("processing")
+
+    const userMessageId = `user-${Date.now()}`
+    const assistantMessageId = `assistant-${Date.now()}`
+
+    setMessages([
+      {
+        id: userMessageId,
+        role: "user",
+        text: cleanText,
+      },
+    ])
+
+    try {
+      const res = await fetch("/api/ai/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: cleanText }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          setVoiceState("idle")
+          isSubmittingRef.current = false
+          return
+        }
+
+        if (data.requiresUpgrade) {
+          window.location.href = "/pricing?plan=pro&feature=ai-voice"
+          setVoiceState("idle")
+          isSubmittingRef.current = false
+          return
+        }
+
+        throw new Error(data.error || "AI error")
+      }
+
+      setMessages([
+        {
+          id: userMessageId,
+          role: "user",
+          text: cleanText,
+        },
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          text: data.reply,
+        },
+      ])
+
+      if (data.historyItem) {
+        const item = data.historyItem as VoiceHistoryItem
+        setCurrentHistoryId(item.id)
+        setHistory((prev) => [item, ...prev.filter((entry) => entry.id !== item.id)].slice(0, 12))
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href)
+          url.searchParams.set("history", item.id)
+          window.history.replaceState({}, "", url.toString())
+        }
+      } else {
+        await loadHistory()
+      }
+
+      speak(data.reply)
+    } catch (e) {
+      const errText = e instanceof Error ? e.message : "Something went wrong"
+      setError(errText)
+      setVoiceState("idle")
+    } finally {
+      isSubmittingRef.current = false
+    }
+  }
+
   const handleVoiceToggle = () => {
     if (isLoading) {
       setPendingVoiceAction(true)
@@ -181,13 +303,16 @@ export default function AIVoicePage() {
     }
 
     if (voiceState === "speaking") {
-      synthRef.current?.cancel()
-      setVoiceState("idle")
+      stopEverything()
       return
     }
 
     if (voiceState === "listening") {
-      recognitionRef.current?.stop()
+      stopEverything()
+      return
+    }
+
+    if (voiceState === "processing") {
       return
     }
 
@@ -202,80 +327,31 @@ export default function AIVoicePage() {
     const recognition = new SpeechRecognitionAPI()
     recognition.lang = "en-US"
     recognition.interimResults = false
+    recognition.continuous = false
     recognition.maxAlternatives = 1
 
-    recognition.onstart = () => setVoiceState("listening")
+    recognition.onstart = () => {
+      setVoiceState("listening")
+    }
 
     recognition.onresult = async (event) => {
-      const userText = event.results[0][0].transcript?.trim() || ""
+      const userText = event.results?.[0]?.[0]?.transcript?.trim() || ""
+      try {
+        recognition.stop()
+      } catch {
+        //
+      }
+
       if (!userText) {
         setVoiceState("idle")
         return
       }
 
-      setTranscript(userText)
-      setVoiceState("processing")
-
-      const userMsg: Message = { id: Date.now().toString(), role: "user", text: userText }
-      setMessages((prev) => [...prev, userMsg])
-
-      try {
-        const res = await fetch("/api/ai/voice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: userText }),
-        })
-
-        const data = await res.json()
-
-        if (!res.ok) {
-          if (data.requiresLogin) {
-            setShowLoginModal(true)
-            setVoiceState("idle")
-            return
-          }
-
-          if (data.requiresUpgrade) {
-            window.location.href = "/pricing?plan=pro&feature=ai-voice"
-            setVoiceState("idle")
-            return
-          }
-
-          throw new Error(data.error || "AI error")
-        }
-
-        const aiMsg: Message = {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          text: data.reply,
-        }
-
-        setMessages((prev) => [...prev, aiMsg])
-
-        if (data.historyItem) {
-          const item = data.historyItem as VoiceHistoryItem
-          setCurrentHistoryId(item.id)
-          setHistory((prev) => [item, ...prev.filter((entry) => entry.id !== item.id)].slice(0, 12))
-
-          if (typeof window !== "undefined") {
-            const url = new URL(window.location.href)
-            url.searchParams.set("history", item.id)
-            window.history.replaceState({}, "", url.toString())
-          }
-        } else {
-          await loadHistory()
-        }
-
-        speak(data.reply)
-      } catch (e) {
-        const errText = e instanceof Error ? e.message : "Something went wrong"
-        setError(errText)
-        setVoiceState("idle")
-      }
+      await runPrompt(userText)
     }
 
     recognition.onerror = (e) => {
-      if (e.error !== "no-speech") {
+      if (e.error !== "no-speech" && e.error !== "aborted") {
         setError(`Voice error: ${e.error}`)
       }
       setVoiceState("idle")
@@ -295,11 +371,16 @@ export default function AIVoicePage() {
     handleVoiceToggle()
   }, [pendingVoiceAction, isLoading, userError, email, canUseVoice, voiceState])
 
+  const handleReplayHistory = (item: VoiceHistoryItem) => {
+    openHistory(item)
+    speak(item.response)
+  }
+
   const stateLabel = {
     idle: "Tap to speak",
     listening: "Listening...",
     processing: "Thinking...",
-    speaking: "Speaking — tap to stop",
+    speaking: "Speaking...",
   }
 
   return (
@@ -307,7 +388,7 @@ export default function AIVoicePage() {
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         <div>
           <h1 className="text-2xl font-bold text-foreground">AI Voice Assistant</h1>
-          <p className="text-muted-foreground">Ask questions hands-free and get clean production-style notes</p>
+          <p className="text-muted-foreground">Ask one question and get one clean spoken answer with saved history</p>
         </div>
 
         {activePlanName ? (
@@ -339,15 +420,16 @@ export default function AIVoicePage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)_340px]">
+        <div className="grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)_320px]">
           <Card className="relative overflow-hidden border-border bg-card">
             <div className="absolute -top-20 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
+
             <CardHeader className="relative pb-2 text-center">
               <CardTitle className="text-lg font-semibold text-foreground">Voice Control</CardTitle>
               <p className="text-sm text-muted-foreground">Tap the microphone to start</p>
             </CardHeader>
 
-            <CardContent className="relative flex flex-col items-center space-y-8 py-8">
+            <CardContent className="relative flex flex-col items-center space-y-6 py-8">
               {voiceState === "listening" && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   {[1, 2, 3].map((i) => (
@@ -389,6 +471,24 @@ export default function AIVoicePage() {
                 )}
               </div>
 
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={handleVoiceToggle}
+                  disabled={isLoading || voiceState === "processing"}
+                  className="gap-2"
+                >
+                  <Mic className="h-4 w-4" />
+                  {voiceState === "idle" ? "Start" : voiceState === "listening" ? "Listening..." : voiceState === "speaking" ? "Speaking..." : "Processing..."}
+                </Button>
+
+                {(voiceState === "listening" || voiceState === "speaking") && (
+                  <Button variant="destructive" onClick={stopEverything} className="gap-2">
+                    <Square className="h-4 w-4" />
+                    Stop
+                  </Button>
+                )}
+              </div>
+
               {error && (
                 <div className="max-w-xs rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
                   {error}
@@ -403,7 +503,7 @@ export default function AIVoicePage() {
             </CardContent>
           </Card>
 
-          <Card className="flex flex-col border-border bg-card min-h-[460px]">
+          <Card className="flex flex-col border-border bg-card min-h-[560px]">
             <CardHeader className="flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold text-foreground">
                 <MessageSquare className="h-5 w-5 text-primary" />
@@ -419,6 +519,7 @@ export default function AIVoicePage() {
                     setMessages([])
                     setTranscript("")
                     setCurrentHistoryId(null)
+                    stopEverything()
 
                     if (typeof window !== "undefined") {
                       const url = new URL(window.location.href)
@@ -454,7 +555,7 @@ export default function AIVoicePage() {
                         className={cn(
                           "rounded-2xl px-4 py-3 text-sm",
                           message.role === "user"
-                            ? "ml-auto max-w-[85%] bg-primary text-primary-foreground"
+                            ? "ml-auto max-w-[82%] bg-primary text-primary-foreground"
                             : "max-w-full bg-secondary text-foreground"
                         )}
                       >
@@ -472,7 +573,7 @@ export default function AIVoicePage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border bg-card h-fit">
+          <Card className="border-border bg-card h-fit max-h-[560px] flex flex-col">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <History className="h-5 w-5 text-primary" />
@@ -480,7 +581,7 @@ export default function AIVoicePage() {
               </CardTitle>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 overflow-y-auto">
               {historyLoading ? (
                 <div className="text-sm text-muted-foreground">Loading history...</div>
               ) : history.length === 0 ? (
@@ -496,40 +597,56 @@ export default function AIVoicePage() {
                   const isActive = currentHistoryId === item.id
 
                   return (
-                    <button
+                    <div
                       key={item.id}
-                      type="button"
-                      onClick={() => openHistory(item)}
                       className={cn(
-                        "w-full rounded-xl border text-left transition-all p-3",
+                        "rounded-xl border transition-all p-3",
                         isActive
                           ? "border-primary bg-primary/10"
                           : "border-border bg-background/40 hover:border-primary/40 hover:bg-primary/5"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card">
-                              <Mic className="h-4 w-4 text-primary" />
-                            </div>
+                        <button
+                          type="button"
+                          onClick={() => openHistory(item)}
+                          className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                        >
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card shrink-0">
+                            <Mic className="h-4 w-4 text-primary" />
+                          </div>
 
-                            <div className="min-w-0">
-                              <p className="font-medium text-foreground truncate">{item.title}</p>
-                              <div className="mt-1">
-                                <Badge variant="secondary" className="text-[11px]">
-                                  AI Voice
-                                </Badge>
-                              </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground truncate">{item.title}</p>
+                            <div className="mt-1">
+                              <Badge variant="secondary" className="text-[11px]">
+                                AI Voice
+                              </Badge>
                             </div>
                           </div>
-                        </div>
+                        </button>
 
-                        <div className="shrink-0 text-muted-foreground">
-                          <Eye className="h-4 w-4" />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => handleReplayHistory(item)}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => openHistory(item)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   )
                 })
               )}

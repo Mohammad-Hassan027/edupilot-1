@@ -17,12 +17,13 @@ function buildTitle(prompt: string) {
   return cleaned.length > 60 ? `${cleaned.slice(0, 60)}...` : cleaned
 }
 
-function cleanForSpeech(text: string) {
+function cleanForOutput(text: string) {
   return text
     .replace(/#{1,6}\s*/g, "")
     .replace(/\*\*/g, "")
     .replace(/`/g, "")
     .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "• ")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 }
@@ -81,23 +82,27 @@ export async function POST(req: NextRequest) {
     const cleanPrompt = prompt.trim()
 
     const reply = await generateAIResponse(
-      `Create clean, professional, student-friendly short notes for this voice query.
+      `You are generating a single final answer for an AI Voice study assistant.
 
-User query: "${cleanPrompt}"
+User request: "${cleanPrompt}"
+
+Return one clean final response only.
 
 Rules:
-- Give a clean production-style answer
-- Do not use markdown fences
+- One question must produce one complete answer
+- Do not split the answer into multiple responses
+- Do not use markdown code fences
 - Do not use symbols like ## or ###
-- Keep the structure neat and readable
-- Use short headings written naturally
-- Use concise paragraphs and bullet points where useful
-- Focus on clarity for students
-- Keep the answer direct and polished`,
+- Use a clean student-friendly structure
+- Keep it polished and professional
+- Use short natural headings only when needed
+- Use concise bullets only when useful
+- Avoid messy formatting
+- Do not include extra intro/outro filler`,
       { mode: "chat" }
     )
 
-    const cleanedReply = cleanForSpeech(reply)
+    const cleanedReply = cleanForOutput(reply)
 
     const saved = await saveVoiceHistory(user.id, {
       prompt: cleanPrompt,
