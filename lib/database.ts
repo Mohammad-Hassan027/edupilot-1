@@ -205,8 +205,6 @@ export async function deleteSavedVoiceHistory(userId: string, historyId: string)
   return { success: true }
 }
 
-
-
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
