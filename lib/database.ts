@@ -19,6 +19,7 @@ export type SavedNoteRecord = {
   created_at: string
   updated_at: string
 }
+
 export type SavedFlashcard = {
   front: string
   back: string
@@ -205,21 +206,132 @@ export async function deleteSavedVoiceHistory(userId: string, historyId: string)
   return { success: true }
 }
 
-create table if not exists public.saved_quiz_attempts (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  topic text not null,
-  total_questions integer not null default 0,
-  score integer not null default 0,
-  percentage numeric(5,2) not null default 0,
-  questions jsonb not null default '[]'::jsonb,
-  answers jsonb not null default '[]'::jsonb,
-  created_at timestamp without time zone not null default now(),
-  updated_at timestamp without time zone not null default now()
-);
+export type SavedQuizOption = {
+  id: string
+  text: string
+}
 
-create index if not exists idx_saved_quiz_attempts_user_created_at
-  on public.saved_quiz_attempts (user_id, created_at desc);
+export type SavedQuizQuestion = {
+  id: string
+  question: string
+  options: SavedQuizOption[]
+  correctOptionId: string
+  explanation?: string | null
+}
+
+export type SavedQuizAnswer = {
+  questionId: string
+  selectedOptionId: string | null
+  isCorrect: boolean
+}
+
+export type SavedQuizAttemptRecord = {
+  id: string
+  user_id: string
+  topic: string
+  total_questions: number
+  score: number
+  percentage: number
+  questions: SavedQuizQuestion[]
+  answers: SavedQuizAnswer[]
+  created_at: string
+  updated_at: string
+}
+
+export async function saveQuizAttempt(
+  userId: string,
+  input: {
+    topic: string
+    questions: SavedQuizQuestion[]
+    answers: SavedQuizAnswer[]
+    score: number
+    totalQuestions: number
+    percentage: number
+  }
+) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    topic: input.topic,
+    total_questions: input.totalQuestions,
+    score: input.score,
+    percentage: input.percentage,
+    questions: input.questions,
+    answers: input.answers,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("saved_quiz_attempts")
+    .insert(payload)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save quiz attempt: ${error.message}`)
+  }
+
+  return data as SavedQuizAttemptRecord
+}
+
+export async function getSavedQuizAttempts(userId: string, limit = 12) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_quiz_attempts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_quiz_attempts")) {
+      return []
+    }
+    throw new Error(`Failed to load quiz history: ${error.message}`)
+  }
+
+  return (data || []) as SavedQuizAttemptRecord[]
+}
+
+export async function getSavedQuizAttemptById(userId: string, attemptId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_quiz_attempts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", attemptId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_quiz_attempts")) {
+      return null
+    }
+    throw new Error(`Failed to load quiz attempt: ${error.message}`)
+  }
+
+  return (data || null) as SavedQuizAttemptRecord | null
+}
+
+export async function deleteSavedQuizAttempt(userId: string, attemptId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("saved_quiz_attempts")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", attemptId)
+
+  if (error) {
+    throw new Error(`Failed to delete quiz attempt: ${error.message}`)
+  }
+
+  return { success: true }
+}
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
