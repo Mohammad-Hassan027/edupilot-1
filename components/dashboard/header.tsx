@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Bell, Search, Sparkles, Menu, X, Home, LayoutDashboard, MessageSquareText, FileText,
   Layers, HelpCircle, Calendar, BookOpen, Settings, Mic, User, CreditCard,
-  LogOut, Clock, TrendingUp, Lightbulb, LogIn, Lock
+  LogOut, Clock, TrendingUp, Lightbulb, LogIn, Lock, ArrowRight
 } from "lucide-react"
 import { UserAvatar } from "@/components/user-avatar"
 import { Button } from "@/components/ui/button"
@@ -39,20 +39,68 @@ const mobileNavItems = [
   { icon: Settings, label: "Settings", href: "/settings", guestOk: false },
 ]
 
-const recentSearches = ["JavaScript basics", "Time management"]
+type SearchItem = {
+  id: string
+  title: string
+  subtitle?: string
+  href?: string
+  query?: string
+  icon: typeof Search
+  category: "feature" | "note" | "flashcard" | "quiz" | "voice" | "topic" | "recent"
+  guestOk?: boolean
+}
 
-const suggestedTopics = [
-  { icon: TrendingUp, label: "Learning productivity" },
-  { icon: Lightbulb, label: "UI design principles" },
-  { icon: BookOpen, label: "Interview preparation" },
-  { icon: MessageSquareText, label: "Data analysis basics" },
+type NoteSearchItem = {
+  id: string
+  source_title?: string
+  source_label?: string | null
+  source_type?: string
+}
+
+type FlashcardSearchItem = {
+  id: string
+  topic?: string
+  card_count?: number
+}
+
+type QuizSearchItem = {
+  id: string
+  topic?: string
+  score?: number
+  percentage?: number
+}
+
+type VoiceSearchItem = {
+  id: string
+  title?: string
+  prompt?: string
+}
+
+const FEATURE_ITEMS: SearchItem[] = [
+  { id: "feature-home", title: "Home", subtitle: "Go to homepage", href: "/", icon: Home, category: "feature", guestOk: true },
+  { id: "feature-dashboard", title: "Dashboard", subtitle: "Open your dashboard", href: "/dashboard", icon: LayoutDashboard, category: "feature", guestOk: true },
+  { id: "feature-ai-tutor", title: "AI Tutor", subtitle: "Ask anything with AI", href: "/ai-tutor", icon: MessageSquareText, category: "feature", guestOk: true },
+  { id: "feature-notes", title: "Notes", subtitle: "Generate study notes", href: "/notes", icon: FileText, category: "feature", guestOk: false },
+  { id: "feature-flashcards", title: "Flashcards", subtitle: "Review saved flashcards", href: "/flashcards", icon: Layers, category: "feature", guestOk: false },
+  { id: "feature-ai-voice", title: "AI Voice", subtitle: "Practice with voice", href: "/ai-voice", icon: Mic, category: "feature", guestOk: false },
+  { id: "feature-quiz", title: "Quiz", subtitle: "Generate and review quizzes", href: "/quiz", icon: HelpCircle, category: "feature", guestOk: false },
+  { id: "feature-planner", title: "Planner", subtitle: "Create study plans", href: "/planner", icon: Calendar, category: "feature", guestOk: false },
+  { id: "feature-blogs", title: "Blogs", subtitle: "Read study blogs", href: "/blogs", icon: BookOpen, category: "feature", guestOk: true },
+  { id: "feature-billing", title: "Billing", subtitle: "Manage your plan", href: "/billing", icon: CreditCard, category: "feature", guestOk: false },
+  { id: "feature-profile", title: "Profile", subtitle: "View your profile", href: "/profile", icon: User, category: "feature", guestOk: false },
+  { id: "feature-settings", title: "Settings", subtitle: "Change your preferences", href: "/settings", icon: Settings, category: "feature", guestOk: false },
 ]
 
-const searchResultTypes = [
-  { type: "note", icon: FileText, label: "Notes" },
-  { type: "flashcard", icon: Layers, label: "Flashcards" },
-  { type: "quiz", icon: HelpCircle, label: "Quizzes" },
+const suggestedTopics: SearchItem[] = [
+  { id: "topic-javascript", title: "JavaScript basics", subtitle: "Ask AI Tutor about JavaScript fundamentals", query: "Explain JavaScript basics for a beginner with examples.", icon: TrendingUp, category: "topic", guestOk: true },
+  { id: "topic-time", title: "Time management", subtitle: "Get tips for studying better", query: "Give me practical time management tips for students.", icon: Clock, category: "topic", guestOk: true },
+  { id: "topic-productivity", title: "Learning productivity", subtitle: "Improve focus and retention", query: "How can I improve learning productivity and focus while studying?", icon: TrendingUp, category: "topic", guestOk: true },
+  { id: "topic-ui", title: "UI design principles", subtitle: "Learn core design concepts", query: "Teach me UI design principles in a simple way.", icon: Lightbulb, category: "topic", guestOk: true },
+  { id: "topic-interview", title: "Interview preparation", subtitle: "Practice interview topics", query: "Help me prepare for interviews with a study plan and sample questions.", icon: BookOpen, category: "topic", guestOk: true },
+  { id: "topic-data", title: "Data analysis basics", subtitle: "Understand core analytics concepts", query: "Explain data analysis basics for a student.", icon: MessageSquareText, category: "topic", guestOk: true },
 ]
+
+const RECENT_SEARCHES_KEY = "edupilot_recent_searches"
 
 function getPlanLabel(status: string | undefined, trialActive: boolean, planId?: string | null): string {
   const paidLabel = planId === "premium" ? "Premium" : "Pro"
@@ -61,16 +109,31 @@ function getPlanLabel(status: string | undefined, trialActive: boolean, planId?:
   return "Free Plan"
 }
 
+function normalizeValue(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function matchesQuery(query: string, ...values: Array<string | null | undefined>) {
+  const normalizedQuery = normalizeValue(query)
+  if (!normalizedQuery) return true
+  return values.some((value) => normalizeValue(value || "").includes(normalizedQuery))
+}
+
 export function DashboardHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [savedNotes, setSavedNotes] = useState<NoteSearchItem[]>([])
+  const [savedFlashcards, setSavedFlashcards] = useState<FlashcardSearchItem[]>([])
+  const [savedQuizzes, setSavedQuizzes] = useState<QuizSearchItem[]>([])
+  const [savedVoiceHistory, setSavedVoiceHistory] = useState<VoiceSearchItem[]>([])
+  const [isLoadingSearchData, setIsLoadingSearchData] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   const { profile, email, subscription, isLoading, fullName, error } = useUser()
-  // isGuest: loading finished and no authenticated user
   const isGuest = !isLoading && (error === "not_authenticated" || !email)
 
   const displayName = fullName || profile?.full_name || email?.split("@")[0] || "User"
@@ -87,16 +150,181 @@ export function DashboardHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleAskAI = () => router.push("/ai-tutor")
+  useEffect(() => {
+    if (typeof window === "undefined") return
 
-  const handleSearchSelect = (topic: string) => {
-    setSearchQuery(topic)
-    setSearchOpen(false)
+    try {
+      const stored = window.localStorage.getItem(RECENT_SEARCHES_KEY)
+      if (!stored) return
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) {
+        setRecentSearches(parsed.filter((item): item is string => typeof item === "string").slice(0, 6))
+      }
+    } catch {
+      setRecentSearches([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isGuest || !searchOpen) return
+
+    let cancelled = false
+
+    const loadSearchData = async () => {
+      setIsLoadingSearchData(true)
+      try {
+        const [notesRes, flashcardsRes, quizzesRes, voiceRes] = await Promise.allSettled([
+          fetch("/api/ai/notes", { cache: "no-store" }),
+          fetch("/api/ai/flashcards", { cache: "no-store" }),
+          fetch("/api/ai/quiz", { cache: "no-store" }),
+          fetch("/api/ai/voice", { cache: "no-store" }),
+        ])
+
+        if (cancelled) return
+
+        if (notesRes.status === "fulfilled" && notesRes.value.ok) {
+          const data = await notesRes.value.json()
+          setSavedNotes(Array.isArray(data.notes) ? data.notes : [])
+        }
+
+        if (flashcardsRes.status === "fulfilled" && flashcardsRes.value.ok) {
+          const data = await flashcardsRes.value.json()
+          setSavedFlashcards(Array.isArray(data.sets) ? data.sets : [])
+        }
+
+        if (quizzesRes.status === "fulfilled" && quizzesRes.value.ok) {
+          const data = await quizzesRes.value.json()
+          setSavedQuizzes(Array.isArray(data.attempts) ? data.attempts : [])
+        }
+
+        if (voiceRes.status === "fulfilled" && voiceRes.value.ok) {
+          const data = await voiceRes.value.json()
+          setSavedVoiceHistory(Array.isArray(data.history) ? data.history : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setSavedNotes([])
+          setSavedFlashcards([])
+          setSavedQuizzes([])
+          setSavedVoiceHistory([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSearchData(false)
+        }
+      }
+    }
+
+    void loadSearchData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isGuest, searchOpen])
+
+  const saveRecentSearch = (value: string) => {
+    const cleaned = value.trim()
+    if (!cleaned || typeof window === "undefined") return
+
+    const next = [cleaned, ...recentSearches.filter((item) => normalizeValue(item) !== normalizeValue(cleaned))].slice(0, 6)
+    setRecentSearches(next)
+    window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
   }
 
-  const handleAskAIAboutTopic = (topic: string) => {
-    router.push(`/ai-tutor?q=${encodeURIComponent(topic)}`)
+  const historyResults = useMemo<SearchItem[]>(() => {
+    const noteItems: SearchItem[] = savedNotes.map((item) => ({
+      id: `note-${item.id}`,
+      title: item.source_title || "Saved note",
+      subtitle: item.source_label || "Open saved notes",
+      href: `/notes?saved=${item.id}`,
+      icon: FileText,
+      category: "note",
+      guestOk: false,
+    }))
+
+    const flashcardItems: SearchItem[] = savedFlashcards.map((item) => ({
+      id: `flashcard-${item.id}`,
+      title: item.topic || "Saved flashcards",
+      subtitle: `${item.card_count || 0} cards`,
+      href: `/flashcards?set=${item.id}`,
+      icon: Layers,
+      category: "flashcard",
+      guestOk: false,
+    }))
+
+    const quizItems: SearchItem[] = savedQuizzes.map((item) => ({
+      id: `quiz-${item.id}`,
+      title: item.topic || "Saved quiz",
+      subtitle: typeof item.percentage === "number" ? `Last score: ${item.percentage}%` : "Open saved quiz",
+      href: `/quiz?attempt=${item.id}`,
+      icon: HelpCircle,
+      category: "quiz",
+      guestOk: false,
+    }))
+
+    const voiceItems: SearchItem[] = savedVoiceHistory.map((item) => ({
+      id: `voice-${item.id}`,
+      title: item.title || item.prompt || "Saved voice prompt",
+      subtitle: item.prompt || "Open AI Voice history",
+      href: `/ai-voice?history=${item.id}`,
+      icon: Mic,
+      category: "voice",
+      guestOk: false,
+    }))
+
+    return [...noteItems, ...flashcardItems, ...quizItems, ...voiceItems]
+  }, [savedNotes, savedFlashcards, savedQuizzes, savedVoiceHistory])
+
+  const filteredFeatureItems = useMemo(
+    () => FEATURE_ITEMS.filter((item) => matchesQuery(searchQuery, item.title, item.subtitle)),
+    [searchQuery]
+  )
+
+  const filteredHistoryItems = useMemo(
+    () => historyResults.filter((item) => matchesQuery(searchQuery, item.title, item.subtitle)).slice(0, 8),
+    [historyResults, searchQuery]
+  )
+
+  const filteredSuggestedTopics = useMemo(
+    () => suggestedTopics.filter((item) => matchesQuery(searchQuery, item.title, item.subtitle)).slice(0, 6),
+    [searchQuery]
+  )
+
+  const handleAskAI = () => router.push("/ai-tutor")
+
+  const navigateToSearchItem = (item: SearchItem) => {
+    if (!item.guestOk && isGuest) {
+      router.push("/login")
+      setSearchOpen(false)
+      return
+    }
+
+    saveRecentSearch(item.title)
+    setSearchQuery(item.title)
     setSearchOpen(false)
+
+    if (item.href) {
+      router.push(item.href)
+      return
+    }
+
+    const topic = item.query || item.title
+    router.push(`/ai-tutor?q=${encodeURIComponent(topic)}`)
+  }
+
+  const handleSearchSubmit = () => {
+    const trimmedQuery = searchQuery.trim()
+    if (!trimmedQuery) return
+
+    const matchedFeature = FEATURE_ITEMS.find((item) => normalizeValue(item.title) === normalizeValue(trimmedQuery))
+    if (matchedFeature) {
+      navigateToSearchItem(matchedFeature)
+      return
+    }
+
+    saveRecentSearch(trimmedQuery)
+    setSearchOpen(false)
+    router.push(`/ai-tutor?q=${encodeURIComponent(trimmedQuery)}`)
   }
 
   const handleMobileNavClick = (href: string, guestOk: boolean) => {
@@ -123,7 +351,6 @@ export function DashboardHeader() {
     }
   }
 
-  // Shared user menu items (used in both desktop + mobile dropdowns)
   const userMenuItems = (
     <>
       <DropdownMenuLabel className="font-normal">
@@ -177,7 +404,6 @@ export function DashboardHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 md:px-6 backdrop-blur-xl">
-        {/* Mobile Menu Button & Logo */}
         <div className="flex items-center gap-3 md:hidden">
           <Button
             variant="ghost"
@@ -190,61 +416,123 @@ export function DashboardHeader() {
           <Logo size="sm" />
         </div>
 
-        {/* Welcome Message - Desktop */}
         <div className="hidden md:block">
           {isGuest ? (
             <h1 className="text-xl font-semibold text-foreground">
-              Welcome to{" "}<span className="text-primary">EduPilot</span>
+              Welcome to <span className="text-primary">EduPilot</span>
             </h1>
           ) : (
             <h1 className="text-xl font-semibold text-foreground">
-              Welcome to EduPilot,{" "}
-              <span className="text-primary">{isLoading ? "..." : firstName}</span>
+              Welcome to EduPilot, <span className="text-primary">{isLoading ? "..." : firstName}</span>
             </h1>
           )}
         </div>
 
-        {/* Right Section */}
         <div className="flex items-center gap-4">
-          {/* Smart Search with Dropdown */}
           <div className="relative hidden md:block" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10" />
             <Input
               placeholder="Search topics, skills, concepts..."
-              className="w-64 border-border bg-secondary pl-10 text-foreground placeholder:text-muted-foreground"
+              className="w-64 border-border bg-secondary pl-10 pr-10 text-foreground placeholder:text-muted-foreground"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setSearchOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  handleSearchSubmit()
+                }
+              }}
             />
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={handleSearchSubmit}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                aria-label="Search"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : null}
 
-            {/* Search Dropdown */}
             {searchOpen && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-lg border border-border bg-card/95 backdrop-blur-xl shadow-xl overflow-hidden z-50">
-                {searchQuery ? (
+              <div className="absolute top-full left-0 right-0 mt-2 max-h-[28rem] overflow-y-auto rounded-lg border border-border bg-card/95 backdrop-blur-xl shadow-xl z-50">
+                {searchQuery.trim() ? (
                   <div className="p-2">
-                    <div className="px-3 py-2 text-xs font-medium text-muted-foreground">
-                      Search results for &quot;{searchQuery}&quot;
-                    </div>
-                    {searchResultTypes.map((type) => (
-                      <button
-                        key={type.type}
-                        onClick={() => handleSearchSelect(searchQuery)}
-                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md hover:bg-secondary transition-colors text-left"
-                      >
-                        <type.icon className="h-4 w-4 text-primary" />
-                        <span className="text-sm text-foreground">{searchQuery}</span>
-                        <span className="text-xs text-muted-foreground ml-auto">{type.label}</span>
-                      </button>
-                    ))}
-                    <div className="border-t border-border mt-2 pt-2">
-                      <button
-                        onClick={() => handleAskAIAboutTopic(searchQuery)}
-                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md hover:bg-accent/10 transition-colors text-left"
-                      >
-                        <Sparkles className="h-4 w-4 text-accent" />
-                        <span className="text-sm text-accent">Ask AI about this topic</span>
-                      </button>
-                    </div>
+                    {filteredFeatureItems.length > 0 && (
+                      <div className="mb-2">
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Pages</div>
+                        {filteredFeatureItems.slice(0, 6).map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => navigateToSearchItem(item)}
+                            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-secondary"
+                          >
+                            <item.icon className="h-4 w-4 text-primary" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm text-foreground">{item.title}</div>
+                              {item.subtitle ? <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div> : null}
+                            </div>
+                            <span className="text-xs text-muted-foreground">Page</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {!isGuest && filteredHistoryItems.length > 0 && (
+                      <div className="mb-2">
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Your content</div>
+                        {filteredHistoryItems.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => navigateToSearchItem(item)}
+                            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-secondary"
+                          >
+                            <item.icon className="h-4 w-4 text-primary" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm text-foreground">{item.title}</div>
+                              {item.subtitle ? <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div> : null}
+                            </div>
+                            <span className="text-xs text-muted-foreground capitalize">{item.category}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {filteredSuggestedTopics.length > 0 && (
+                      <div className="border-t border-border pt-2">
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Suggested topics</div>
+                        {filteredSuggestedTopics.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => navigateToSearchItem(item)}
+                            className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-secondary"
+                          >
+                            <item.icon className="h-4 w-4 text-primary" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm text-foreground">{item.title}</div>
+                              {item.subtitle ? <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div> : null}
+                            </div>
+                            <span className="text-xs text-accent">Ask AI</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {filteredFeatureItems.length === 0 && filteredHistoryItems.length === 0 && filteredSuggestedTopics.length === 0 && (
+                      <div className="p-3">
+                        <button
+                          onClick={handleSearchSubmit}
+                          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-accent/10"
+                        >
+                          <Sparkles className="h-4 w-4 text-accent" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-accent">Ask AI about “{searchQuery.trim()}”</div>
+                            <div className="text-xs text-muted-foreground">Open AI Tutor with this prompt</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="p-2">
@@ -257,8 +545,11 @@ export function DashboardHeader() {
                         {recentSearches.map((search) => (
                           <button
                             key={search}
-                            onClick={() => handleSearchSelect(search)}
-                            className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-secondary transition-colors text-left"
+                            onClick={() => {
+                              setSearchQuery(search)
+                              saveRecentSearch(search)
+                            }}
+                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-secondary"
                           >
                             <Search className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm text-foreground">{search}</span>
@@ -266,29 +557,55 @@ export function DashboardHeader() {
                         ))}
                       </div>
                     )}
+
+                    <div className="mb-3">
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Quick access</div>
+                      {FEATURE_ITEMS.filter((item) => item.guestOk || !isGuest).slice(0, 6).map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => navigateToSearchItem(item)}
+                          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-secondary"
+                        >
+                          <item.icon className="h-4 w-4 text-primary" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-foreground">{item.title}</div>
+                            {item.subtitle ? <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div> : null}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
                     <div>
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
                         <Lightbulb className="h-3 w-3" />
                         Suggested topics
                       </div>
-                      {suggestedTopics.map((topic) => (
+                      {suggestedTopics.slice(0, 4).map((item) => (
                         <button
-                          key={topic.label}
-                          onClick={() => handleSearchSelect(topic.label)}
-                          className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-secondary transition-colors text-left"
+                          key={item.id}
+                          onClick={() => navigateToSearchItem(item)}
+                          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-secondary"
                         >
-                          <topic.icon className="h-4 w-4 text-primary" />
-                          <span className="text-sm text-foreground">{topic.label}</span>
+                          <item.icon className="h-4 w-4 text-primary" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-foreground">{item.title}</div>
+                            {item.subtitle ? <div className="truncate text-xs text-muted-foreground">{item.subtitle}</div> : null}
+                          </div>
                         </button>
                       ))}
                     </div>
+
+                    {!isGuest && (
+                      <div className="border-t border-border mt-3 pt-3 px-3 pb-1 text-xs text-muted-foreground">
+                        {isLoadingSearchData ? "Loading your notes, flashcards, quizzes, and voice history..." : "Search also checks your saved notes, flashcards, quizzes, and AI Voice history."}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* Quick AI Button */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -311,13 +628,9 @@ export function DashboardHeader() {
             </Tooltip>
           </TooltipProvider>
 
-          {/* Theme Toggle */}
           <ThemeToggle />
-
-          {/* Notifications Dropdown */}
           <NotificationsDropdown />
 
-          {/* Desktop: Sign In for guests | Profile dropdown for logged-in */}
           {isGuest ? (
             <Link
               href="/login"
@@ -345,7 +658,6 @@ export function DashboardHeader() {
             </DropdownMenu>
           )}
 
-          {/* Mobile: Sign In for guests | Avatar dropdown for logged-in */}
           {isGuest ? (
             <Link href="/login" className="sm:hidden flex h-8 w-8 items-center justify-center rounded-full border border-primary/50 bg-primary/10 text-primary">
               <LogIn className="h-4 w-4" />
@@ -363,7 +675,6 @@ export function DashboardHeader() {
         </div>
       </header>
 
-      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />

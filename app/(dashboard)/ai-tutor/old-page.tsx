@@ -192,7 +192,6 @@ interface SpeechRecognitionErrorEvent {
 function AITutorContent() {
   const searchParams = useSearchParams()
   const targetSessionId = searchParams.get("session")
-  const initialQuery = searchParams.get("q")
 
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
@@ -219,11 +218,6 @@ function AITutorContent() {
   const [showSourcesSidebar, setShowSourcesSidebar] = useState(false)
   const [activeSources, setActiveSources] = useState<ResourceLink[]>([])
   const [activeSourceTitle, setActiveSourceTitle] = useState("Sources")
-
-  useEffect(() => {
-    if (!initialQuery || targetSessionId) return
-    setInput((current) => (current.trim().length > 0 ? current : initialQuery))
-  }, [initialQuery, targetSessionId])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)

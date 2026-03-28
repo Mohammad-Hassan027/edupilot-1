@@ -333,6 +333,138 @@ export async function deleteSavedQuizAttempt(userId: string, attemptId: string) 
   return { success: true }
 }
 
+export type SavedPlannerTask = {
+  id: string
+  title: string
+  time: string
+  duration: string
+  subject: string
+  completed: boolean
+  day: number
+}
+
+export type SavedStudyPlanRecord = {
+  id: string
+  user_id: string
+  title: string
+  goal: string | null
+  selected_day: number
+  tasks: SavedPlannerTask[]
+  created_at: string
+  updated_at: string
+}
+
+export async function saveStudyPlan(
+  userId: string,
+  input: {
+    planId?: string | null
+    title: string
+    goal?: string | null
+    selectedDay: number
+    tasks: SavedPlannerTask[]
+  }
+) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    title: input.title,
+    goal: input.goal ?? null,
+    selected_day: input.selectedDay,
+    tasks: input.tasks,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.planId) {
+    const { data, error } = await admin
+      .from("saved_study_plans")
+      .update(payload)
+      .eq("user_id", userId)
+      .eq("id", input.planId)
+      .select("*")
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to update study plan: ${error.message}`)
+    }
+
+    return data as SavedStudyPlanRecord
+  }
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .insert({
+      ...payload,
+      created_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save study plan: ${error.message}`)
+  }
+
+  return data as SavedStudyPlanRecord
+}
+
+export async function getSavedStudyPlans(userId: string, limit = 12) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_study_plans")) {
+      return []
+    }
+    throw new Error(`Failed to load planner history: ${error.message}`)
+  }
+
+  return (data || []) as SavedStudyPlanRecord[]
+}
+
+export async function getSavedStudyPlanById(userId: string, planId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", planId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_study_plans")) {
+      return null
+    }
+    throw new Error(`Failed to load study plan: ${error.message}`)
+  }
+
+  return (data || null) as SavedStudyPlanRecord | null
+}
+
+export async function deleteSavedStudyPlan(userId: string, planId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("saved_study_plans")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", planId)
+
+  if (error) {
+    throw new Error(`Failed to delete study plan: ${error.message}`)
+  }
+
+  return { success: true }
+}
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
@@ -851,6 +983,7 @@ export async function updatePaymentRecord(
     throw new Error(`Payment update failed: ${fallbackUpdate.error.message}`)
   }
 }
+
 
 // ─── Saved Notes ─────────────────────────────────────────────────────────────
 
