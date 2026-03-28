@@ -76,7 +76,7 @@ export default function PricingPage() {
         <div className="mx-auto mb-16 max-w-2xl text-center">
           <h1 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">Pricing for every learner</h1>
           <p className="mb-8 text-lg text-muted-foreground">
-            Select a plan and complete Razorpay test payment to activate it instantly across the app.
+            Select a plan and complete Razorpay test payment to activate it instantly<br/>After clicking on ‘Activate any Plan’, please wait for a while for the Razorpay payment process 
           </p>
 
           <div className="inline-flex items-center gap-4 rounded-full border border-border bg-card p-1">
@@ -125,7 +125,7 @@ export default function PricingPage() {
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary to-accent px-3 py-1 text-xs font-medium text-primary-foreground">
                       <Sparkles className="h-3 w-3" />
-                      {isRecommended ? "Recommended for you" : "Most Popular"}
+                      {isRecommended ? "Recommended" : "Most Popular"}
                     </span>
                   </div>
                 )}
