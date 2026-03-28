@@ -186,7 +186,7 @@ export default function FlashcardsPage() {
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />
               <div>
-                <p className="font-medium text-foreground">Flashcards is a paid feature.</p>
+                <p className="font-medium text-foreground">Flashcards is a Pro feature.</p>
                 <p className="text-muted-foreground mt-1">
                   Upgrade on the Pricing page to unlock Flashcards instantly after successful payment.
                 </p>
