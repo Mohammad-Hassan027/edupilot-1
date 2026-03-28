@@ -1,126 +1,129 @@
-export type SavedQuizOption = {
-  id: string
-  text: string
-}
+export const dynamic = "force-dynamic"
 
-export type SavedQuizQuestion = {
-  id: string
+import { NextRequest, NextResponse } from "next/server"
+import { getUser } from "@/lib/auth-server"
+import { generateQuiz } from "@/lib/ai"
+import {
+  getSubscription,
+  isTrialActive,
+  logUsage,
+  getSavedQuizAttempts,
+} from "@/lib/database"
+
+type GeneratedQuizQuestion = {
   question: string
-  options: SavedQuizOption[]
-  correctOptionId: string
-  explanation?: string | null
+  options: string[]
+  answer: string
+  explanation?: string
 }
 
-export type SavedQuizAnswer = {
-  questionId: string
-  selectedOptionId: string | null
-  isCorrect: boolean
-}
+export async function GET() {
+  try {
+    const user = await getUser()
 
-export type SavedQuizAttemptRecord = {
-  id: string
-  user_id: string
-  topic: string
-  total_questions: number
-  score: number
-  percentage: number
-  questions: SavedQuizQuestion[]
-  answers: SavedQuizAnswer[]
-  created_at: string
-  updated_at: string
-}
-
-export async function saveQuizAttempt(
-  userId: string,
-  input: {
-    topic: string
-    questions: SavedQuizQuestion[]
-    answers: SavedQuizAnswer[]
-    score: number
-    totalQuestions: number
-    percentage: number
-  }
-) {
-  const admin = await getSupabaseAdmin()
-
-  const payload = {
-    user_id: userId,
-    topic: input.topic,
-    total_questions: input.totalQuestions,
-    score: input.score,
-    percentage: input.percentage,
-    questions: input.questions,
-    answers: input.answers,
-    updated_at: new Date().toISOString(),
-  }
-
-  const { data, error } = await admin
-    .from("saved_quiz_attempts")
-    .insert(payload)
-    .select("*")
-    .single()
-
-  if (error) {
-    throw new Error(`Failed to save quiz attempt: ${error.message}`)
-  }
-
-  return data as SavedQuizAttemptRecord
-}
-
-export async function getSavedQuizAttempts(userId: string, limit = 12) {
-  const admin = await getSupabaseAdmin()
-
-  const { data, error } = await admin
-    .from("saved_quiz_attempts")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(limit)
-
-  if (error) {
-    const message = error.message?.toLowerCase() || ""
-    if (message.includes("saved_quiz_attempts")) {
-      return []
+    if (!user) {
+      return NextResponse.json({ attempts: [] })
     }
-    throw new Error(`Failed to load quiz history: ${error.message}`)
-  }
 
-  return (data || []) as SavedQuizAttemptRecord[]
+    const attempts = await getSavedQuizAttempts(user.id, 12)
+    return NextResponse.json({ attempts })
+  } catch (err) {
+    console.error("[ai/quiz][GET] Error:", err)
+    const message = err instanceof Error ? err.message : "Failed to load quiz history"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
 
-export async function getSavedQuizAttemptById(userId: string, attemptId: string) {
-  const admin = await getSupabaseAdmin()
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getUser()
 
-  const { data, error } = await admin
-    .from("saved_quiz_attempts")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("id", attemptId)
-    .maybeSingle()
-
-  if (error) {
-    const message = error.message?.toLowerCase() || ""
-    if (message.includes("saved_quiz_attempts")) {
-      return null
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Login required to generate quiz.",
+          code: "UNAUTHORIZED",
+          requiresLogin: true,
+        },
+        { status: 401 }
+      )
     }
-    throw new Error(`Failed to load quiz attempt: ${error.message}`)
+
+    const body = await req.json().catch(() => null)
+    const topic = typeof body?.topic === "string" ? body.topic.trim() : ""
+    const count = Math.min(Math.max(Number(body?.count) || 5, 1), 10)
+
+    if (!topic) {
+      return NextResponse.json({ error: "Topic is required" }, { status: 400 })
+    }
+
+    const subscription = await getSubscription(user.id)
+    const paidTrialActive = await isTrialActive(user.id)
+    const hasPremiumPlan = subscription?.plan_id === "premium"
+
+    const canUseQuiz = Boolean(
+      hasPremiumPlan &&
+        (paidTrialActive || subscription?.status === "active" || subscription?.status === "trial")
+    )
+
+    if (!canUseQuiz) {
+      return NextResponse.json(
+        {
+          error: "Quiz is available on the Premium plan only. Start your 14-day free trial to continue.",
+          code: "PLAN_REQUIRED",
+          requiresUpgrade: true,
+        },
+        { status: 402 }
+      )
+    }
+
+    const quiz = await generateQuiz(topic, count)
+
+    const formattedQuestions = (quiz as GeneratedQuizQuestion[]).map((item, questionIndex) => {
+      const options = Array.isArray(item.options) ? item.options.slice(0, 4) : []
+
+      const normalizedOptions =
+        options.length === 4
+          ? options
+          : ["Option A", "Option B", "Option C", "Option D"]
+
+      const optionObjects = normalizedOptions.map((optionText, optionIndex) => ({
+        id: `q${questionIndex + 1}_o${optionIndex + 1}`,
+        text: String(optionText),
+      }))
+
+      const matchedCorrect =
+        optionObjects.find(
+          (option) =>
+            option.text.trim().toLowerCase() === String(item.answer || "").trim().toLowerCase()
+        ) || optionObjects[0]
+
+      return {
+        id: `q${questionIndex + 1}`,
+        question: String(item.question || `Question ${questionIndex + 1}`),
+        options: optionObjects,
+        correctOptionId: matchedCorrect.id,
+        explanation: item.explanation ? String(item.explanation) : "",
+      }
+    })
+
+    await logUsage(user.id, "quiz", "quiz_generated", {
+      topic,
+      count: formattedQuestions.length,
+      planId: subscription?.plan_id,
+      generatedAt: new Date().toISOString(),
+    }).catch(() => undefined)
+
+    return NextResponse.json({
+      success: true,
+      quiz: {
+        topic,
+        questions: formattedQuestions,
+      },
+    })
+  } catch (err) {
+    console.error("[ai/quiz][POST] Error:", err)
+    const message = err instanceof Error ? err.message : "Failed to generate quiz"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return (data || null) as SavedQuizAttemptRecord | null
-}
-
-export async function deleteSavedQuizAttempt(userId: string, attemptId: string) {
-  const admin = await getSupabaseAdmin()
-
-  const { error } = await admin
-    .from("saved_quiz_attempts")
-    .delete()
-    .eq("user_id", userId)
-    .eq("id", attemptId)
-
-  if (error) {
-    throw new Error(`Failed to delete quiz attempt: ${error.message}`)
-  }
-
-  return { success: true }
 }

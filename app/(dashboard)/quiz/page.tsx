@@ -13,6 +13,7 @@ import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye } fro
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { LoginGateModal } from "@/components/login-gate-modal"
+import { cn } from "@/lib/utils"
 
 type QuizOption = {
   id: string
