@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,26 +10,11 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserAvatar } from "@/components/user-avatar"
-import {
-  Camera,
-  Save,
-  User,
-  Mail,
-  Clock,
-  BookOpen,
-  X,
-  Trash2,
-  Loader2,
-  CalendarDays,
-  Edit2,
-  CheckCircle,
-  Shield,
-  ImagePlus,
-} from "lucide-react"
+import { Camera, Save, User, Mail, X, Trash2, Loader2, Edit2, CheckCircle } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 
 export default function ProfilePage() {
-  const { profile, email, subscription, isLoading, refetch, setUserState } = useUser()
+  const { profile, email, isLoading, refetch, setUserState, fullName: userFullName } = useUser()
 
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -40,38 +25,28 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setFullName(profile?.full_name || "")
+    setFullName(profile?.full_name || userFullName || "")
     setBio(profile?.bio || "")
-  }, [profile?.full_name, profile?.bio])
+  }, [profile?.full_name, profile?.bio, userFullName])
 
-  const displayName = profile?.full_name || email?.split("@")[0] || "User"
-  const hasUnsavedChanges = isEditing && (fullName !== (profile?.full_name || "") || bio !== (profile?.bio || ""))
-
-  const currentPlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : "Free"
-  const membershipStatus = subscription?.trial_active
-    ? `${currentPlanName} Trial`
-    : subscription?.status === "active"
-      ? `${currentPlanName} Active`
-      : "Free"
-
-  const memberSince = profile?.created_at
-    ? new Date(profile.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })
-    : "—"
-
-  const profileCompleteness = useMemo(() => {
-    let score = 0
-    if (profile?.avatar_url) score += 34
-    if (profile?.full_name) score += 33
-    if (profile?.bio) score += 33
-    return Math.min(score, 100)
-  }, [profile?.avatar_url, profile?.bio, profile?.full_name])
+  const displayName = profile?.full_name || userFullName || email?.split("@")[0] || "User"
+  const hasUnsavedChanges = isEditing && (fullName !== (profile?.full_name || userFullName || "") || bio !== (profile?.bio || ""))
 
   const updateProfileState = (updates: Record<string, unknown>) => {
     setUserState((prev) => ({
       ...prev,
+      authName: typeof updates.full_name === "string" ? updates.full_name : prev.authName,
       profile: prev.profile
         ? { ...prev.profile, ...updates, updated_at: new Date().toISOString() }
-        : (prev.profile as typeof prev.profile),
+        : ({
+            id: "temp-profile",
+            user_id: "",
+            full_name: typeof updates.full_name === "string" ? updates.full_name : null,
+            avatar_url: typeof updates.avatar_url === "string" ? updates.avatar_url : null,
+            bio: typeof updates.bio === "string" ? updates.bio : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as typeof prev.profile),
     }))
   }
 
@@ -104,14 +79,20 @@ export default function ProfilePage() {
         throw new Error(data?.error || "Failed to save profile")
       }
 
+      const nextName = data.data?.full_name ?? fullName.trim()
+      const nextBio = data.data?.bio ?? (bio.trim() || null)
+
       updateProfileState({
-        full_name: data.data?.full_name ?? fullName.trim(),
-        bio: data.data?.bio ?? (bio.trim() || null),
+        full_name: nextName,
+        bio: nextBio,
       })
 
+      setFullName(nextName)
+      setBio(nextBio || "")
       setIsEditing(false)
       showMessage("success", "Profile updated successfully.")
       await refetch(true, true)
+      window.dispatchEvent(new CustomEvent("user-data-refresh", { detail: { authName: nextName } }))
     } catch (err) {
       setStatus("error")
       setStatusMsg(err instanceof Error ? err.message : "Something went wrong.")
@@ -122,7 +103,7 @@ export default function ProfilePage() {
 
   const handleCancel = () => {
     setIsEditing(false)
-    setFullName(profile?.full_name || "")
+    setFullName(profile?.full_name || userFullName || "")
     setBio(profile?.bio || "")
     setStatus("idle")
   }
@@ -202,7 +183,7 @@ export default function ProfilePage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Profile Settings</h1>
-          <p className="text-muted-foreground">Manage your account details, photo, and membership info.</p>
+          <p className="text-muted-foreground">Manage your account details and photo.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -246,28 +227,6 @@ export default function ProfilePage() {
               <p className="text-sm text-muted-foreground break-all">{email}</p>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2">
-              <Badge variant="secondary" className="gap-1">
-                <Clock className="h-3 w-3" />
-                {membershipStatus}
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                <Shield className="h-3 w-3" />
-                {profileCompleteness}% complete
-              </Badge>
-            </div>
-
-            <div className="flex w-full items-center justify-center gap-1 border-t border-border pt-2 text-xs text-muted-foreground">
-              <CalendarDays className="h-3 w-3" />Member since {memberSince}
-            </div>
-
-            <div className="w-full rounded-xl border border-border bg-secondary/40 p-3 text-left text-xs text-muted-foreground">
-              <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
-                <ImagePlus className="h-3.5 w-3.5 text-primary" />Profile image
-              </div>
-              All users now start with the same default profile icon. You can upload your own image anytime.
-            </div>
-
             {isEditing && profile?.avatar_url ? (
               <Button
                 variant="ghost"
@@ -286,7 +245,7 @@ export default function ProfilePage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <User className="h-4 w-4 text-primary" />Personal Information
             </CardTitle>
-            <CardDescription>Your account details are saved to your EduPilot profile.</CardDescription>
+            <CardDescription>Your existing profile data is loaded here automatically.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -322,29 +281,6 @@ export default function ProfilePage() {
                 <span>This helps personalize your learning experience later.</span>
                 <span>{bio.length}/300</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border bg-card lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <BookOpen className="h-4 w-4 text-primary" />Account Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {[
-                { label: "Plan Status", value: membershipStatus, icon: "⭐" },
-                { label: "Membership", value: currentPlanName, icon: "🛡️" },
-                { label: "Member Since", value: memberSince, icon: "📅" },
-              ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-border bg-secondary/50 p-4 text-center">
-                  <div className="mb-1 text-2xl">{item.icon}</div>
-                  <p className="text-lg font-bold text-foreground">{item.value}</p>
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>

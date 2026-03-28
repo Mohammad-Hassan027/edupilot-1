@@ -129,10 +129,12 @@ export async function GET() {
     ])
 
     if (logsError) throw new Error(logsError.message)
-    if (sessionsError) throw new Error(sessionsError.message)
+
+    const sessionTableMissing = sessionsError?.message?.toLowerCase().includes("user_activity_sessions")
+    if (sessionsError && !sessionTableMissing) throw new Error(sessionsError.message)
 
     const allLogs = (logs || []) as UsageLogRow[]
-    const allSessions = (sessions || []) as ActivitySessionRow[]
+    const allSessions = sessionTableMissing ? [] : ((sessions || []) as ActivitySessionRow[])
 
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
