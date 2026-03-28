@@ -3,7 +3,29 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { generateFlashcards } from "@/lib/ai"
-import { logUsage, getSubscription, isTrialActive } from "@/lib/database"
+import {
+  logUsage,
+  getSubscription,
+  isTrialActive,
+  getSavedFlashcardSets,
+  saveFlashcardSet,
+} from "@/lib/database"
+
+export async function GET() {
+  try {
+    const user = await getUser()
+
+    if (!user) {
+      return NextResponse.json({ sets: [] })
+    }
+
+    const sets = await getSavedFlashcardSets(user.id, 12)
+    return NextResponse.json({ sets })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load flashcard history"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,6 +66,14 @@ export async function POST(req: NextRequest) {
     const totalCards = Math.min(Number(count) || 10, 20)
     const flashcards = await generateFlashcards(normalizedTopic, totalCards)
 
+    const savedSet = await saveFlashcardSet(user.id, {
+      topic: normalizedTopic,
+      cards: flashcards.map((card) => ({
+        front: card.front,
+        back: card.back,
+      })),
+    })
+
     await logUsage(user.id, "flashcards", "flashcards_generated", {
       topic: normalizedTopic,
       count: flashcards.length,
@@ -51,9 +81,10 @@ export async function POST(req: NextRequest) {
       firstCardFront: flashcards[0]?.front || null,
       lastCardFront: flashcards[flashcards.length - 1]?.front || null,
       lastGeneratedAt: new Date().toISOString(),
+      savedSetId: savedSet.id,
     }).catch(console.error)
 
-    return NextResponse.json({ success: true, flashcards })
+    return NextResponse.json({ success: true, flashcards, savedSet })
   } catch (err) {
     console.error("[ai/flashcards] Error:", err)
     const message = err instanceof Error ? err.message : "Failed to generate flashcards"

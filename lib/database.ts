@@ -19,6 +19,92 @@ export type SavedNoteRecord = {
   created_at: string
   updated_at: string
 }
+export type SavedFlashcard = {
+  front: string
+  back: string
+}
+
+export type SavedFlashcardSetRecord = {
+  id: string
+  user_id: string
+  topic: string
+  card_count: number
+  cards: SavedFlashcard[]
+  created_at: string
+  updated_at: string
+}
+
+export async function saveFlashcardSet(
+  userId: string,
+  input: {
+    topic: string
+    cards: SavedFlashcard[]
+  }
+) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    topic: input.topic,
+    card_count: input.cards.length,
+    cards: input.cards,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("saved_flashcard_sets")
+    .insert(payload)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save flashcard set: ${error.message}`)
+  }
+
+  return data as SavedFlashcardSetRecord
+}
+
+export async function getSavedFlashcardSets(userId: string, limit = 12) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_flashcard_sets")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_flashcard_sets")) {
+      return []
+    }
+    throw new Error(`Failed to load flashcard history: ${error.message}`)
+  }
+
+  return (data || []) as SavedFlashcardSetRecord[]
+}
+
+export async function getSavedFlashcardSetById(userId: string, setId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_flashcard_sets")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", setId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_flashcard_sets")) {
+      return null
+    }
+    throw new Error(`Failed to load flashcard set: ${error.message}`)
+  }
+
+  return (data || null) as SavedFlashcardSetRecord | null
+}
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
