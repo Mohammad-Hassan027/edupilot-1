@@ -864,6 +864,35 @@ export async function isTrialActive(userId: string): Promise<boolean> {
   return new Date(sub.trial_expiry) > new Date()
 }
 
+export type UsageLogRecord = {
+  id: string
+  user_id: string
+  feature: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export async function getRecentUsageLogs(userId: string, limit = 20) {
+  try {
+    const admin = await getSupabaseAdmin()
+
+    const { data, error } = await admin
+      .from("usage_logs")
+      .select("id, user_id, feature, metadata, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      throw new Error(`Failed to load usage logs: ${error.message}`)
+    }
+
+    return (data || []) as UsageLogRecord[]
+  } catch {
+    return []
+  }
+}
+
 // ─── Usage Logs ──────────────────────────────────────────────────────────────
 
 export async function logUsage(
