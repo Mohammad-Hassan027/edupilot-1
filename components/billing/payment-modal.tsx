@@ -48,10 +48,10 @@ export function PaymentModal({
   const { email, profile } = useUser()
 
   useEffect(() => {
-    if (!isOpen) return
-
-    setError(null)
-    setPaymentStatus("idle")
+    if (isOpen) {
+      setError(null)
+      setPaymentStatus("idle")
+    }
 
     let mounted = true
     let script: HTMLScriptElement | null = document.querySelector(
@@ -101,11 +101,17 @@ export function PaymentModal({
       setError(null)
       setPaymentStatus("processing")
 
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 15000)
+
       const orderResponse = await fetch("/api/payments/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId: plan.id }),
+        signal: controller.signal,
       })
+
+      window.clearTimeout(timeout)
 
       const orderData = await orderResponse.json().catch(() => ({}))
 
@@ -139,9 +145,19 @@ export function PaymentModal({
           email: email ?? "",
           name: profile?.full_name ?? "",
         },
+        hidden: {
+          contact: true,
+        },
+        readonly: {
+          email: Boolean(email),
+          name: Boolean(profile?.full_name),
+        },
         notes: {
           planId: plan.id,
           env: "test",
+        },
+        retry: {
+          enabled: false,
         },
         theme: { color: "#f59e0b" },
         modal: {
@@ -217,7 +233,14 @@ export function PaymentModal({
 
       rzp.open()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment failed. Please try again.")
+      const message =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "Payment setup is taking too long. Please try again."
+          : err instanceof Error
+            ? err.message
+            : "Payment failed. Please try again."
+
+      setError(message)
       setPaymentStatus("error")
       setIsOpeningCheckout(false)
     }
@@ -294,7 +317,7 @@ export function PaymentModal({
             <Alert className="border-accent/50 bg-accent/10">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
               <AlertDescription className="text-accent">
-                Opening Razorpay checkout...
+                Opening Razorpay checkout. This should only take a few seconds...
               </AlertDescription>
             </Alert>
           )}

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   Bell, Search, Sparkles, Menu, X, Home, LayoutDashboard, MessageSquareText, FileText,
   Layers, HelpCircle, Calendar, BookOpen, Settings, Mic, User, CreditCard,
-  LogOut, Clock, TrendingUp, Lightbulb, LogIn
+  LogOut, Clock, TrendingUp, Lightbulb, LogIn, Lock
 } from "lucide-react"
 import { UserAvatar } from "@/components/user-avatar"
 import { Button } from "@/components/ui/button"
@@ -27,16 +27,16 @@ import { NotificationsDropdown } from "./notifications-dropdown"
 import { useUser } from "@/hooks/use-user"
 
 const mobileNavItems = [
-  { icon: Home, label: "Home", href: "/" },
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: MessageSquareText, label: "AI Tutor", href: "/ai-tutor" },
-  { icon: FileText, label: "Notes", href: "/notes" },
-  { icon: Layers, label: "Flashcards", href: "/flashcards" },
-  { icon: Mic, label: "AI Voice", href: "/ai-voice" },
-  { icon: HelpCircle, label: "Quiz", href: "/quiz" },
-  { icon: Calendar, label: "Planner", href: "/planner" },
-  { icon: BookOpen, label: "Blogs", href: "/blogs" },
-  { icon: Settings, label: "Settings", href: "/settings" },
+  { icon: Home, label: "Home", href: "/", guestOk: true },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", guestOk: true },
+  { icon: MessageSquareText, label: "AI Tutor", href: "/ai-tutor", guestOk: true },
+  { icon: FileText, label: "Notes", href: "/notes", guestOk: false },
+  { icon: Layers, label: "Flashcards", href: "/flashcards", guestOk: false },
+  { icon: Mic, label: "AI Voice", href: "/ai-voice", guestOk: false },
+  { icon: HelpCircle, label: "Quiz", href: "/quiz", guestOk: false },
+  { icon: Calendar, label: "Planner", href: "/planner", guestOk: false },
+  { icon: BookOpen, label: "Blogs", href: "/blogs", guestOk: true },
+  { icon: Settings, label: "Settings", href: "/settings", guestOk: false },
 ]
 
 const recentSearches = ["JavaScript basics", "Time management"]
@@ -97,6 +97,17 @@ export function DashboardHeader() {
   const handleAskAIAboutTopic = (topic: string) => {
     router.push(`/ai-tutor?q=${encodeURIComponent(topic)}`)
     setSearchOpen(false)
+  }
+
+  const handleMobileNavClick = (href: string, guestOk: boolean) => {
+    setMobileMenuOpen(false)
+
+    if (!guestOk && isGuest) {
+      router.push("/login")
+      return
+    }
+
+    router.push(href)
   }
 
   const handleLogout = async () => {
@@ -361,17 +372,27 @@ export function DashboardHeader() {
               <Logo size="sm" />
             </div>
             <nav className="p-4 space-y-1">
-              {mobileNavItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              ))}
+              {mobileNavItems.map((item) => {
+                const isLocked = isGuest && !item.guestOk
+
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={() => handleMobileNavClick(item.href, item.guestOk)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      isLocked
+                        ? "text-muted-foreground/60 hover:bg-secondary hover:text-muted-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className={cn("h-5 w-5", isLocked && "opacity-60")} />
+                    <span>{item.label}</span>
+                    {isLocked ? <Lock className="ml-auto h-4 w-4 opacity-60" /> : null}
+                  </button>
+                )
+              })}
             </nav>
           </div>
         </div>
