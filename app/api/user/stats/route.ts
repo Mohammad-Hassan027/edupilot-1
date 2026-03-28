@@ -1,13 +1,13 @@
-export const dynamic = "force-dynamic"
-
 import { NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 
+export const dynamic = "force-dynamic"
+
 type UsageLogRow = {
   feature: string
-  action: string
   created_at: string
+  metadata?: Record<string, unknown> | null
 }
 
 type ActivitySessionRow = {
@@ -113,14 +113,22 @@ function getEngagementLevel(secondsThisWeek: number, activeDaysThisWeek: number,
 export async function GET() {
   try {
     const user = await getUser()
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const admin = await getSupabaseAdmin()
 
-    const [{ data: logs, error: logsError }, { data: sessions, error: sessionsError }] = await Promise.all([
-      admin.from("usage_logs").select("feature, action, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+    const [
+      { data: logs, error: logsError },
+      { data: sessions, error: sessionsError },
+    ] = await Promise.all([
+      admin
+        .from("usage_logs")
+        .select("feature, created_at, metadata")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
       admin
         .from("user_activity_sessions")
         .select("duration_seconds, started_at, last_seen_at")
@@ -128,12 +136,23 @@ export async function GET() {
         .order("started_at", { ascending: false }),
     ])
 
-    if (logsError) throw new Error(logsError.message)
+    const usageTableMissing =
+      logsError?.message?.toLowerCase().includes("usage_logs") ||
+      logsError?.message?.toLowerCase().includes("column") ||
+      false
 
-    const sessionTableMissing = sessionsError?.message?.toLowerCase().includes("user_activity_sessions")
-    if (sessionsError && !sessionTableMissing) throw new Error(sessionsError.message)
+    if (logsError && !usageTableMissing) {
+      throw new Error(logsError.message)
+    }
 
-    const allLogs = (logs || []) as UsageLogRow[]
+    const sessionTableMissing =
+      sessionsError?.message?.toLowerCase().includes("user_activity_sessions") || false
+
+    if (sessionsError && !sessionTableMissing) {
+      throw new Error(sessionsError.message)
+    }
+
+    const allLogs = usageTableMissing ? [] : ((logs || []) as UsageLogRow[])
     const allSessions = sessionTableMissing ? [] : ((sessions || []) as ActivitySessionRow[])
 
     const now = new Date()
@@ -173,7 +192,12 @@ export async function GET() {
 
     const weeklyActivity = buildWeeklyActivity(allLogs, allSessions)
     const monthlyActivity = buildMonthlyActivity(allLogs, allSessions)
-    const activeDaysThisWeek = new Set(thisWeekSessions.map((session) => toDayKey(session.started_at))).size
+
+    const activeDaysThisWeek = new Set([
+      ...thisWeekSessions.map((session) => toDayKey(session.started_at)),
+      ...thisWeekLogs.map((log) => toDayKey(log.created_at)),
+    ]).size
+
     const activeDaysThisMonth = new Set([
       ...thisMonthSessions.map((session) => toDayKey(session.started_at)),
       ...thisMonthLogs.map((log) => toDayKey(log.created_at)),
@@ -200,6 +224,42 @@ export async function GET() {
     })
   } catch (err) {
     console.error("[user/stats] Error:", err)
-    return NextResponse.json({ error: "Failed to load stats" }, { status: 500 })
+
+    return NextResponse.json(
+      {
+        learningHours: "0.0",
+        totalLearningHours: "0.0",
+        trackedSecondsThisWeek: 0,
+        totalTrackedSeconds: 0,
+        quizzesTaken: 0,
+        totalActivities: 0,
+        weekTrend: "0%",
+        thisWeekCount: 0,
+        lastWeekCount: 0,
+        activeDaysThisWeek: 0,
+        activeDaysThisMonth: 0,
+        weeklyActivity: [
+          { label: "Mon", count: 0 },
+          { label: "Tue", count: 0 },
+          { label: "Wed", count: 0 },
+          { label: "Thu", count: 0 },
+          { label: "Fri", count: 0 },
+          { label: "Sat", count: 0 },
+          { label: "Sun", count: 0 },
+        ],
+        monthlyActivity: [],
+        featureUsage: {
+          ai_tutor: 0,
+          notes: 0,
+          flashcards: 0,
+          quiz: 0,
+          planner: 0,
+          ai_voice: 0,
+        },
+        engagementLevel: "Low",
+        error: "Failed to load stats",
+      },
+      { status: 200 }
+    )
   }
 }

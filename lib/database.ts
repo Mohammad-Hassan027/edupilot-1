@@ -20,50 +20,115 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
-
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
   const admin = await getSupabaseAdmin()
-  const { data, error } = await admin
+
+  const payload = {
+    id: userId,
+    user_id: userId,
+    email,
+    full_name: fullName ?? email.split("@")[0],
+    avatar_url: null,
+    bio: null,
+    plan: "free",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+
+  const inserted = await admin
     .from("profiles")
-    .insert({
-      user_id: userId,
-      full_name: fullName ?? email.split("@")[0],
-      avatar_url: null,
-      bio: null,
-    })
-    .select()
+    .insert(payload)
+    .select("*")
     .single()
 
-  if (error) throw new Error(`Profile creation failed: ${error.message}`)
-  return data as Profile
+  if (!inserted.error) {
+    return inserted.data as Profile
+  }
+
+  const fallback = await admin
+    .from("profiles")
+    .upsert(payload, { onConflict: "user_id" })
+    .select("*")
+    .single()
+
+  if (fallback.error) {
+    throw new Error(`Profile creation failed: ${fallback.error.message}`)
+  }
+
+  return fallback.data as Profile
 }
 
 export async function getProfile(userId: string) {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("profiles")
     .select("*")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (error) return null
-  return data as Profile
+  return data as Profile | null
 }
 
 export async function upsertProfile(userId: string, updates: Partial<Profile>) {
   const admin = await getSupabaseAdmin()
+
+  const existingProfile = await getProfile(userId)
+
+  const payload = {
+    id: userId,
+    user_id: userId,
+    email: updates.email ?? existingProfile?.email ?? null,
+    full_name: updates.full_name ?? existingProfile?.full_name ?? null,
+    avatar_url:
+      Object.prototype.hasOwnProperty.call(updates, "avatar_url")
+        ? (updates.avatar_url ?? null)
+        : (existingProfile?.avatar_url ?? null),
+    bio:
+      Object.prototype.hasOwnProperty.call(updates, "bio")
+        ? (updates.bio ?? null)
+        : (existingProfile?.bio ?? null),
+    contact:
+      Object.prototype.hasOwnProperty.call(updates, "contact")
+        ? (updates.contact ?? null)
+        : ((existingProfile as any)?.contact ?? null),
+    first_name:
+      Object.prototype.hasOwnProperty.call(updates, "first_name")
+        ? (updates.first_name ?? null)
+        : ((existingProfile as any)?.first_name ?? null),
+    last_name:
+      Object.prototype.hasOwnProperty.call(updates, "last_name")
+        ? (updates.last_name ?? null)
+        : ((existingProfile as any)?.last_name ?? null),
+    role:
+      Object.prototype.hasOwnProperty.call(updates, "role")
+        ? (updates.role ?? null)
+        : ((existingProfile as any)?.role ?? "student"),
+    plan:
+      Object.prototype.hasOwnProperty.call(updates, "plan")
+        ? (updates.plan ?? "free")
+        : ((existingProfile as any)?.plan ?? "free"),
+    credits:
+      Object.prototype.hasOwnProperty.call(updates, "credits")
+        ? (updates.credits ?? 50)
+        : ((existingProfile as any)?.credits ?? 50),
+    created_at: existingProfile?.created_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+
   const { data, error } = await admin
     .from("profiles")
-    .upsert(
-      { user_id: userId, ...updates, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    )
-    .select()
+    .upsert(payload, { onConflict: "user_id" })
+    .select("*")
     .single()
 
-  if (error) throw new Error(`Profile update failed: ${error.message}`)
+  if (error) {
+    throw new Error(`Profile update failed: ${error.message}`)
+  }
+
   return data as Profile
 }
 
@@ -71,53 +136,66 @@ export async function upsertProfile(userId: string, updates: Partial<Profile>) {
 
 export async function createCredits(userId: string) {
   const admin = await getSupabaseAdmin()
-  const { data, error } = await admin
+
+  const payload = {
+    user_id: userId,
+    ai_chat_remaining: FREE_CREDIT_VALUES.ai_chat,
+    flashcards_remaining: FREE_CREDIT_VALUES.flashcards,
+    study_plan_remaining: FREE_CREDIT_VALUES.study_plan,
+    created_at: new Date().toISOString(),
+  }
+
+  const inserted = await admin
     .from("credits")
-    .insert({
-      user_id: userId,
-      ai_chat_remaining: FREE_CREDIT_VALUES.ai_chat,
-      ai_chat_used: 0,
-      flashcards_remaining: FREE_CREDIT_VALUES.flashcards,
-      flashcards_used: 0,
-      study_plan_remaining: FREE_CREDIT_VALUES.study_plan,
-      study_plan_used: 0,
-    })
-    .select()
+    .insert(payload)
+    .select("*")
     .single()
 
-  if (error) throw new Error(`Credits creation failed: ${error.message}`)
-  return data as Credits
+  if (!inserted.error) {
+    return inserted.data as Credits
+  }
+
+  const fallback = await admin
+    .from("credits")
+    .upsert(payload, { onConflict: "user_id" })
+    .select("*")
+    .single()
+
+  if (fallback.error) {
+    throw new Error(`Credits creation failed: ${fallback.error.message}`)
+  }
+
+  return fallback.data as Credits
 }
 
 export async function getCredits(userId: string) {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("credits")
     .select("*")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   if (error) return null
-  return data as Credits
+  return data as Credits | null
 }
 
 export async function deductCredit(userId: string, feature: FeatureKey): Promise<boolean> {
   const admin = await getSupabaseAdmin()
   const credits = await getCredits(userId)
+
   if (!credits) return false
 
   const remainingKey = `${feature}_remaining` as keyof Credits
-  const usedKey = `${feature}_used` as keyof Credits
+  const remaining = Number(credits[remainingKey] ?? 0)
 
-  const remaining = credits[remainingKey] as number
   if (remaining <= 0) return false
 
   const { error } = await admin
     .from("credits")
     .update({
       [remainingKey]: remaining - 1,
-      [usedKey]: (credits[usedKey] as number) + 1,
-      updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
 
@@ -126,62 +204,71 @@ export async function deductCredit(userId: string, feature: FeatureKey): Promise
 
 export async function refillCreditsForTrial(userId: string) {
   const admin = await getSupabaseAdmin()
+
   const { error } = await admin
     .from("credits")
     .update({
       ai_chat_remaining: 9999,
       flashcards_remaining: 9999,
       study_plan_remaining: 9999,
-      updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId)
 
-  if (error) throw new Error(`Credits refill failed: ${error.message}`)
+  if (error) {
+    throw new Error(`Credits refill failed: ${error.message}`)
+  }
 }
 
 // ─── Subscription ─────────────────────────────────────────────────────────────
 
 export async function createSubscription(userId: string) {
   const admin = await getSupabaseAdmin()
-  const baseRecord = {
+  const now = new Date().toISOString()
+
+  const payload = {
     user_id: userId,
+    plan: "free",
+    plan_id: "free",
     status: "free",
+    credits: 0,
+    start_date: null,
+    end_date: null,
+    current_period_end: null,
     trial_active: false,
     trial_start: null,
     trial_expiry: null,
     subscription_start: null,
     subscription_end: null,
+    created_at: now,
+    updated_at: now,
   }
 
-  let data: unknown = null
-  let error: { message: string } | null = null
-
-  const withPlan = await admin
+  const inserted = await admin
     .from("subscriptions")
-    .insert({ ...baseRecord, plan_id: "free" })
-    .select()
+    .insert(payload)
+    .select("*")
     .single()
 
-  data = withPlan.data
-  error = withPlan.error
-
-  if (error?.message?.includes("plan_id")) {
-    const legacyInsert = await admin
-      .from("subscriptions")
-      .insert(baseRecord)
-      .select()
-      .single()
-
-    data = legacyInsert.data
-    error = legacyInsert.error
+  if (!inserted.error) {
+    return inserted.data as Subscription
   }
 
-  if (error) throw new Error(`Subscription creation failed: ${error.message}`)
-  return { ...((data as Record<string, unknown>) ?? {}), plan_id: "free" } as Subscription
+  const fallback = await admin
+    .from("subscriptions")
+    .upsert(payload, { onConflict: "user_id" })
+    .select("*")
+    .single()
+
+  if (fallback.error) {
+    throw new Error(`Subscription creation failed: ${fallback.error.message}`)
+  }
+
+  return fallback.data as Subscription
 }
 
 export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premium" | "free"> {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("payments")
     .select("plan_id,status,created_at")
@@ -191,6 +278,7 @@ export async function getLatestPaidPlan(userId: string): Promise<"pro" | "premiu
     .limit(1)
 
   if (error || !data || data.length === 0) return "free"
+
   const planId = data[0]?.plan_id
   return planId === "pro" || planId === "premium" ? planId : "free"
 }
@@ -204,20 +292,25 @@ function getPlanRank(planId: string | null | undefined) {
 async function syncSubscriptionPlanFromPayments(userId: string, planId: "free" | "pro" | "premium") {
   const admin = await getSupabaseAdmin()
   const now = new Date()
+  const nowIso = now.toISOString()
   const expiry = new Date(now)
   expiry.setDate(expiry.getDate() + 14)
 
   const payload = {
     user_id: userId,
-    status: planId === "free" ? "free" : "trial",
     plan: planId,
     plan_id: planId,
+    status: planId === "free" ? "free" : "trial",
+    credits: 0,
+    start_date: planId === "free" ? null : nowIso,
+    end_date: null,
+    current_period_end: planId === "free" ? null : expiry.toISOString(),
     trial_active: planId !== "free",
-    trial_start: planId === "free" ? null : now.toISOString(),
+    trial_start: planId === "free" ? null : nowIso,
     trial_expiry: planId === "free" ? null : expiry.toISOString(),
-    subscription_start: planId === "free" ? null : now.toISOString(),
+    subscription_start: planId === "free" ? null : nowIso,
     subscription_end: null,
-    updated_at: now.toISOString(),
+    updated_at: nowIso,
   }
 
   const existing = await admin
@@ -231,31 +324,46 @@ async function syncSubscriptionPlanFromPayments(userId: string, planId: "free" |
       .from("subscriptions")
       .update(payload)
       .eq("user_id", userId)
-      .select()
+      .select("*")
       .single()
 
-    if (error) throw new Error(`Subscription update failed: ${error.message}`)
+    if (error) {
+      throw new Error(`Subscription update failed: ${error.message}`)
+    }
+
     return data as Subscription
   }
 
   const { data, error } = await admin
     .from("subscriptions")
-    .insert(payload)
-    .select()
+    .insert({
+      ...payload,
+      created_at: nowIso,
+    })
+    .select("*")
     .single()
 
-  if (error) {
-    const fallback = await admin
-      .from("subscriptions")
-      .upsert(payload, { onConflict: "user_id" })
-      .select()
-      .single()
-
-    if (fallback.error) throw new Error(`Subscription sync failed: ${fallback.error.message}`)
-    return fallback.data as Subscription
+  if (!error) {
+    return data as Subscription
   }
 
-  return data as Subscription
+  const fallback = await admin
+    .from("subscriptions")
+    .upsert(
+      {
+        ...payload,
+        created_at: nowIso,
+      },
+      { onConflict: "user_id" }
+    )
+    .select("*")
+    .single()
+
+  if (fallback.error) {
+    throw new Error(`Subscription sync failed: ${fallback.error.message}`)
+  }
+
+  return fallback.data as Subscription
 }
 
 export async function activatePlanSubscription(userId: string, planId: "pro" | "premium") {
@@ -264,11 +372,12 @@ export async function activatePlanSubscription(userId: string, planId: "pro" | "
 
 export async function getSubscription(userId: string) {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("subscriptions")
     .select("*")
     .eq("user_id", userId)
-    .single()
+    .maybeSingle()
 
   const latestPaidPlan = await getLatestPaidPlan(userId)
 
@@ -280,6 +389,7 @@ export async function getSubscription(userId: string) {
   }
 
   const currentPlan = (data as Record<string, unknown>).plan_id as string | null | undefined
+
   if (getPlanRank(latestPaidPlan) > getPlanRank(currentPlan)) {
     return await syncSubscriptionPlanFromPayments(userId, latestPaidPlan)
   }
@@ -288,7 +398,11 @@ export async function getSubscription(userId: string) {
     return data as Subscription
   }
 
-  return { ...data, plan_id: latestPaidPlan } as Subscription
+  return {
+    ...(data as Record<string, unknown>),
+    plan_id: latestPaidPlan,
+    plan: latestPaidPlan,
+  } as Subscription
 }
 
 export async function activateTrial(userId: string, planId: "pro" | "premium") {
@@ -297,7 +411,11 @@ export async function activateTrial(userId: string, planId: "pro" | "premium") {
 
 export async function isTrialActive(userId: string): Promise<boolean> {
   const sub = await getSubscription(userId)
-  if (!sub || !sub.trial_active || !sub.trial_expiry) return false
+
+  if (!sub || !sub.trial_active || !sub.trial_expiry) {
+    return false
+  }
+
   return new Date(sub.trial_expiry) > new Date()
 }
 
@@ -311,15 +429,18 @@ export async function logUsage(
 ) {
   try {
     const admin = await getSupabaseAdmin()
+
     await admin.from("usage_logs").insert({
       user_id: userId,
       feature,
-      action,
-      metadata: metadata ?? null,
+      metadata: {
+        action,
+        ...(metadata ?? {}),
+      },
       created_at: new Date().toISOString(),
     })
   } catch {
-    // Non-throwing — log failures are silent
+    // silent
   }
 }
 
@@ -332,6 +453,7 @@ export async function createPaymentRecord(
   planId: string
 ) {
   const admin = await getSupabaseAdmin()
+
   const primaryInsert = await admin
     .from("payments")
     .insert({
@@ -347,7 +469,7 @@ export async function createPaymentRecord(
       updated_at: new Date().toISOString(),
       provider: "razorpay",
     })
-    .select()
+    .select("*")
     .single()
 
   if (!primaryInsert.error) {
@@ -363,8 +485,9 @@ export async function createPaymentRecord(
       status: "created",
       plan_id: planId,
       provider: `razorpay:${razorpayOrderId}`,
+      created_at: new Date().toISOString(),
     })
-    .select()
+    .select("*")
     .single()
 
   if (fallbackInsert.error) {
@@ -384,9 +507,13 @@ export async function updatePaymentRecord(
   }
 ) {
   const admin = await getSupabaseAdmin()
+
   const primaryUpdate = await admin
     .from("payments")
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
     .eq("razorpay_order_id", razorpayOrderId)
 
   if (!primaryUpdate.error) {
@@ -395,9 +522,11 @@ export async function updatePaymentRecord(
 
   const fallbackPayload: Record<string, unknown> = {
     status: updates.status,
+    refunded: updates.refunded,
     provider: updates.razorpay_payment_id
       ? `razorpay:${razorpayOrderId}:${updates.razorpay_payment_id}`
       : `razorpay:${razorpayOrderId}`,
+    updated_at: new Date().toISOString(),
   }
 
   const fallbackUpdate = await admin
@@ -410,12 +539,11 @@ export async function updatePaymentRecord(
   }
 }
 
-
-// ─── Saved Notes ───────────────────────────────────────────────────────────
-// ─── Saved Notes ───────────────────────────────────────────────────────────
+// ─── Saved Notes ─────────────────────────────────────────────────────────────
 
 function isMissingColumnError(message?: string | null) {
   if (!message) return false
+
   return (
     message.includes("schema cache") ||
     message.includes("Could not find the") ||
@@ -435,7 +563,6 @@ export async function saveGeneratedNote(
   }
 ) {
   const admin = await getSupabaseAdmin()
-
   const now = new Date().toISOString()
 
   const attempts = [
@@ -496,19 +623,21 @@ export async function saveGeneratedNote(
 
 export async function getSavedNoteById(userId: string, noteId: string) {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("saved_notes")
     .select("*")
     .eq("user_id", userId)
     .eq("id", noteId)
-    .single()
+    .maybeSingle()
 
   if (error) return null
-  return data as SavedNoteRecord
+  return data as SavedNoteRecord | null
 }
 
 export async function getSavedNotes(userId: string, limit = 5) {
   const admin = await getSupabaseAdmin()
+
   const { data, error } = await admin
     .from("saved_notes")
     .select("*")
