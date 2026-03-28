@@ -17,6 +17,7 @@ import {
   Eye,
   Square,
   Play,
+  Trash,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -64,6 +65,8 @@ export default function AIVoicePage() {
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const isSubmittingRef = useRef(false)
+  const finalTranscriptRef = useRef("")
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canUseVoice = canAccessFeature(subscription, "ai_voice")
   const activePlanName =
@@ -103,6 +106,11 @@ export default function AIVoicePage() {
   }, [history, historyLoading])
 
   const stopEverything = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+
     try {
       recognitionRef.current?.stop()
     } catch {
@@ -116,6 +124,7 @@ export default function AIVoicePage() {
     }
 
     isSubmittingRef.current = false
+    finalTranscriptRef.current = ""
     setVoiceState("idle")
   }
 
@@ -287,83 +296,157 @@ export default function AIVoicePage() {
   }
 
   const handleVoiceToggle = () => {
-    if (isLoading) {
-      setPendingVoiceAction(true)
-      return
+  if (isLoading) {
+    setPendingVoiceAction(true)
+    return
+  }
+
+  if (userError === "not_authenticated" || !email) {
+    setShowLoginModal(true)
+    return
+  }
+
+  if (!canUseVoice) {
+    window.location.href = "/pricing?plan=pro&feature=ai-voice"
+    return
+  }
+
+  if (voiceState === "speaking") {
+    stopEverything()
+    return
+  }
+
+  if (voiceState === "listening") {
+    stopEverything()
+    return
+  }
+
+  if (voiceState === "processing") {
+    return
+  }
+
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognitionAPI) {
+    setError("Your browser doesn't support voice input. Try Chrome or Edge.")
+    return
+  }
+
+  setError("")
+  finalTranscriptRef.current = ""
+
+  const recognition = new SpeechRecognitionAPI()
+  recognition.lang = "en-US"
+  recognition.interimResults = true
+  recognition.continuous = true
+  recognition.maxAlternatives = 1
+
+  recognition.onstart = () => {
+    setVoiceState("listening")
+  }
+
+  recognition.onresult = (event) => {
+    let finalText = finalTranscriptRef.current
+    let interimText = ""
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const text = event.results[i][0]?.transcript || ""
+
+      if (event.results[i].isFinal) {
+        finalText += `${text} `
+      } else {
+        interimText += text
+      }
     }
 
-    if (userError === "not_authenticated" || !email) {
-      setShowLoginModal(true)
-      return
+    finalTranscriptRef.current = finalText.trim()
+    const liveTranscript = `${finalText} ${interimText}`.trim()
+    setTranscript(liveTranscript)
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
     }
 
-    if (!canUseVoice) {
-      window.location.href = "/pricing?plan=pro&feature=ai-voice"
-      return
-    }
+    silenceTimerRef.current = setTimeout(async () => {
+      const completedText = `${finalTranscriptRef.current} ${interimText}`.trim()
 
-    if (voiceState === "speaking") {
-      stopEverything()
-      return
-    }
-
-    if (voiceState === "listening") {
-      stopEverything()
-      return
-    }
-
-    if (voiceState === "processing") {
-      return
-    }
-
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognitionAPI) {
-      setError("Your browser doesn't support voice input. Try Chrome or Edge.")
-      return
-    }
-
-    setError("")
-
-    const recognition = new SpeechRecognitionAPI()
-    recognition.lang = "en-US"
-    recognition.interimResults = false
-    recognition.continuous = false
-    recognition.maxAlternatives = 1
-
-    recognition.onstart = () => {
-      setVoiceState("listening")
-    }
-
-    recognition.onresult = async (event) => {
-      const userText = event.results?.[0]?.[0]?.transcript?.trim() || ""
       try {
         recognition.stop()
       } catch {
         //
       }
 
-      if (!userText) {
+      if (!completedText) {
         setVoiceState("idle")
         return
       }
 
-      await runPrompt(userText)
+      finalTranscriptRef.current = ""
+      await runPrompt(completedText)
+    }, 1600)
+  }
+
+  recognition.onerror = (e) => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
     }
 
-    recognition.onerror = (e) => {
-      if (e.error !== "no-speech" && e.error !== "aborted") {
-        setError(`Voice error: ${e.error}`)
+    if (e.error !== "no-speech" && e.error !== "aborted") {
+      setError(`Voice error: ${e.error}`)
+    }
+
+    setVoiceState("idle")
+  }
+
+  recognition.onend = async () => {
+    if (voiceState === "listening") {
+      const leftover = finalTranscriptRef.current.trim()
+
+      if (leftover && !isSubmittingRef.current) {
+        finalTranscriptRef.current = ""
+        await runPrompt(leftover)
+        return
       }
+
       setVoiceState("idle")
     }
+  }
 
-    recognition.onend = () => {
-      setVoiceState((prev) => (prev === "listening" ? "idle" : prev))
+  recognitionRef.current = recognition
+  recognition.start()
+  }
+
+  const handleDeleteHistory = async (historyId: string) => {
+  try {
+    const response = await fetch(`/api/ai/voice/${historyId}/delete`, {
+      method: "DELETE",
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to delete history")
     }
 
-    recognitionRef.current = recognition
-    recognition.start()
+    setHistory((prev) => prev.filter((item) => item.id !== historyId))
+
+    if (currentHistoryId === historyId) {
+      setCurrentHistoryId(null)
+      setMessages([])
+      setTranscript("")
+      stopEverything()
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href)
+        url.searchParams.delete("history")
+        window.history.replaceState({}, "", url.toString())
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to delete history"
+    setError(message)
   }
+}
 
   useEffect(() => {
     if (!pendingVoiceAction || isLoading) return
@@ -627,24 +710,33 @@ export default function AIVoicePage() {
                         </button>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => handleReplayHistory(item)}
-                          >
-                            <Play className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleReplayHistory(item)}
+                            >
+                              <Play className="h-4 w-4" />
+                            </Button>
 
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => openHistory(item)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => openHistory(item)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteHistory(item.id)}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
                       </div>
                     </div>
                   )

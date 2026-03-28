@@ -189,6 +189,22 @@ export async function getSavedVoiceHistoryById(userId: string, historyId: string
   return (data || null) as SavedVoiceHistoryRecord | null
 }
 
+export async function deleteSavedVoiceHistory(userId: string, historyId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("saved_voice_history")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", historyId)
+
+  if (error) {
+    throw new Error(`Failed to delete voice history: ${error.message}`)
+  }
+
+  return { success: true }
+}
+
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
