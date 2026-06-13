@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react"
 import type { Credits, Profile, Subscription } from "@/types"
+import { getSupabaseBrowserClient } from "@/lib/supabase-client"
 
 type UserPayload = {
   profile: Profile | null
@@ -141,6 +142,26 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
 
     if (!silent) {
       applyState({ ...sharedUserState, isLoading: true, error: null })
+    }
+
+    let session = null
+    try {
+      const { data } = await getSupabaseBrowserClient().auth.getSession()
+      session = data.session
+    } catch (sessionError) {
+      console.error("[use-user][refetch][getSession]", sessionError)
+    }
+
+    if (!session) {
+      const nextState: UseUserState = {
+        ...INITIAL_STATE,
+        isLoading: false,
+        error: "not_authenticated",
+      }
+      sharedFetchedAt = Date.now()
+      sharedUserState = nextState
+      setState(nextState)
+      return null
     }
 
     if (!inflightRequest) {
