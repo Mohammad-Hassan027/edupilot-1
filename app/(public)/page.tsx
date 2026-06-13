@@ -389,7 +389,7 @@ export default function LandingPage() {
                   size="lg"
                   variant="secondary"
                   asChild
-                  className="bg-white text-primary hover:bg-white/90"
+                  className="bg-white text-slate-950 hover:bg-white/90"
                 >
                   <Link href={isLoggedIn ? "/dashboard" : "/register"}>
                     {isLoggedIn ? "Go to Dashboard" : "Get Started Free"}

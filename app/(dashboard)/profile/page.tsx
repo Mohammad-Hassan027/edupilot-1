@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserAvatar } from "@/components/user-avatar"
 import { Camera, Save, User, Mail, X, Trash2, Loader2, Edit2, CheckCircle } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
+import type { Profile } from "@/types"
 
 export default function ProfilePage() {
   const { profile, email, isLoading, refetch, setUserState, fullName: userFullName } = useUser()
@@ -61,7 +62,7 @@ export default function ProfilePage() {
                 : bio || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          } as typeof prev.profile),
+          } as Profile),
     }))
   }
 
