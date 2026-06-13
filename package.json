@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "prepare": "husky"
   },
   "dependencies": {
     "@fal-ai/client": "^1.9.5",
@@ -73,10 +74,13 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "husky": "^9.1.7",
     "postcss": "^8.5",
     "shadcn": "^4.0.0",
     "tailwindcss": "^4.2.0",
