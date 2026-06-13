@@ -55,7 +55,81 @@ git checkout -b feat/your-feature-name
 * Ensure you don't commit temporary variables or raw API keys.
 
 ### Step 4: Commit and Push
-Write descriptive, semantic commits:
+
+This project enforces **Conventional Commits** via a `commit-msg` git hook (Husky + commitlint). Non-conforming commit messages are rejected automatically.
+
+#### Commit Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:** `feat` · `fix` · `docs` · `style` · `refactor` · `perf` · `test` · `build` · `ci` · `chore` · `revert`
+
+#### Good Commits
+
+```bash
+# New feature
+feat: add flashcard export capability
+
+# Bug fix with scope
+fix(auth): resolve session expiration race condition
+
+# Docs change
+docs: update API authentication examples
+
+# Feature with scope and issue reference
+feat(quiz): add timed mode for practice sessions
+
+Adds a countdown timer to quiz sessions. Timer duration is
+configurable per session from the settings panel.
+
+Closes #42
+
+# Breaking change
+feat(api)!: change response format to JSON:API
+
+BREAKING CHANGE: All API responses now use camelCase keys.
+Clients must update their parsers accordingly.
+```
+
+#### Bad Commits
+
+```bash
+# Too vague
+fix: fixed it
+update: updates
+chore: misc changes
+
+# Wrong tense (use imperative mood)
+feat: added new feature
+fix: fixes the bug
+
+# Missing type prefix entirely
+add flashcard export
+update auth logic
+
+# Description too long (max 72 chars)
+feat: add a new feature that allows users to export their data in multiple formats including CSV, JSON, and XML
+
+# All caps or sentence case description
+feat: Add Flashcard Export
+feat: ADD FLASHCARD EXPORT
+```
+
+#### Rules enforced by commitlint
+
+| Rule | Requirement |
+|------|-------------|
+| Type | Must be one of the allowed types above |
+| Scope | kebab-case if provided (`auth`, `quiz`, `api`) |
+| Description | lowercase, max 72 characters, no trailing period |
+| Body lines | max 100 characters per line |
+
 ```bash
 git add .
 git commit -m "feat: add flashcard export capability"
