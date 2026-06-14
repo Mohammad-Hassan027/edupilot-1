@@ -1,16 +1,28 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import { LoginGateModal } from "@/components/login-gate-modal"
-import { useUser } from "@/hooks/use-user"
-import { canAccessFeature } from "@/lib/plans"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { LoginGateModal } from "@/components/login-gate-modal";
+import { useUser } from "@/hooks/use-user";
+import { canAccessFeature } from "@/lib/plans";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Calendar,
   ChevronLeft,
@@ -25,65 +37,76 @@ import {
   History,
   Eye,
   Trash2,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Task {
-  id: string
-  title: string
-  time: string
-  duration: string
-  subject: string
-  completed: boolean
+  id: string;
+  title: string;
+  time: string;
+  duration: string;
+  subject: string;
+  completed: boolean;
 }
 
 interface AIScheduleItem {
-  time: string
-  activity: string
-  reason: string
-  selected?: boolean
+  time: string;
+  activity: string;
+  reason: string;
+  selected?: boolean;
 }
 
 interface SavedStudyPlan {
-  id: string
-  title: string
-  goal: string | null
-  selected_day: number
+  id: string;
+  title: string;
+  goal: string | null;
+  selected_day: number;
   tasks: Array<{
-    id: string
-    title: string
-    time: string
-    duration: string
-    subject: string
-    completed: boolean
-    day: number
-  }>
-  created_at: string
-  updated_at: string
+    id: string;
+    title: string;
+    time: string;
+    duration: string;
+    subject: string;
+    completed: boolean;
+    day: number;
+  }>;
+  created_at: string;
+  updated_at: string;
 }
 
-const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const currentDate = new Date()
-const currentMonth = currentDate.toLocaleString("default", { month: "long", year: "numeric" })
+const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const currentDate = new Date();
+const currentMonth = currentDate.toLocaleString("default", {
+  month: "long",
+  year: "numeric",
+});
 
 const generateCalendarDays = (eventDays: Set<number>) => {
-  const days = []
-  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay()
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+  const days = [];
+  const firstDay = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    1,
+  ).getDay();
+  const daysInMonth = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth() + 1,
+    0,
+  ).getDate();
 
   for (let i = 0; i < firstDay; i++) {
-    days.push({ day: null, events: 0 })
+    days.push({ day: null, events: 0 });
   }
 
   for (let i = 1; i <= daysInMonth; i++) {
-    const eventCount = Array.from(eventDays).filter((d) => d === i).length
-    days.push({ day: i, events: eventCount })
+    const eventCount = Array.from(eventDays).filter((d) => d === i).length;
+    days.push({ day: i, events: eventCount });
   }
 
-  return days
-}
+  return days;
+};
 
-const initialTasks: Task[] = []
+const initialTasks: Task[] = [];
 
 const subjectColors: Record<string, string> = {
   Mathematics: "border-l-primary bg-primary/5",
@@ -91,164 +114,197 @@ const subjectColors: Record<string, string> = {
   Chemistry: "border-l-emerald-500 bg-emerald-500/5",
   Break: "border-l-muted-foreground bg-muted/30",
   "AI Study": "border-l-orange-500 bg-orange-500/5",
-}
+};
 
 const aiSuggestionsData: AIScheduleItem[] = [
-  { time: "08:00 - 09:30", activity: "Mathematics (Peak focus time)", reason: "Your analytics show best performance in mornings", selected: false },
-  { time: "10:00 - 11:00", activity: "Break + Light Review", reason: "Scheduled break to maintain productivity", selected: false },
-  { time: "11:00 - 12:30", activity: "Physics Problems", reason: "Practice sessions work well mid-morning", selected: false },
-  { time: "14:00 - 15:30", activity: "Chemistry Concepts", reason: "New material learning optimal after lunch", selected: false },
-  { time: "16:00 - 17:00", activity: "AI Tutor Q&A", reason: "Clear up doubts before end of day", selected: false },
-]
+  {
+    time: "08:00 - 09:30",
+    activity: "Mathematics (Peak focus time)",
+    reason: "Your analytics show best performance in mornings",
+    selected: false,
+  },
+  {
+    time: "10:00 - 11:00",
+    activity: "Break + Light Review",
+    reason: "Scheduled break to maintain productivity",
+    selected: false,
+  },
+  {
+    time: "11:00 - 12:30",
+    activity: "Physics Problems",
+    reason: "Practice sessions work well mid-morning",
+    selected: false,
+  },
+  {
+    time: "14:00 - 15:30",
+    activity: "Chemistry Concepts",
+    reason: "New material learning optimal after lunch",
+    selected: false,
+  },
+  {
+    time: "16:00 - 17:00",
+    activity: "AI Tutor Q&A",
+    reason: "Clear up doubts before end of day",
+    selected: false,
+  },
+];
 
 function formatRelativeTime(value: string) {
-  const diff = Date.now() - new Date(value).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "Just now"
-  if (mins < 60) return `${mins} min ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} hr ago`
-  const days = Math.floor(hours / 24)
-  return `${days} day${days > 1 ? "s" : ""} ago`
+  const diff = Date.now() - new Date(value).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
 }
 
 export default function PlannerPage() {
-  const { subscription, isLoading, error: userError, email } = useUser()
+  const { subscription, isLoading, error: userError, email } = useUser();
 
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
-  const [taskDays, setTaskDays] = useState<Record<string, number>>({})
-  const [selectedDay, setSelectedDay] = useState(currentDate.getDate())
-  const [isAddingTask, setIsAddingTask] = useState(false)
-  const [showAISuggestions, setShowAISuggestions] = useState(false)
-  const [aiSuggestions, setAiSuggestions] = useState<AIScheduleItem[]>(aiSuggestionsData)
-  const [newTaskTitle, setNewTaskTitle] = useState("")
-  const [newTaskTime, setNewTaskTime] = useState("")
-  const [newTaskDuration, setNewTaskDuration] = useState("1h")
-  const [newTaskSubject, setNewTaskSubject] = useState("")
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiGoal, setAiGoal] = useState("")
-  const [aiGenerated, setAiGenerated] = useState(false)
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [pendingPlannerAction, setPendingPlannerAction] = useState<null | "open_task" | "open_ai">(null)
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [taskDays, setTaskDays] = useState<Record<string, number>>({});
+  const [selectedDay, setSelectedDay] = useState(currentDate.getDate());
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [aiSuggestions, setAiSuggestions] =
+    useState<AIScheduleItem[]>(aiSuggestionsData);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskTime, setNewTaskTime] = useState("");
+  const [newTaskDuration, setNewTaskDuration] = useState("1h");
+  const [newTaskSubject, setNewTaskSubject] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiGoal, setAiGoal] = useState("");
+  const [aiGenerated, setAiGenerated] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingPlannerAction, setPendingPlannerAction] = useState<
+    null | "open_task" | "open_ai"
+  >(null);
 
-  const [history, setHistory] = useState<SavedStudyPlan[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null)
-  const [savingPlan, setSavingPlan] = useState(false)
-  const [pageError, setPageError] = useState("")
+  const [history, setHistory] = useState<SavedStudyPlan[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [pageError, setPageError] = useState("");
 
-  const canUsePlanner = canAccessFeature(subscription, "planner")
-  const activePlanName =
-    canUsePlanner
-      ? subscription?.plan_id === "premium"
-        ? "Premium"
-        : subscription?.plan_id === "pro"
-          ? "Pro"
-          : null
-      : null
+  const canUsePlanner = canAccessFeature(subscription, "planner");
+  const activePlanName = canUsePlanner
+    ? subscription?.plan_id === "premium"
+      ? "Premium"
+      : subscription?.plan_id === "pro"
+        ? "Pro"
+        : null
+    : null;
 
-  const calendarDays = generateCalendarDays(new Set(Object.values(taskDays)))
+  const calendarDays = generateCalendarDays(new Set(Object.values(taskDays)));
   const visibleTasks = useMemo(
     () => tasks.filter((task) => taskDays[task.id] === selectedDay),
-    [tasks, taskDays, selectedDay]
-  )
+    [tasks, taskDays, selectedDay],
+  );
 
   const guardPlannerAccess = (action: "open_task" | "open_ai") => {
     if (isLoading) {
-      setPendingPlannerAction(action)
-      return false
+      setPendingPlannerAction(action);
+      return false;
     }
     if (userError === "not_authenticated" || !email) {
-      setShowLoginModal(true)
-      return false
+      setShowLoginModal(true);
+      return false;
     }
     if (!canUsePlanner) {
-      setPendingPlannerAction(action)
-      window.location.href = "/pricing?plan=premium&feature=planner"
-      return false
+      setPendingPlannerAction(action);
+      window.location.href = "/pricing?plan=premium&feature=planner";
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   useEffect(() => {
-    void loadHistory()
-  }, [])
+    void loadHistory();
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined") return;
 
-    const planId = new URLSearchParams(window.location.search).get("plan")
-    if (!planId) return
+    const planId = new URLSearchParams(window.location.search).get("plan");
+    if (!planId) return;
 
-    const existing = history.find((item) => item.id === planId)
+    const existing = history.find((item) => item.id === planId);
     if (existing) {
-      openSavedPlan(existing)
-      return
+      openSavedPlan(existing);
+      return;
     }
 
     if (!historyLoading) {
-      void loadSavedPlan(planId)
+      void loadSavedPlan(planId);
     }
-  }, [history, historyLoading])
+  }, [history, historyLoading]);
 
   useEffect(() => {
-    if (!pendingPlannerAction || isLoading) return
+    if (!pendingPlannerAction || isLoading) return;
 
-    const action = pendingPlannerAction
-    setPendingPlannerAction(null)
+    const action = pendingPlannerAction;
+    setPendingPlannerAction(null);
 
     if (userError === "not_authenticated" || !email) {
-      setShowLoginModal(true)
-      return
+      setShowLoginModal(true);
+      return;
     }
 
     if (!canUsePlanner) {
-      window.location.href = "/pricing?plan=premium&feature=planner"
-      return
+      window.location.href = "/pricing?plan=premium&feature=planner";
+      return;
     }
 
     if (action === "open_task") {
-      setIsAddingTask(true)
-      return
+      setIsAddingTask(true);
+      return;
     }
 
-    setShowAISuggestions(true)
-  }, [pendingPlannerAction, isLoading, userError, email, canUsePlanner])
+    setShowAISuggestions(true);
+  }, [pendingPlannerAction, isLoading, userError, email, canUsePlanner]);
 
   async function loadHistory() {
     try {
-      setHistoryLoading(true)
-      const response = await fetch("/api/ai/planner", { cache: "no-store" })
-      const data = await response.json().catch(() => ({ plans: [] }))
+      setHistoryLoading(true);
+      const response = await fetch("/api/ai/planner", { cache: "no-store" });
+      const data = await response.json().catch(() => ({ plans: [] }));
 
       if (response.ok) {
-        const plans = data.plans || []
-        setHistory(plans)
+        const plans = data.plans || [];
+        setHistory(plans);
 
         if (plans.length > 0 && typeof window !== "undefined") {
-          const urlPlanId = new URLSearchParams(window.location.search).get("plan")
+          const urlPlanId = new URLSearchParams(window.location.search).get(
+            "plan",
+          );
           if (!urlPlanId) {
-            openSavedPlan(plans[0])
+            openSavedPlan(plans[0]);
           }
         }
       }
     } catch {
       //
     } finally {
-      setHistoryLoading(false)
+      setHistoryLoading(false);
     }
   }
 
   async function loadSavedPlan(planId: string) {
     try {
-      const response = await fetch(`/api/ai/planner/${planId}`, { cache: "no-store" })
-      const data = await response.json().catch(() => ({}))
+      const response = await fetch(`/api/ai/planner/${planId}`, {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
 
-      if (!response.ok || !data.plan) return
+      if (!response.ok || !data.plan) return;
 
-      const plan = data.plan as SavedStudyPlan
-      setHistory((prev) => (prev.some((item) => item.id === plan.id) ? prev : [plan, ...prev]))
-      openSavedPlan(plan)
+      const plan = data.plan as SavedStudyPlan;
+      setHistory((prev) =>
+        prev.some((item) => item.id === plan.id) ? prev : [plan, ...prev],
+      );
+      openSavedPlan(plan);
     } catch {
       //
     }
@@ -262,32 +318,38 @@ export default function PlannerPage() {
       duration: task.duration,
       subject: task.subject,
       completed: task.completed,
-    }))
+    }));
 
-    const restoredDays: Record<string, number> = {}
+    const restoredDays: Record<string, number> = {};
     for (const task of plan.tasks || []) {
-      restoredDays[task.id] = Number(task.day) || plan.selected_day || currentDate.getDate()
+      restoredDays[task.id] =
+        Number(task.day) || plan.selected_day || currentDate.getDate();
     }
 
-    setTasks(restoredTasks)
-    setTaskDays(restoredDays)
-    setSelectedDay(plan.selected_day || currentDate.getDate())
-    setCurrentPlanId(plan.id)
-    setAiGoal(plan.goal || "")
+    setTasks(restoredTasks);
+    setTaskDays(restoredDays);
+    setSelectedDay(plan.selected_day || currentDate.getDate());
+    setCurrentPlanId(plan.id);
+    setAiGoal(plan.goal || "");
 
     if (typeof window !== "undefined") {
-      const url = new URL(window.location.href)
-      url.searchParams.set("plan", plan.id)
-      window.history.replaceState({}, "", url.toString())
+      const url = new URL(window.location.href);
+      url.searchParams.set("plan", plan.id);
+      window.history.replaceState({}, "", url.toString());
     }
   }
 
-  async function persistPlan(nextTasks: Task[], nextTaskDays: Record<string, number>, planTitle?: string, goal?: string | null) {
-    if (!email || !canUsePlanner) return
+  async function persistPlan(
+    nextTasks: Task[],
+    nextTaskDays: Record<string, number>,
+    planTitle?: string,
+    goal?: string | null,
+  ) {
+    if (!email || !canUsePlanner) return;
 
     try {
-      setSavingPlan(true)
-      setPageError("")
+      setSavingPlan(true);
+      setPageError("");
 
       const payload = {
         planId: currentPlanId,
@@ -304,49 +366,58 @@ export default function PlannerPage() {
           ...task,
           day: nextTaskDays[task.id] ?? selectedDay,
         })),
-      }
+      };
 
       const response = await fetch("/api/ai/planner", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      })
+      });
 
-      const data = await response.json().catch(() => ({}))
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to save planner")
+        throw new Error(data.error || "Failed to save planner");
       }
 
-      const savedPlan = data.plan as SavedStudyPlan
-      setCurrentPlanId(savedPlan.id)
-      setHistory((prev) => [savedPlan, ...prev.filter((item) => item.id !== savedPlan.id)].slice(0, 12))
+      const savedPlan = data.plan as SavedStudyPlan;
+      setCurrentPlanId(savedPlan.id);
+      setHistory((prev) =>
+        [savedPlan, ...prev.filter((item) => item.id !== savedPlan.id)].slice(
+          0,
+          12,
+        ),
+      );
 
       if (typeof window !== "undefined") {
-        const url = new URL(window.location.href)
-        url.searchParams.set("plan", savedPlan.id)
-        window.history.replaceState({}, "", url.toString())
+        const url = new URL(window.location.href);
+        url.searchParams.set("plan", savedPlan.id);
+        window.history.replaceState({}, "", url.toString());
       }
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to save planner")
+      setPageError(
+        err instanceof Error ? err.message : "Failed to save planner",
+      );
     } finally {
-      setSavingPlan(false)
+      setSavingPlan(false);
     }
   }
 
   const toggleTask = async (id: string) => {
-    const nextTasks = tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-    setTasks(nextTasks)
-    await persistPlan(nextTasks, taskDays)
-  }
+    const nextTasks = tasks.map((t) =>
+      t.id === id ? { ...t, completed: !t.completed } : t,
+    );
+    setTasks(nextTasks);
+    await persistPlan(nextTasks, taskDays);
+  };
 
   const handleAddTask = async () => {
-    if (!guardPlannerAccess("open_task")) return
+    if (!guardPlannerAccess("open_task")) return;
     if (!newTaskTitle.trim() || !newTaskTime || !newTaskSubject.trim()) {
-      return
+      return;
     }
 
-    const taskId = Date.now().toString()
+    const taskId = Date.now().toString();
 
     const newTask: Task = {
       id: taskId,
@@ -355,37 +426,42 @@ export default function PlannerPage() {
       duration: newTaskDuration,
       subject: newTaskSubject.trim(),
       completed: false,
-    }
+    };
 
-    const nextTasks = [...tasks, newTask]
-    const nextTaskDays = { ...taskDays, [taskId]: selectedDay }
+    const nextTasks = [...tasks, newTask];
+    const nextTaskDays = { ...taskDays, [taskId]: selectedDay };
 
-    setTasks(nextTasks)
-    setTaskDays(nextTaskDays)
+    setTasks(nextTasks);
+    setTaskDays(nextTaskDays);
 
-    await persistPlan(nextTasks, nextTaskDays, `${newTaskTitle.trim()} Plan`, aiGoal || null)
+    await persistPlan(
+      nextTasks,
+      nextTaskDays,
+      `${newTaskTitle.trim()} Plan`,
+      aiGoal || null,
+    );
 
-    setNewTaskTitle("")
-    setNewTaskTime("")
-    setNewTaskDuration("1h")
-    setNewTaskSubject("")
-    setIsAddingTask(false)
-  }
+    setNewTaskTitle("");
+    setNewTaskTime("");
+    setNewTaskDuration("1h");
+    setNewTaskSubject("");
+    setIsAddingTask(false);
+  };
 
   const toggleAISuggestion = (index: number) => {
     setAiSuggestions(
       aiSuggestions.map((item, i) =>
-        i === index ? { ...item, selected: !item.selected } : item
-      )
-    )
-  }
+        i === index ? { ...item, selected: !item.selected } : item,
+      ),
+    );
+  };
 
   const handleApplySchedule = async () => {
-    const selectedItems = aiSuggestions.filter((item) => item.selected)
-    if (!selectedItems.length) return
+    const selectedItems = aiSuggestions.filter((item) => item.selected);
+    if (!selectedItems.length) return;
 
     const newTasks = selectedItems.map((item, index) => {
-      const taskId = `${Date.now()}-${index}-${Math.random()}`
+      const taskId = `${Date.now()}-${index}-${Math.random()}`;
       return {
         id: taskId,
         title: item.activity,
@@ -393,35 +469,35 @@ export default function PlannerPage() {
         duration: "1h",
         subject: item.activity.split("(")[0].trim(),
         completed: false,
-      }
-    })
+      };
+    });
 
-    const nextTasks = [...tasks, ...newTasks]
-    const nextTaskDays = { ...taskDays }
+    const nextTasks = [...tasks, ...newTasks];
+    const nextTaskDays = { ...taskDays };
     newTasks.forEach((task) => {
-      nextTaskDays[task.id] = selectedDay
-    })
+      nextTaskDays[task.id] = selectedDay;
+    });
 
-    setTasks(nextTasks)
-    setTaskDays(nextTaskDays)
+    setTasks(nextTasks);
+    setTaskDays(nextTaskDays);
 
     await persistPlan(
       nextTasks,
       nextTaskDays,
       aiGoal.trim() ? `${aiGoal.trim()} Plan` : "AI Study Plan",
-      aiGoal.trim() || null
-    )
+      aiGoal.trim() || null,
+    );
 
-    setAiSuggestions(aiSuggestionsData)
-    setShowAISuggestions(false)
-    setAiGenerated(false)
-  }
+    setAiSuggestions(aiSuggestionsData);
+    setShowAISuggestions(false);
+    setAiGenerated(false);
+  };
 
   const handleGenerateAIPlan = async () => {
-    if (!aiGoal.trim()) return
-    if (!guardPlannerAccess("open_ai")) return
+    if (!aiGoal.trim()) return;
+    if (!guardPlannerAccess("open_ai")) return;
 
-    setAiLoading(true)
+    setAiLoading(true);
     try {
       const prompt = `You are a study planner AI. Create a daily study schedule for a student.
 Goal: ${aiGoal}
@@ -431,27 +507,29 @@ Current time: ${new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute
 Return ONLY a valid JSON array. No markdown, no backticks:
 [{"time":"09:00 - 10:30","activity":"Subject Name (specific task)","reason":"Why this timing is optimal"}]
 
-Generate 5-6 schedule items that fit within 4 hours total. Make times realistic and specific to the goal.`
+Generate 5-6 schedule items that fit within 4 hours total. Make times realistic and specific to the goal.`;
 
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: prompt }),
-      })
+      });
 
-      const data = await res.json()
-      if (!res.ok) return
+      const data = await res.json();
+      if (!res.ok) return;
 
       const cleaned = String(data.reply || "")
         .replace(/\`\`\`json\s*/g, "")
         .replace(/\`\`\`\s*/g, "")
-        .trim()
+        .trim();
 
-      const parsed = JSON.parse(cleaned)
+      const parsed = JSON.parse(cleaned);
 
       if (Array.isArray(parsed)) {
-        setAiSuggestions(parsed.map((item: AIScheduleItem) => ({ ...item, selected: false })))
-        setAiGenerated(true)
+        setAiSuggestions(
+          parsed.map((item: AIScheduleItem) => ({ ...item, selected: false })),
+        );
+        setAiGenerated(true);
 
         fetch("/api/usage/track", {
           method: "POST",
@@ -461,46 +539,50 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             action: "plan_generated",
             metadata: { goal: aiGoal, sessionCount: parsed.length },
           }),
-        }).catch(() => undefined)
+        }).catch(() => undefined);
       }
     } catch {
-      setAiSuggestions(aiSuggestionsData.map((s) => ({ ...s, selected: false })))
-      setAiGenerated(true)
+      setAiSuggestions(
+        aiSuggestionsData.map((s) => ({ ...s, selected: false })),
+      );
+      setAiGenerated(true);
     } finally {
-      setAiLoading(false)
+      setAiLoading(false);
     }
-  }
+  };
 
   async function handleDeleteHistory(planId: string) {
     try {
       const response = await fetch(`/api/ai/planner/${planId}`, {
         method: "DELETE",
-      })
+      });
 
-      const data = await response.json().catch(() => ({}))
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to delete planner history")
+        throw new Error(data.error || "Failed to delete planner history");
       }
 
-      const remaining = history.filter((item) => item.id !== planId)
-      setHistory(remaining)
+      const remaining = history.filter((item) => item.id !== planId);
+      setHistory(remaining);
 
       if (currentPlanId === planId) {
-        setCurrentPlanId(null)
-        setTasks([])
-        setTaskDays({})
-        setAiGoal("")
+        setCurrentPlanId(null);
+        setTasks([]);
+        setTaskDays({});
+        setAiGoal("");
         if (remaining[0]) {
-          openSavedPlan(remaining[0])
+          openSavedPlan(remaining[0]);
         } else if (typeof window !== "undefined") {
-          const url = new URL(window.location.href)
-          url.searchParams.delete("plan")
-          window.history.replaceState({}, "", url.toString())
+          const url = new URL(window.location.href);
+          url.searchParams.delete("plan");
+          window.history.replaceState({}, "", url.toString());
         }
       }
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : "Failed to delete planner history")
+      setPageError(
+        err instanceof Error ? err.message : "Failed to delete planner history",
+      );
     }
   }
 
@@ -509,16 +591,20 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Study Planner</h1>
-            <p className="text-muted-foreground">Plan and organize your study schedule</p>
+            <h1 className="text-2xl font-bold text-foreground">
+              Study Planner
+            </h1>
+            <p className="text-muted-foreground">
+              Plan and organize your study schedule
+            </p>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               className="gap-2"
               onClick={() => {
-                if (!guardPlannerAccess("open_ai")) return
-                setShowAISuggestions(true)
+                if (!guardPlannerAccess("open_ai")) return;
+                setShowAISuggestions(true);
               }}
             >
               <Sparkles className="h-4 w-4" />
@@ -531,10 +617,10 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                   className="gap-2"
                   onClick={(e) => {
                     if (!guardPlannerAccess("open_task")) {
-                      e.preventDefault()
-                      return
+                      e.preventDefault();
+                      return;
                     }
-                    setIsAddingTask(true)
+                    setIsAddingTask(true);
                   }}
                 >
                   <Plus className="h-4 w-4" />
@@ -571,7 +657,10 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
 
                     <div className="space-y-2">
                       <Label>Duration</Label>
-                      <Select value={newTaskDuration} onValueChange={setNewTaskDuration}>
+                      <Select
+                        value={newTaskDuration}
+                        onValueChange={setNewTaskDuration}
+                      >
                         <SelectTrigger className="bg-secondary border-border">
                           <SelectValue placeholder="Select" />
                         </SelectTrigger>
@@ -595,7 +684,11 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                     />
                   </div>
 
-                  <Button className="w-full" onClick={handleAddTask} disabled={savingPlan}>
+                  <Button
+                    className="w-full"
+                    onClick={handleAddTask}
+                    disabled={savingPlan}
+                  >
                     {savingPlan ? "Saving..." : "Add Task"}
                   </Button>
                 </div>
@@ -615,8 +708,12 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
               <div>
-                <p className="font-medium text-foreground">You are on {activePlanName} Plan.</p>
-                <p className="mt-1 text-muted-foreground">Your premium features are now active across the app.</p>
+                <p className="font-medium text-foreground">
+                  You are on {activePlanName} Plan.
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  Your premium features are now active across the app.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -625,13 +722,18 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             <CardContent className="flex items-start gap-3 p-4 text-sm">
               <Crown className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div>
-                <p className="font-medium text-foreground">Planner is a Premium feature.</p>
+                <p className="font-medium text-foreground">
+                  Planner is a Premium feature.
+                </p>
                 <p className="mt-1 text-muted-foreground">
-                  Upgrade on the Pricing page to unlock Planner instantly after successful payment.
+                  Upgrade on the Pricing page to unlock Planner instantly after
+                  successful payment.
                 </p>
                 <div className="mt-3">
                   <Button asChild size="sm" variant="outline">
-                    <Link href="/pricing?plan=premium&feature=planner">View Pricing</Link>
+                    <Link href="/pricing?plan=premium&feature=planner">
+                      View Pricing
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -695,7 +797,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                   <Calendar className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">March {selectedDay}, 2026</CardTitle>
+                  <CardTitle className="text-base">{currentMonth.split(' ')[0]} {selectedDay}, {currentMonth.split(' ')[1]}</CardTitle>
                   <p className="text-xs text-muted-foreground">
                     {visibleTasks.length} tasks scheduled
                     {savingPlan ? " • saving..." : ""}
@@ -824,7 +926,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             <CardContent>
               <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
                 {daysOfWeek.map((day) => (
-                  <div key={day} className="py-1">{day}</div>
+                  <div key={day} className="py-1">
+                    {day}
+                  </div>
                 ))}
               </div>
 
@@ -837,17 +941,27 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                     className={cn(
                       "aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-all relative",
                       !item.day && "invisible",
-                      item.day === selectedDay && "bg-primary text-primary-foreground",
-                      item.day === currentDate.getDate() && item.day !== selectedDay && "border border-primary",
-                      item.day && item.day !== selectedDay && "hover:bg-secondary"
+                      item.day === selectedDay &&
+                        "bg-primary text-primary-foreground",
+                      item.day === currentDate.getDate() &&
+                        item.day !== selectedDay &&
+                        "border border-primary",
+                      item.day &&
+                        item.day !== selectedDay &&
+                        "hover:bg-secondary",
                     )}
                   >
                     {item.day}
                     {item.events > 0 && item.day !== selectedDay && (
                       <div className="absolute bottom-1 flex gap-0.5">
-                        {Array.from({ length: Math.min(item.events, 3) }).map((_, i) => (
-                          <div key={i} className="h-1 w-1 rounded-full bg-primary" />
-                        ))}
+                        {Array.from({ length: Math.min(item.events, 3) }).map(
+                          (_, i) => (
+                            <div
+                              key={i}
+                              className="h-1 w-1 rounded-full bg-primary"
+                            />
+                          ),
+                        )}
                       </div>
                     )}
                   </button>
@@ -863,7 +977,10 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                   <Calendar className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">March {selectedDay}, 2026</CardTitle>
+                  <CardTitle className="text-base">
+                    {currentMonth.split(" ")[0]} {selectedDay},{" "}
+                    {currentMonth.split(" ")[1]}
+                  </CardTitle>
                   <p className="text-xs text-muted-foreground">
                     {visibleTasks.length} tasks scheduled
                     {savingPlan ? " • saving..." : ""}
@@ -875,7 +992,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
             <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
               {visibleTasks.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-6 text-center text-sm text-muted-foreground">
-                  No tasks added for this day yet. Click <span className="font-medium text-foreground">Add Task</span> to create your first planner item.
+                  No tasks added for this day yet. Click{" "}
+                  <span className="font-medium text-foreground">Add Task</span>{" "}
+                  to create your first planner item.
                 </div>
               ) : (
                 visibleTasks.map((task) => (
@@ -883,8 +1002,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                     key={task.id}
                     className={cn(
                       "flex items-center gap-4 rounded-lg border-l-4 p-4 transition-all",
-                      subjectColors[task.subject] || "border-l-border bg-secondary/30",
-                      task.completed && "opacity-60"
+                      subjectColors[task.subject] ||
+                        "border-l-border bg-secondary/30",
+                      task.completed && "opacity-60",
                     )}
                   >
                     <button
@@ -893,17 +1013,26 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                         "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
                         task.completed
                           ? "border-emerald-500 bg-emerald-500"
-                          : "border-muted-foreground hover:border-primary"
+                          : "border-muted-foreground hover:border-primary",
                       )}
                     >
-                      {task.completed && <Check className="h-4 w-4 text-white" />}
+                      {task.completed && (
+                        <Check className="h-4 w-4 text-white" />
+                      )}
                     </button>
 
                     <div className="flex-1 min-w-0">
-                      <p className={cn("font-medium text-foreground", task.completed && "line-through")}>
+                      <p
+                        className={cn(
+                          "font-medium text-foreground",
+                          task.completed && "line-through",
+                        )}
+                      >
                         {task.title}
                       </p>
-                      <p className="text-sm text-muted-foreground">{task.subject}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {task.subject}
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -926,7 +1055,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
 
             <CardContent className="flex-1 overflow-y-auto space-y-3 pr-2">
               {historyLoading ? (
-                <div className="text-sm text-muted-foreground">Loading history...</div>
+                <div className="text-sm text-muted-foreground">
+                  Loading history...
+                </div>
               ) : history.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-4 text-sm text-muted-foreground">
                   No planner history yet.
@@ -937,14 +1068,19 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                     key={plan.id}
                     className={cn(
                       "rounded-lg border p-3",
-                      currentPlanId === plan.id ? "border-primary bg-primary/5" : "border-border bg-secondary/20"
+                      currentPlanId === plan.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-secondary/20",
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{plan.title}</p>
+                        <p className="truncate font-medium text-foreground">
+                          {plan.title}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          {(plan.tasks || []).length} tasks • {formatRelativeTime(plan.updated_at)}
+                          {(plan.tasks || []).length} tasks •{" "}
+                          {formatRelativeTime(plan.updated_at)}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -967,7 +1103,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                       </div>
                     </div>
                     {plan.goal ? (
-                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{plan.goal}</p>
+                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                        {plan.goal}
+                      </p>
                     ) : null}
                   </div>
                 ))
@@ -979,9 +1117,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
         <Dialog
           open={showAISuggestions}
           onOpenChange={(open) => {
-            setShowAISuggestions(open)
+            setShowAISuggestions(open);
             if (!open) {
-              setAiGenerated(false)
+              setAiGenerated(false);
             }
           }}
         >
@@ -997,7 +1135,8 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
               {!aiGenerated ? (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Tell the AI what you want to study today and it will create a personalized schedule.
+                    Tell the AI what you want to study today and it will create
+                    a personalized schedule.
                   </p>
 
                   <div className="space-y-2">
@@ -1007,7 +1146,9 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                       value={aiGoal}
                       onChange={(e) => setAiGoal(e.target.value)}
                       className="bg-secondary border-border"
-                      onKeyDown={(e) => e.key === "Enter" && handleGenerateAIPlan()}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleGenerateAIPlan()
+                      }
                     />
                   </div>
 
@@ -1028,7 +1169,11 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                   </div>
 
                   <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowAISuggestions(false)}>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setShowAISuggestions(false)}
+                    >
                       Cancel
                     </Button>
                     <Button
@@ -1053,7 +1198,8 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Here&apos;s your AI-generated study schedule. Select sessions to add to your planner:
+                    Here&apos;s your AI-generated study schedule. Select
+                    sessions to add to your planner:
                   </p>
 
                   <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -1065,24 +1211,34 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                           "flex items-start gap-4 p-3 rounded-lg transition-all border-2 text-left w-full",
                           suggestion.selected
                             ? "bg-primary/10 border-primary"
-                            : "bg-secondary/50 border-border hover:border-primary/50"
+                            : "bg-secondary/50 border-border hover:border-primary/50",
                         )}
                       >
                         <div className="flex-shrink-0 mt-0.5">
                           <div
                             className={cn(
                               "h-5 w-5 rounded border-2 flex items-center justify-center transition-all",
-                              suggestion.selected ? "bg-primary border-primary" : "border-muted-foreground"
+                              suggestion.selected
+                                ? "bg-primary border-primary"
+                                : "border-muted-foreground",
                             )}
                           >
-                            {suggestion.selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                            {suggestion.selected && (
+                              <Check className="h-3 w-3 text-primary-foreground" />
+                            )}
                           </div>
                         </div>
 
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-primary mb-1">{suggestion.time}</div>
-                          <p className="font-medium text-foreground">{suggestion.activity}</p>
-                          <p className="text-sm text-muted-foreground">{suggestion.reason}</p>
+                          <div className="text-sm font-medium text-primary mb-1">
+                            {suggestion.time}
+                          </div>
+                          <p className="font-medium text-foreground">
+                            {suggestion.activity}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {suggestion.reason}
+                          </p>
                         </div>
                       </button>
                     ))}
@@ -1093,7 +1249,7 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                       variant="outline"
                       className="flex-1"
                       onClick={() => {
-                        setAiGenerated(false)
+                        setAiGenerated(false);
                       }}
                     >
                       ← Back
@@ -1102,7 +1258,10 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                     <Button
                       className="flex-1 gap-2"
                       onClick={handleApplySchedule}
-                      disabled={!aiSuggestions.some((item) => item.selected) || savingPlan}
+                      disabled={
+                        !aiSuggestions.some((item) => item.selected) ||
+                        savingPlan
+                      }
                     >
                       <Check className="h-4 w-4" />
                       {savingPlan
@@ -1117,7 +1276,11 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
         </Dialog>
       </div>
 
-      <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Study Planner" />
+      <LoginGateModal
+        open={showLoginModal}
+        onOpenChange={setShowLoginModal}
+        featureName="Study Planner"
+      />
     </>
-  )
+  );
 }
