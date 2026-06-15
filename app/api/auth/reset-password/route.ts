@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseAdmin } from "@/lib/supabase-server"
+import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase-server"
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,6 +55,10 @@ export async function POST(req: NextRequest) {
 
     // ── Clean up all OTP records for this email ───────────────────────────────
     await admin.from("password_reset_otps").delete().eq("email", normalizedEmail)
+
+    // ── Invalidate session locally ─────────────────────────────────────────────
+    const supabase = await getSupabaseServer()
+    await supabase.auth.signOut()
 
     return NextResponse.json({ success: true })
   } catch (err) {
