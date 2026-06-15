@@ -831,7 +831,7 @@ function AITutorContent() {
                         type="button"
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-destructive desktop-hover-only"
                         onClick={(event) => {
                           event.stopPropagation()
                           handleDeleteSession(chat.id)

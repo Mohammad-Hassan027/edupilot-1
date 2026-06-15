@@ -125,3 +125,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media (hover: hover) {
+  .desktop-hover-only {
+    opacity: 0;
+  }
+  .group:hover .desktop-hover-only {
+    opacity: 1;
+  }
+}
+
