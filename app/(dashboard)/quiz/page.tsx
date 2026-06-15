@@ -14,6 +14,7 @@ import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { cn } from "@/lib/utils"
+import { Kbd } from "@/components/ui/kbd"
 
 type QuizOption = {
   id: string
@@ -87,6 +88,22 @@ export default function QuizPage() {
       void loadAttempt(attemptId)
     }
   }, [history, historyLoading])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (questions.length > 0 && !submittedAttempt && !submitting) {
+          e.preventDefault()
+          void handleSubmitQuiz()
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [questions.length, submittedAttempt, submitting, handleSubmitQuiz])
 
   const scorePreview = useMemo(() => {
     if (!submittedAttempt) return null
@@ -454,9 +471,15 @@ export default function QuizPage() {
                   })}
 
                   {!submittedAttempt ? (
-                    <Button onClick={handleSubmitQuiz} disabled={submitting}>
-                      {submitting ? "Checking Answers..." : "Submit Quiz"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleSubmitQuiz} disabled={submitting}>
+                        {submitting ? "Checking Answers..." : "Submit Quiz"}
+                      </Button>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Kbd>Ctrl</Kbd>
+                        <Kbd>↵</Kbd>
+                      </span>
+                    </div>
                   ) : null}
                 </CardContent>
               </Card>
