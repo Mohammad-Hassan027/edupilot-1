@@ -38,6 +38,7 @@ import {
   ImageIcon,
   Loader2,
   Trash2,
+  Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -727,6 +728,56 @@ function AITutorContent() {
     setActiveSources([])
   }
 
+  const handleExportChat = () => {
+    if (messages.length <= 1) return
+
+    const currentSession = chatSessions.find((s) => s.id === activeSessionId)
+    const sessionName = currentSession
+      ? currentSession.title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase().slice(0, 50)
+      : "study-session"
+
+    const markdownContent = messages
+      .map((msg) => {
+        const role = msg.role === "user" ? "👤 **You**" : "🤖 **EduPilot**";
+        const timestampStr = msg.timestamp ? ` *(${new Date(msg.timestamp).toLocaleTimeString()})*` : "";
+        let text = `${role}${timestampStr}:\n${msg.content}\n`;
+
+        if (msg.attachments && msg.attachments.length > 0) {
+          text += "\n**Attachments:**\n";
+          msg.attachments.forEach((file) => {
+            text += `- ${file.name} (${formatFileSize(file.size)})\n`;
+          });
+        }
+
+        if (msg.media && msg.media.type === "image") {
+          text += `\n![Generated Image](${msg.media.url})\n`;
+        }
+
+        if (msg.sources && msg.sources.length > 0) {
+          text += "\n**Sources:**\n";
+          msg.sources.forEach((source) => {
+            text += `- [${source.title}](${source.url}) (${source.source})\n`;
+          });
+        }
+
+        return text;
+      })
+      .join("\n---\n\n");
+
+    const blob = new Blob([markdownContent], { type: "text/markdown;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    
+    link.setAttribute("href", url)
+    link.setAttribute("download", `${sessionName}-${new Date().toISOString().split("T")[0]}.md`)
+    link.style.visibility = "hidden"
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const handleCopy = async (messageId: string, content: string) => {
     try {
       await navigator.clipboard.writeText(content)
@@ -882,6 +933,18 @@ function AITutorContent() {
 
             <div className="flex items-center gap-2">
               {activeMode !== "chat" && <Badge variant="secondary">{modeLabels[activeMode]}</Badge>}
+              {messages.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportChat}
+                  className="gap-2 border-border hover:bg-secondary text-foreground"
+                  title="Export chat to Markdown"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">Export Chat</span>
+                </Button>
+              )}
               {showSourcesSidebar && (
                 <Button
                   variant="outline"
