@@ -555,6 +555,20 @@ export function DashboardHeader() {
                             <span className="text-sm text-foreground">{search}</span>
                           </button>
                         ))}
+                        <div className="flex justify-end px-3 pt-1.5 border-t border-border/40 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRecentSearches([])
+                              if (typeof window !== "undefined") {
+                                window.localStorage.removeItem(RECENT_SEARCHES_KEY)
+                              }
+                            }}
+                            className="text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                          >
+                            Clear recent searches
+                          </button>
+                        </div>
                       </div>
                     )}
 
