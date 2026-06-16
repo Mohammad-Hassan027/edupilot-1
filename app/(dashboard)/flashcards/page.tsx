@@ -457,6 +457,11 @@ export default function FlashcardsPage() {
                                 <Badge variant="secondary" className="text-[11px]">
                                   {item.card_count} cards
                                 </Badge>
+                                {isActive && (
+                                  <Badge variant="default" className="text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white border-none">
+                                    {masteredCount}/{cards.length} mastered ({Math.round(progress)}%)
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                           </div>
