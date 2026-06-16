@@ -186,3 +186,96 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_feature      ON public.usage_logs(feat
 CREATE INDEX IF NOT EXISTS idx_usage_logs_created_at   ON public.usage_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_saved_notes_user_id      ON public.saved_notes(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_notes_created_at   ON public.saved_notes(created_at DESC);
+
+-- ============================================================
+-- Fix: missing chat_sessions, chat_messages, user_activity_sessions
+-- ============================================================
+
+-- ─── user_activity_sessions (from migration-activity-tracking.sql) ─────────
+CREATE TABLE IF NOT EXISTS public.user_activity_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL UNIQUE,
+  path TEXT NOT NULL DEFAULT '/dashboard',
+  duration_seconds INTEGER NOT NULL DEFAULT 0,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_user_id ON public.user_activity_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_started_at ON public.user_activity_sessions(started_at DESC);
+
+ALTER TABLE public.user_activity_sessions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'user_activity_sessions' AND policyname = 'user_activity_sessions_select_own'
+  ) THEN
+    CREATE POLICY "user_activity_sessions_select_own" ON public.user_activity_sessions
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+ALTER TABLE public.usage_logs DROP CONSTRAINT IF EXISTS usage_logs_feature_check;
+
+-- ─── chat_sessions ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title            TEXT,
+  topic            TEXT,
+  last_message_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'chat_sessions' AND policyname = 'chat_sessions_select_own'
+  ) THEN
+    CREATE POLICY "chat_sessions_select_own" ON public.chat_sessions
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS chat_sessions_updated_at ON public.chat_sessions;
+CREATE TRIGGER chat_sessions_updated_at
+  BEFORE UPDATE ON public.chat_sessions
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON public.chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_last_message_at ON public.chat_sessions(last_message_at DESC);
+
+-- ─── chat_messages ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id  UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role        TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  content     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'chat_messages' AND policyname = 'chat_messages_select_own'
+  ) THEN
+    CREATE POLICY "chat_messages_select_own" ON public.chat_messages
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON public.chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON public.chat_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON public.chat_messages(created_at);
