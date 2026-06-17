@@ -1290,6 +1290,7 @@ function AITutorContent() {
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                     className="border-border bg-secondary pl-12 pr-10 text-sm"
                     disabled={isTyping || isUploadingFiles || isRecording || isTranscribing}
+                    maxLength={2000}
                   />
 
                   <DropdownMenu>
@@ -1369,7 +1370,23 @@ function AITutorContent() {
                   {isRecording && <span className="text-rose-400">Recording your question...</span>}
                   {isTranscribing && <span>Converting voice to text...</span>}
                 </div>
-                <p>AI can make mistakes. Consider checking important information.</p>
+                <div className="flex items-center gap-3">
+                  {input.length > 1500 && (
+                    <span
+                      className={cn(
+                        "font-medium transition-colors duration-200",
+                        input.length >= 1950
+                          ? "text-rose-500 dark:text-rose-400"
+                          : input.length >= 1800
+                            ? "text-amber-500 dark:text-amber-400"
+                            : "text-muted-foreground"
+                      )}
+                    >
+                      {input.length} / 2000 characters
+                    </span>
+                  )}
+                  <p>AI can make mistakes. Consider checking important information.</p>
+                </div>
               </div>
             </div>
           </div>
