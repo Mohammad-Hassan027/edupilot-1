@@ -137,6 +137,15 @@ function cleanAIResponse(text: string) {
     .trim()
 }
 
+function isErrorMessage(content: string): boolean {
+  return (
+    content.includes("Something went wrong") ||
+    content.includes("Please try again") ||
+    content.includes("Failed to") ||
+    content.includes("Unable to")
+  )
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -233,6 +242,7 @@ function AITutorContent() {
   const audioChunksRef = useRef<Blob[]>([])
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null)
   const speechTranscriptRef = useRef("")
+  const lastUserMessageRef = useRef("")
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -619,10 +629,12 @@ function AITutorContent() {
     await startVoiceRecording()
   }
 
-  const handleSend = async () => {
-    if ((!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles || isRecording || isTranscribing)) return
+  const handleSend = async (overrideText?: string) => {
+    const textToSend = overrideText ?? input.trim()
+    if ((!( textToSend || selectedFiles.length) || isTyping || isUploadingFiles || isRecording || isTranscribing)) return
 
-    const messageText = input.trim()
+    const messageText = textToSend
+    if (messageText) lastUserMessageRef.current = messageText
     const pendingFiles = [...selectedFiles]
 
     const userMessage: Message = {
@@ -639,7 +651,7 @@ function AITutorContent() {
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInput("")
+    if (!overrideText) setInput("")
     setSelectedFiles([])
     setIsTyping(true)
 
@@ -1060,52 +1072,68 @@ function AITutorContent() {
 
                         {message.role === "assistant" && (
                           <div className="flex items-center gap-1 px-2 md:gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={cn(
-                                "h-7 w-7",
-                                copiedMessageId === message.id
-                                  ? "text-emerald-400"
-                                  : "text-muted-foreground hover:text-foreground"
-                              )}
-                              onClick={() => handleCopy(message.id, message.content)}
-                              title={copiedMessageId === message.id ? "Done" : "Copy"}
-                            >
-                              {copiedMessageId === message.id ? (
-                                <Check className="h-3.5 w-3.5" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
+                            {isErrorMessage(message.content) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 px-3 text-xs font-medium text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-300 transition-all duration-200"
+                                onClick={() => handleSend(lastUserMessageRef.current)}
+                                disabled={isTyping || !lastUserMessageRef.current}
+                                title="Retry last message"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                Retry
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-7 w-7",
+                                    copiedMessageId === message.id
+                                      ? "text-emerald-400"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => handleCopy(message.id, message.content)}
+                                  title={copiedMessageId === message.id ? "Done" : "Copy"}
+                                >
+                                  {copiedMessageId === message.id ? (
+                                    <Check className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={cn(
-                                "h-7 w-7",
-                                feedback === "like"
-                                  ? "text-emerald-400"
-                                  : "text-muted-foreground hover:text-foreground"
-                              )}
-                              onClick={() => handleLike(message.id)}
-                            >
-                              <ThumbsUp className="h-3.5 w-3.5" />
-                            </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-7 w-7",
+                                    feedback === "like"
+                                      ? "text-emerald-400"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => handleLike(message.id)}
+                                >
+                                  <ThumbsUp className="h-3.5 w-3.5" />
+                                </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={cn(
-                                "h-7 w-7",
-                                feedback === "dislike"
-                                  ? "text-rose-400"
-                                  : "text-muted-foreground hover:text-foreground"
-                              )}
-                              onClick={() => handleDislike(message.id)}
-                            >
-                              <ThumbsDown className="h-3.5 w-3.5" />
-                            </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-7 w-7",
+                                    feedback === "dislike"
+                                      ? "text-rose-400"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                  onClick={() => handleDislike(message.id)}
+                                >
+                                  <ThumbsDown className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1344,7 +1372,7 @@ function AITutorContent() {
                 </div>
 
                 <Button
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={(!(input.trim() || selectedFiles.length) || isTyping || isUploadingFiles || isRecording || isTranscribing)}
                   size="sm"
                   className="shrink-0"
