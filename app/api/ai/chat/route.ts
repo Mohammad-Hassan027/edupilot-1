@@ -144,46 +144,49 @@ export async function POST(req: NextRequest) {
         cleanMessage ||
         `Uploaded files: ${attachments.map((file) => file.name).join(", ")}`;
 
-      const { error: userMessageError } = await admin
-        .from("chat_messages")
-        .insert({
-          session_id: currentSessionId,
-          user_id: user.id,
-          role: "user",
-          content: userContent,
-          created_at: new Date().toISOString(),
-        });
+      const now = new Date().toISOString();
 
-      if (userMessageError) {
+      const [userMsgResult, assistantMsgResult, sessionUpdateResult] =
+        await Promise.all([
+          admin.from("chat_messages").insert({
+            session_id: currentSessionId,
+            user_id: user.id,
+            role: "user",
+            content: userContent,
+            created_at: now,
+          }),
+          admin.from("chat_messages").insert({
+            session_id: currentSessionId,
+            user_id: user.id,
+            role: "assistant",
+            content: finalReply,
+            created_at: now,
+          }),
+          admin
+            .from("chat_sessions")
+            .update({
+              last_message_at: now,
+              updated_at: now,
+            })
+            .eq("id", currentSessionId)
+            .eq("user_id", user.id),
+        ]);
+
+      if (userMsgResult.error) {
         throw new Error(
-          `Failed to save user message: ${userMessageError.message}`,
+          `Failed to save user message: ${userMsgResult.error.message}`,
         );
       }
-
-      const { error: assistantMessageError } = await admin
-        .from("chat_messages")
-        .insert({
-          session_id: currentSessionId,
-          user_id: user.id,
-          role: "assistant",
-          content: finalReply,
-          created_at: new Date().toISOString(),
-        });
-
-      if (assistantMessageError) {
+      if (assistantMsgResult.error) {
         throw new Error(
-          `Failed to save assistant message: ${assistantMessageError.message}`,
+          `Failed to save assistant message: ${assistantMsgResult.error.message}`,
         );
       }
-
-      await admin
-        .from("chat_sessions")
-        .update({
-          last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", currentSessionId)
-        .eq("user_id", user.id);
+      if (sessionUpdateResult.error) {
+        throw new Error(
+          `Failed to update session: ${sessionUpdateResult.error.message}`,
+        );
+      }
 
       savedSessionId = currentSessionId;
 
