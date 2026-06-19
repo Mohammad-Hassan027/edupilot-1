@@ -142,7 +142,12 @@ function isErrorMessage(content: string): boolean {
     content.includes("Something went wrong") ||
     content.includes("Please try again") ||
     content.includes("Failed to") ||
-    content.includes("Unable to")
+    content.includes("Unable to") ||
+    content.includes("fetch failed") ||
+    content.includes("Error fetching") ||
+    content.includes("is not set") ||
+    content.includes("API key") ||
+    /error:/i.test(content)
   )
 }
 
