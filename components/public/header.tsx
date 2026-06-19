@@ -140,6 +140,10 @@ export function PublicHeader() {
             ))}
 
             <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <div className="flex items-center justify-between px-1 pb-1">
+                <span className="text-sm font-medium text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
               {!authReady ? (
                 <div className="h-10 rounded-lg bg-secondary animate-pulse" />
               ) : authUser ? (
