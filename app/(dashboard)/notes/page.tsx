@@ -216,7 +216,9 @@ export default function NotesPage() {
   const [history, setHistory] = useState<SavedNote[]>([])
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null)
   const [copiedTab, setCopiedTab] = useState<NoteTab["type"] | null>(null)
+  const [copiedAll, setCopiedAll] = useState(false)
   const copiedTimerRef = useRef<number | null>(null)
+  const copiedAllTimerRef = useRef<number | null>(null)
 
   const selectedOption = useMemo(
     () => sourceOptions.find((option) => option.id === sourceMode) || sourceOptions[0],
@@ -270,6 +272,9 @@ export default function NotesPage() {
     return () => {
       if (copiedTimerRef.current) {
         window.clearTimeout(copiedTimerRef.current)
+      }
+      if (copiedAllTimerRef.current) {
+        window.clearTimeout(copiedAllTimerRef.current)
       }
     }
   }, [])
@@ -467,6 +472,25 @@ export default function NotesPage() {
 
     copiedTimerRef.current = window.setTimeout(() => {
       setCopiedTab(null)
+    }, 1800)
+  }
+
+  async function copyAllNotes() {
+    if (!generatedNotes) return
+
+    const allText = generatedNotes
+      .map((tab) => `${tab.title}\n\n${tab.content}`)
+      .join("\n\n---\n\n")
+
+    await navigator.clipboard.writeText(allText)
+    setCopiedAll(true)
+
+    if (copiedAllTimerRef.current) {
+      window.clearTimeout(copiedAllTimerRef.current)
+    }
+
+    copiedAllTimerRef.current = window.setTimeout(() => {
+      setCopiedAll(false)
     }, 1800)
   }
 
@@ -967,6 +991,14 @@ export default function NotesPage() {
                   <Button variant="outline" className="gap-2" onClick={resetGeneratedView}>
                     <Plus className="h-4 w-4" />
                     Add New
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => void copyAllNotes()}
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copiedAll ? "Copied!" : "Copy All"}
                   </Button>
                   <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => downloadNotes()}>
                     <Download className="h-5 w-5" />
