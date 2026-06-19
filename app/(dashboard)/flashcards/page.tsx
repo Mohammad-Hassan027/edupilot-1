@@ -174,6 +174,17 @@ export default function FlashcardsPage() {
     }
   }
 
+  function openSavedSetShuffled(set: SavedFlashcardSet) {
+    openSavedSet(set)
+    setCards((c) => [...c].sort(() => Math.random() - 0.5))
+    setCurrentIndex(0)
+    setIsFlipped(false)
+  }
+
+  function openSavedSetReset(set: SavedFlashcardSet) {
+    openSavedSet(set)
+  }
+
   async function loadSavedSet(setId: string) {
     try {
       const response = await fetch(`/api/ai/flashcards/${setId}`, { cache: "no-store" })
@@ -512,8 +523,31 @@ export default function FlashcardsPage() {
                           </div>
                         </div>
 
-                        <div className="shrink-0 text-muted-foreground">
-                          <Eye className="h-4 w-4" />
+                        <div className="shrink-0 flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Open set"
+                            onClick={(e) => { e.stopPropagation(); openSavedSet(item) }}
+                            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Open shuffled"
+                            onClick={(e) => { e.stopPropagation(); openSavedSetShuffled(item) }}
+                            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-primary transition-colors"
+                          >
+                            <Shuffle className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Open with mastery reset"
+                            onClick={(e) => { e.stopPropagation(); openSavedSetReset(item) }}
+                            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-destructive transition-colors"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     </button>
