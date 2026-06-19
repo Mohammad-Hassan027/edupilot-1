@@ -217,6 +217,44 @@ export default function FlashcardsPage() {
     setIsFlipped(false)
   }
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't fire when a dialog is open or focus is inside an input/textarea
+      if (dialogOpen) return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+
+      switch (e.key) {
+        case " ":
+        case "Enter":
+          e.preventDefault()
+          setIsFlipped((prev) => !prev)
+          break
+        case "ArrowRight":
+        case "l":
+        case "L":
+          e.preventDefault()
+          handleNext()
+          break
+        case "ArrowLeft":
+        case "j":
+        case "J":
+          e.preventDefault()
+          handlePrev()
+          break
+        case "m":
+        case "M":
+          if (isFlipped && currentCard && !currentCard.mastered) {
+            handleMastered()
+          }
+          break
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [dialogOpen, isFlipped, currentCard, handleNext, handlePrev, handleMastered])
+
   const handleReset = () => {
     setCards((c) => c.map((x) => ({ ...x, mastered: false })))
     setCurrentIndex(0)
@@ -398,6 +436,13 @@ export default function FlashcardsPage() {
               <Button variant="outline" size="icon" onClick={handleNext} disabled={currentIndex === cards.length - 1}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground/70 select-none">
+              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">Space</kbd> Flip</span>
+              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">←</kbd> Prev</span>
+              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">→</kbd> Next</span>
+              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">M</kbd> Mastered</span>
             </div>
 
             {masteredCount === cards.length && cards.length > 1 && (
