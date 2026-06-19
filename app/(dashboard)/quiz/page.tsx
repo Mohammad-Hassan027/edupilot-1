@@ -55,6 +55,14 @@ export default function QuizPage() {
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // Timer config (set before generating)
+  const [timerEnabled, setTimerEnabled] = useState(false)
+  const [secondsPerQuestion, setSecondsPerQuestion] = useState(60)
+
+  // Active timer state (resets per active question)
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0)
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
+
   const [quizTopic, setQuizTopic] = useState("")
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
@@ -104,6 +112,43 @@ export default function QuizPage() {
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [questions.length, submittedAttempt, submitting, handleSubmitQuiz])
+
+  // Per-question countdown timer
+  useEffect(() => {
+    if (!timerEnabled || submittedAttempt || questions.length === 0) return
+
+    const currentQuestion = questions[activeQuestionIndex]
+    if (!currentQuestion) return
+
+    // Reset the countdown whenever the active question changes
+    setTimeRemaining(secondsPerQuestion)
+
+    const interval = window.setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          // Time's up — advance to the next unanswered question
+          clearInterval(interval)
+          setActiveQuestionIndex((idx) => {
+            const next = idx + 1
+            if (next < questions.length) {
+              // Smooth-scroll to the next question card
+              setTimeout(() => {
+                document.getElementById(`question-${next}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+              }, 50)
+              return next
+            }
+            // All questions exhausted — auto-submit
+            void handleSubmitQuiz()
+            return idx
+          })
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [timerEnabled, activeQuestionIndex, questions.length, submittedAttempt])
 
   const scorePreview = useMemo(() => {
     if (!submittedAttempt) return null
@@ -201,6 +246,8 @@ export default function QuizPage() {
         setQuestions(data.quiz?.questions || [])
         setSelectedAnswers({})
         setSubmittedAttempt(null)
+        setActiveQuestionIndex(0)
+        setTimeRemaining(timerEnabled ? secondsPerQuestion : null)
 
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href)
@@ -217,6 +264,18 @@ export default function QuizPage() {
   function handleSelect(questionId: string, optionId: string) {
     if (submittedAttempt) return
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: optionId }))
+
+    // When timer is enabled, advance to next question after selection
+    if (timerEnabled) {
+      const idx = questions.findIndex((q) => q.id === questionId)
+      const next = idx + 1
+      if (next < questions.length) {
+        setActiveQuestionIndex(next)
+        setTimeout(() => {
+          document.getElementById(`question-${next}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }, 50)
+      }
+    }
   }
 
   async function handleSubmitQuiz() {
@@ -248,6 +307,7 @@ export default function QuizPage() {
       const savedAttempt = data.result.savedAttempt as QuizAttempt
       setSubmittedAttempt(savedAttempt)
       setCurrentAttemptId(savedAttempt.id)
+      setTimeRemaining(null)
       setHistory((prev) => [savedAttempt, ...prev.filter((item) => item.id !== savedAttempt.id)].slice(0, 12))
 
       if (typeof window !== "undefined") {
@@ -367,6 +427,49 @@ export default function QuizPage() {
                   </Select>
                 </div>
 
+                <div className="space-y-3 rounded-xl border border-border bg-secondary/30 p-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Timer per question</Label>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={timerEnabled}
+                      onClick={() => setTimerEnabled((v) => !v)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        timerEnabled ? "bg-primary" : "bg-secondary"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                          timerEnabled ? "translate-x-5" : "translate-x-1"
+                        )}
+                      />
+                    </button>
+                  </div>
+                  {timerEnabled && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Seconds per question</Label>
+                      <Select
+                        value={String(secondsPerQuestion)}
+                        onValueChange={(v) => setSecondsPerQuestion(Number(v))}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[30, 60, 90, 120].map((s) => (
+                            <SelectItem key={s} value={String(s)}>
+                              {s}s
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
                 {pageError ? <p className="text-sm text-destructive">{pageError}</p> : null}
 
                 <Button
@@ -415,9 +518,33 @@ export default function QuizPage() {
                 <CardContent className="space-y-6">
                   {questions.map((question, index) => {
                     const answerResult = getAnswerResult(question.id)
+                    const isActiveTimerQuestion = timerEnabled && !submittedAttempt && index === activeQuestionIndex
+                    const timerPercent =
+                      isActiveTimerQuestion && timeRemaining !== null
+                        ? (timeRemaining / secondsPerQuestion) * 100
+                        : 100
+                    const isTimerCritical = isActiveTimerQuestion && timeRemaining !== null && timeRemaining < 10
 
                     return (
-                      <div key={question.id} className="rounded-xl border border-border p-4 space-y-4">
+                      <div key={question.id} id={`question-${index}`} className="rounded-xl border border-border p-4 space-y-4">
+                        {isActiveTimerQuestion && timeRemaining !== null && (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Time remaining</span>
+                              <span className={cn(isTimerCritical && "text-destructive font-semibold")}>
+                                {timeRemaining}s
+                              </span>
+                            </div>
+                            <Progress
+                              value={timerPercent}
+                              className={cn(
+                                "h-1.5 transition-colors",
+                                isTimerCritical && "[&>div]:bg-destructive"
+                              )}
+                            />
+                          </div>
+                        )}
+
                         <div className="space-y-1">
                           <p className="text-sm text-muted-foreground">Question {index + 1}</p>
                           <p className="font-medium text-foreground">{question.question}</p>
