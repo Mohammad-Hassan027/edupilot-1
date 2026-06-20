@@ -14,6 +14,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Send,
   MessageSquareText,
   Sparkles,
@@ -224,6 +234,7 @@ function AITutorContent() {
   const [isUploadingFiles, setIsUploadingFiles] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [messageFeedback, setMessageFeedback] = useState<Record<string, FeedbackType>>({})
@@ -908,7 +919,7 @@ function AITutorContent() {
                         className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-destructive desktop-hover-only"
                         onClick={(event) => {
                           event.stopPropagation()
-                          handleDeleteSession(chat.id)
+                          setSessionToDelete(chat.id)
                         }}
                         aria-label="Delete chat"
                         title="Delete chat"
@@ -1487,6 +1498,49 @@ function AITutorContent() {
 
       <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="AI Tutor" />
       <CreditsExhaustedModal open={showCreditsModal} onOpenChange={setShowCreditsModal} feature="AI chat" />
+
+      <AlertDialog
+        open={sessionToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setSessionToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete chat session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const session = chatSessions.find((s) => s.id === sessionToDelete)
+                return session ? (
+                  <>
+                    Are you sure you want to permanently delete{" "}
+                    <span className="font-medium text-foreground">&ldquo;{session.title}&rdquo;</span>?
+                    This action cannot be undone.
+                  </>
+                ) : (
+                  "Are you sure you want to permanently delete this chat session? This action cannot be undone."
+                )
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSessionToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (sessionToDelete) {
+                  handleDeleteSession(sessionToDelete)
+                  setSessionToDelete(null)
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
