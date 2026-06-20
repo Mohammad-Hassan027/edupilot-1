@@ -52,6 +52,11 @@ git checkout -b feat/your-feature-name
   ```bash
   npm run lint
   ```
+* If the Next.js docs section in `AGENTS.md` is missing or stale, refresh it:
+  ```bash
+  npm run dl-nextjs-docs
+  ```
+  This runs `npx @next/codemod@canary agents-md` and updates the `<!-- NEXT-AGENTS-MD-START -->` block in `AGENTS.md` with the current Next.js docs index. AI coding agents rely on this to find accurate Next.js API references — always commit the updated `AGENTS.md` if it changes.
 * Ensure you don't commit temporary variables or raw API keys.
 
 ### Step 4: Commit and Push
