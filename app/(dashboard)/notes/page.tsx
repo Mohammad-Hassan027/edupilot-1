@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
+import { LoginGateModal as ConceptMapLoginGateModal } from "@/components/login-gate-modal"
 import {
   FileText,
   Network,
@@ -28,7 +29,6 @@ import {
   Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LoginGateModal as ConceptMapLoginGateModal } from "@/components/login-gate-modal"
 
 type SourceMode = "pdf" | "video" | "spreadsheet"
 type NoteTab = { type: "summary" | "concepts" | "bullets" | "revision"; title: string; content: string }
