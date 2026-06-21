@@ -34,6 +34,7 @@ import {
   Check,
   ThumbsUp,
   ThumbsDown,
+  Wand2,
   Mic,
   RefreshCw,
   BookOpen,
@@ -95,6 +96,14 @@ interface ChatSession {
 type FeedbackType = "like" | "dislike" | null
 type ToolMode = "chat" | "web_search" | "image_generation"
 type ToolHint = "file_upload" | "web_search" | null
+type ExplainStyle = "simpler" | "analogy" | "step-by-step" | "real-world"
+
+const EXPLAIN_STYLES: Array<{ value: ExplainStyle; label: string }> = [
+  { value: "simpler", label: "Simpler (ELI5)" },
+  { value: "analogy", label: "Use an analogy" },
+  { value: "step-by-step", label: "Step-by-step" },
+  { value: "real-world", label: "Real-world example" },
+]
 
 const examplePrompts = [
   { icon: BookOpen, label: "Explain a concept", prompt: "Explain the concept of REST APIs in simple terms" },
@@ -237,6 +246,7 @@ function AITutorContent() {
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const [explainingMessageId, setExplainingMessageId] = useState<string | null>(null)
   const [messageFeedback, setMessageFeedback] = useState<Record<string, FeedbackType>>({})
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null)
@@ -816,6 +826,52 @@ function AITutorContent() {
     }
   }
 
+  const handleExplainDifferently = async (messageId: string, style: ExplainStyle) => {
+    const messageIndex = messages.findIndex((m) => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const targetMessage = messages[messageIndex]
+    const precedingUserMessage = [...messages.slice(0, messageIndex)].reverse().find((m) => m.role === "user")
+
+    if (!precedingUserMessage) return
+
+    setExplainingMessageId(messageId)
+
+    try {
+      const response = await fetch("/api/ai/chat/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          question: precedingUserMessage.content,
+          previousAnswer: targetMessage.content,
+          style,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate alternate explanation")
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}`,
+          role: "assistant",
+          content: data.reply,
+          timestamp: new Date(),
+          mode: "chat",
+        },
+      ])
+    } catch (err) {
+      pushAssistantError(err instanceof Error ? err.message : "Failed to generate an alternate explanation.")
+    } finally {
+      setExplainingMessageId(null)
+    }
+  }
+
   const handleLike = (messageId: string) => {
     setMessageFeedback((prev) => ({
       ...prev,
@@ -1148,6 +1204,35 @@ function AITutorContent() {
                                 >
                                   <ThumbsDown className="h-3.5 w-3.5" />
                                 </Button>
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1.5 rounded-full px-2 text-xs text-muted-foreground hover:text-foreground"
+                                      disabled={explainingMessageId === message.id}
+                                      title="Explain differently"
+                                    >
+                                      {explainingMessageId === message.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <Wand2 className="h-3.5 w-3.5" />
+                                      )}
+                                      Explain differently
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    {EXPLAIN_STYLES.map((styleOption) => (
+                                      <DropdownMenuItem
+                                        key={styleOption.value}
+                                        onClick={() => void handleExplainDifferently(message.id, styleOption.value)}
+                                      >
+                                        {styleOption.label}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </>
                             )}
                           </div>

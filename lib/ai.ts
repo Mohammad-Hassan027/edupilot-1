@@ -357,6 +357,44 @@ Answer:`
   return callAIWithFallback(prompt)
 }
 
+export type ExplainStyle = "simpler" | "analogy" | "step-by-step" | "real-world"
+
+export const EXPLAIN_STYLE_LABELS: Record<ExplainStyle, string> = {
+  simpler: "Simpler (ELI5)",
+  analogy: "Use an analogy",
+  "step-by-step": "Step-by-step",
+  "real-world": "Real-world example",
+}
+
+const EXPLAIN_STYLE_INSTRUCTIONS: Record<ExplainStyle, string> = {
+  simpler:
+    "Explain it in the simplest possible terms, as if to someone with no background in the subject. Avoid jargon, use short sentences.",
+  analogy:
+    "Explain it using a clear, relatable analogy or metaphor that makes the concept easy to visualize and remember.",
+  "step-by-step":
+    "Break it down into clear, numbered steps that build up to the full explanation, one idea at a time.",
+  "real-world":
+    "Explain it using a concrete real-world example or practical scenario where this concept actually applies.",
+}
+
+export async function generateAlternateExplanation(
+  question: string,
+  previousAnswer: string,
+  style: ExplainStyle
+): Promise<string> {
+  const prompt = `You are EduPilot, an AI tutor. A student asked the following question:
+"${question}"
+
+They already received this explanation but found it hard to understand:
+"${previousAnswer}"
+
+Re-explain the answer to the same question in a different way. ${EXPLAIN_STYLE_INSTRUCTIONS[style]}
+
+Stay accurate and stay focused on the original question. Do not just repeat the previous explanation in different words — genuinely change the approach.`
+
+  return callAIWithFallback(prompt)
+}
+
 // =========================
 // Quiz
 // =========================
