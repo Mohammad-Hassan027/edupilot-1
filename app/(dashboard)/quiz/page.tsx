@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye } from "lucide-react"
+import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye, BarChart3 } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -46,12 +46,23 @@ type QuizAttempt = {
   created_at: string
 }
 
+type QuizDifficulty = "easy" | "medium" | "hard"
+
+type QuizTopicStats = {
+  topic: string
+  attempts: number
+  averagePercentage: number
+  bestPercentage: number
+  lastAttemptAt: string
+}
+
 export default function QuizPage() {
   const { subscription, isLoading, error, email } = useUser()
   const [showLoginModal, setShowLoginModal] = useState(false)
 
   const [topic, setTopic] = useState("")
   const [count, setCount] = useState("5")
+  const [difficulty, setDifficulty] = useState<QuizDifficulty>("medium")
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -73,12 +84,16 @@ export default function QuizPage() {
   const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null)
   const [pageError, setPageError] = useState("")
 
+  const [topicStats, setTopicStats] = useState<QuizTopicStats[]>([])
+  const [sourceInfo, setSourceInfo] = useState<{ sourceType: "note" | "chat"; sourceId: string } | null>(null)
+
   const canUseQuiz = canAccessFeature(subscription, "quiz")
   const activePlanName =
     subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
   useEffect(() => {
     void loadHistory()
+    void loadTopicStats()
   }, [])
 
   useEffect(() => {
@@ -96,6 +111,31 @@ export default function QuizPage() {
       void loadAttempt(attemptId)
     }
   }, [history, historyLoading])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (isLoading) return
+
+    const params = new URLSearchParams(window.location.search)
+    const querySourceType = params.get("sourceType")
+    const querySourceId = params.get("sourceId")
+
+    if ((querySourceType !== "note" && querySourceType !== "chat") || !querySourceId) return
+    if (sourceInfo || questions.length > 0) return
+
+    if (error === "not_authenticated" || !email) {
+      setShowLoginModal(true)
+      return
+    }
+
+    if (!canUseQuiz) {
+      window.location.href = "/pricing?plan=premium&feature=quiz"
+      return
+    }
+
+    setSourceInfo({ sourceType: querySourceType, sourceId: querySourceId })
+    void handleGenerateQuiz({ sourceType: querySourceType, sourceId: querySourceId })
+  }, [isLoading, error, email, canUseQuiz, sourceInfo, questions.length])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -168,6 +208,18 @@ export default function QuizPage() {
     }
   }
 
+  async function loadTopicStats() {
+    try {
+      const response = await fetch("/api/user/quiz-stats", { cache: "no-store" })
+      const data = await response.json().catch(() => ({ stats: [] }))
+      if (response.ok) {
+        setTopicStats(data.stats || [])
+      }
+    } catch {
+      //
+    }
+  }
+
   async function loadAttempt(attemptId: string) {
     try {
       const response = await fetch(`/api/ai/quiz/${attemptId}`, { cache: "no-store" })
@@ -203,7 +255,7 @@ export default function QuizPage() {
     }
   }
 
-  async function handleGenerateQuiz() {
+  async function handleGenerateQuiz(sourceOverride?: { sourceType: "note" | "chat"; sourceId: string }) {
     setPageError("")
 
     if (isLoading) return
@@ -215,7 +267,7 @@ export default function QuizPage() {
       window.location.href = "/pricing?plan=premium&feature=quiz"
       return
     }
-    if (!topic.trim()) return
+    if (!sourceOverride && !topic.trim()) return
 
     try {
       setGenerating(true)
@@ -225,7 +277,11 @@ export default function QuizPage() {
       const response = await fetch("/api/ai/quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topic.trim(), count: Number(count) }),
+        body: JSON.stringify(
+          sourceOverride
+            ? { ...sourceOverride, count: Number(count), difficulty }
+            : { topic: topic.trim(), count: Number(count), difficulty }
+        ),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -293,8 +349,11 @@ export default function QuizPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: quizTopic,
+          difficulty,
           questions,
           answers,
+          sourceType: sourceInfo?.sourceType || "topic",
+          sourceId: sourceInfo?.sourceId || null,
         }),
       })
 
@@ -309,6 +368,7 @@ export default function QuizPage() {
       setCurrentAttemptId(savedAttempt.id)
       setTimeRemaining(null)
       setHistory((prev) => [savedAttempt, ...prev.filter((item) => item.id !== savedAttempt.id)].slice(0, 12))
+      void loadTopicStats()
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("quiz-score-updated"))
@@ -411,20 +471,36 @@ export default function QuizPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Number of Questions</Label>
-                  <Select value={count} onValueChange={setCount}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["5", "7", "10"].map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {value} Questions
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Number of Questions</Label>
+                    <Select value={count} onValueChange={setCount}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["5", "7", "10"].map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {value} Questions
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Difficulty</Label>
+                    <Select value={difficulty} onValueChange={(value) => setDifficulty(value as QuizDifficulty)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Easy</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="hard">Hard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border bg-secondary/30 p-4">
@@ -474,7 +550,7 @@ export default function QuizPage() {
 
                 <Button
                   className="w-full"
-                  onClick={handleGenerateQuiz}
+                  onClick={() => void handleGenerateQuiz()}
                   disabled={!topic.trim() || generating}
                 >
                   {generating ? "Generating Quiz..." : "Generate Quiz"}
@@ -613,6 +689,41 @@ export default function QuizPage() {
             ) : null}
           </div>
 
+          <div className="space-y-6">
+          <Card className="border-border bg-card h-fit">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Performance by Topic
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-3">
+              {topicStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Complete quizzes on different topics to see your average score and improvement here.
+                </p>
+              ) : (
+                topicStats.map((stat) => (
+                  <div key={stat.topic} className="rounded-xl border border-border bg-background/40 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-foreground truncate">{stat.topic}</p>
+                      <Badge variant="secondary" className="text-[11px] shrink-0">
+                        {stat.attempts} {stat.attempts === 1 ? "attempt" : "attempts"}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Avg {stat.averagePercentage}%</span>
+                      <span>·</span>
+                      <span>Best {stat.bestPercentage}%</span>
+                    </div>
+                    <Progress value={stat.averagePercentage} className="mt-2 h-1.5" />
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="border-border bg-card h-fit">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -688,6 +799,7 @@ export default function QuizPage() {
               )}
             </CardContent>
           </Card>
+          </div>
         </div>
       </div>
 

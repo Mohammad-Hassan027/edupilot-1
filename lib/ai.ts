@@ -399,8 +399,22 @@ function normalizeQuizItem(item: unknown, index: number): QuizQuestion {
   }
 }
 
-export async function generateQuiz(topic: string, count = 5): Promise<QuizQuestion[]> {
+export type QuizDifficulty = "easy" | "medium" | "hard"
+
+const QUIZ_DIFFICULTY_GUIDANCE: Record<QuizDifficulty, string> = {
+  easy: "Keep questions at a beginner level: basic recall and simple definitions.",
+  medium: "Keep questions at an intermediate level: application of concepts, not just recall.",
+  hard: "Keep questions at an advanced level: multi-step reasoning, edge cases, and nuanced distinctions.",
+}
+
+export async function generateQuiz(
+  topic: string,
+  count = 5,
+  difficulty: QuizDifficulty = "medium"
+): Promise<QuizQuestion[]> {
   const prompt = `Generate exactly ${count} multiple-choice quiz questions about "${topic}".
+
+Difficulty: ${difficulty}. ${QUIZ_DIFFICULTY_GUIDANCE[difficulty]}
 
 Return ONLY valid JSON array in this exact structure:
 [
@@ -441,6 +455,62 @@ Rules:
     return normalized
   } catch (error) {
     console.error("[generateQuiz] Invalid AI JSON:", raw)
+    throw new Error("AI returned invalid quiz format. Please try again.")
+  }
+}
+
+export async function generateQuizFromContent(
+  title: string,
+  content: string,
+  count = 5,
+  difficulty: QuizDifficulty = "medium"
+): Promise<QuizQuestion[]> {
+  const prompt = `Read the study material below (titled "${title}") and generate exactly ${count} multiple-choice quiz questions that test understanding of it.
+
+Difficulty: ${difficulty}. ${QUIZ_DIFFICULTY_GUIDANCE[difficulty]}
+
+Study material:
+${content.slice(0, 12000)}
+
+Return ONLY valid JSON array in this exact structure:
+[
+  {
+    "question": "Question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": "Option A",
+    "explanation": "Brief explanation"
+  }
+]
+
+Rules:
+- Base every question strictly on the material above
+- Return only JSON
+- No markdown
+- No backticks
+- Exactly ${count} questions
+- Exactly 4 options per question
+- "answer" must exactly match one option
+- Keep explanations short`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned)
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("Quiz response is not an array")
+    }
+
+    const normalized = parsed.slice(0, count).map((item, index) => normalizeQuizItem(item, index))
+
+    if (!normalized.length) {
+      throw new Error("No quiz questions generated")
+    }
+
+    return normalized
+  } catch (error) {
+    console.error("[generateQuizFromContent] Invalid AI JSON:", raw)
     throw new Error("AI returned invalid quiz format. Please try again.")
   }
 }

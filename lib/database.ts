@@ -225,15 +225,21 @@ export type SavedQuizAnswer = {
   isCorrect: boolean
 }
 
+export type QuizDifficultyLevel = "easy" | "medium" | "hard"
+export type QuizSourceType = "topic" | "note" | "chat"
+
 export type SavedQuizAttemptRecord = {
   id: string
   user_id: string
   topic: string
+  difficulty: QuizDifficultyLevel
   total_questions: number
   score: number
   percentage: number
   questions: SavedQuizQuestion[]
   answers: SavedQuizAnswer[]
+  source_type: QuizSourceType
+  source_id: string | null
   created_at: string
   updated_at: string
 }
@@ -242,11 +248,14 @@ export async function saveQuizAttempt(
   userId: string,
   input: {
     topic: string
+    difficulty?: QuizDifficultyLevel
     questions: SavedQuizQuestion[]
     answers: SavedQuizAnswer[]
     score: number
     totalQuestions: number
     percentage: number
+    sourceType?: QuizSourceType
+    sourceId?: string | null
   }
 ) {
   const admin = await getSupabaseAdmin()
@@ -254,11 +263,14 @@ export async function saveQuizAttempt(
   const payload = {
     user_id: userId,
     topic: input.topic,
+    difficulty: input.difficulty || "medium",
     total_questions: input.totalQuestions,
     score: input.score,
     percentage: input.percentage,
     questions: input.questions,
     answers: input.answers,
+    source_type: input.sourceType || "topic",
+    source_id: input.sourceId || null,
     updated_at: new Date().toISOString(),
   }
 
@@ -331,6 +343,53 @@ export async function deleteSavedQuizAttempt(userId: string, attemptId: string) 
   }
 
   return { success: true }
+}
+
+export type QuizTopicStats = {
+  topic: string
+  attempts: number
+  averagePercentage: number
+  bestPercentage: number
+  lastAttemptAt: string
+}
+
+export async function getQuizTopicStats(userId: string): Promise<QuizTopicStats[]> {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_quiz_attempts")
+    .select("topic, percentage, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_quiz_attempts")) return []
+    throw new Error(`Failed to load quiz stats: ${error.message}`)
+  }
+
+  const byTopic = new Map<string, { percentages: number[]; lastAttemptAt: string }>()
+
+  for (const row of data || []) {
+    const existing = byTopic.get(row.topic)
+    if (existing) {
+      existing.percentages.push(Number(row.percentage))
+    } else {
+      byTopic.set(row.topic, { percentages: [Number(row.percentage)], lastAttemptAt: row.created_at })
+    }
+  }
+
+  return Array.from(byTopic.entries())
+    .map(([topic, stats]) => ({
+      topic,
+      attempts: stats.percentages.length,
+      averagePercentage: Number(
+        (stats.percentages.reduce((sum, value) => sum + value, 0) / stats.percentages.length).toFixed(1)
+      ),
+      bestPercentage: Math.max(...stats.percentages),
+      lastAttemptAt: stats.lastAttemptAt,
+    }))
+    .sort((a, b) => new Date(b.lastAttemptAt).getTime() - new Date(a.lastAttemptAt).getTime())
 }
 
 export type SavedPlannerTask = {

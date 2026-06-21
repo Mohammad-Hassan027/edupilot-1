@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback, type ChangeEvent } from "react"
 import { useSearchParams } from "next/navigation"
+import NextLink from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   Send,
+  HelpCircle,
   MessageSquareText,
   Sparkles,
   MessageSquare,
@@ -927,6 +929,22 @@ function AITutorContent() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Button
+                        asChild
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-primary desktop-hover-only"
+                      >
+                        <NextLink
+                          href={`/quiz?sourceType=chat&sourceId=${chat.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="Quiz me from this chat"
+                          title="Quiz me from this chat"
+                        >
+                          <HelpCircle className="h-4 w-4" />
+                        </NextLink>
+                      </Button>
                     </div>
                   </div>
                 ))

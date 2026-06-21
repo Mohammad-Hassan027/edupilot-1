@@ -131,12 +131,15 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
-import { generateQuiz } from "@/lib/ai"
+import { generateQuiz, generateQuizFromContent, type QuizDifficulty } from "@/lib/ai"
+import { getSupabaseAdmin } from "@/lib/supabase-server"
 import {
   getSubscription,
   isTrialActive,
   logUsage,
   getSavedQuizAttempts,
+  getSavedNoteById,
+  type QuizSourceType,
 } from "@/lib/database"
 
 type GeneratedQuizQuestion = {
@@ -144,6 +147,47 @@ type GeneratedQuizQuestion = {
   options: string[]
   answer: string
   explanation?: string
+}
+
+const VALID_DIFFICULTIES: QuizDifficulty[] = ["easy", "medium", "hard"]
+
+async function loadQuizSourceMaterial(
+  userId: string,
+  sourceType: QuizSourceType,
+  sourceId: string
+): Promise<{ topic: string; content: string } | null> {
+  if (sourceType === "note") {
+    const note = await getSavedNoteById(userId, sourceId)
+    if (!note) return null
+
+    const content = note.tabs.map((tab) => `${tab.title}\n${tab.content}`).join("\n\n")
+    return { topic: note.source_title, content }
+  }
+
+  if (sourceType === "chat") {
+    const admin = await getSupabaseAdmin()
+    const { data: messages, error } = await admin
+      .from("chat_messages")
+      .select("role, content")
+      .eq("session_id", sourceId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+
+    if (error || !messages?.length) return null
+
+    const content = messages.map((m) => `${m.role === "user" ? "Student" : "Tutor"}: ${m.content}`).join("\n\n")
+
+    const { data: session } = await admin
+      .from("chat_sessions")
+      .select("title, topic")
+      .eq("id", sourceId)
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    return { topic: session?.title || session?.topic || "Chat Session", content }
+  }
+
+  return null
 }
 
 export async function GET() {
@@ -181,9 +225,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     const topic = typeof body?.topic === "string" ? body.topic.trim() : ""
     const count = Math.min(Math.max(Number(body?.count) || 5, 1), 10)
+    const difficulty: QuizDifficulty = VALID_DIFFICULTIES.includes(body?.difficulty)
+      ? body.difficulty
+      : "medium"
+    const sourceType = body?.sourceType as QuizSourceType | undefined
+    const sourceId = typeof body?.sourceId === "string" ? body.sourceId : ""
+    const isFromSource = sourceType === "note" || sourceType === "chat"
 
-    if (!topic) {
+    if (!isFromSource && !topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
+    }
+
+    if (isFromSource && !sourceId) {
+      return NextResponse.json({ error: "sourceId is required" }, { status: 400 })
     }
 
     const subscription = await getSubscription(user.id)
@@ -206,7 +260,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const quiz = await generateQuiz(topic, count)
+    let resolvedTopic = topic
+    let quiz: Awaited<ReturnType<typeof generateQuiz>>
+
+    if (isFromSource) {
+      const source = await loadQuizSourceMaterial(user.id, sourceType as QuizSourceType, sourceId)
+      if (!source) {
+        return NextResponse.json({ error: "Could not find the selected note or chat session" }, { status: 404 })
+      }
+
+      resolvedTopic = source.topic
+      quiz = await generateQuizFromContent(source.topic, source.content, count, difficulty)
+    } else {
+      quiz = await generateQuiz(topic, count, difficulty)
+    }
 
     const formattedQuestions = (quiz as GeneratedQuizQuestion[]).map((item, questionIndex) => {
       const options = Array.isArray(item.options) ? item.options.slice(0, 4) : []
@@ -237,16 +304,22 @@ export async function POST(req: NextRequest) {
     })
 
     await logUsage(user.id, "quiz", "quiz_generated", {
-      topic,
+      topic: resolvedTopic,
+      difficulty,
       count: formattedQuestions.length,
       planId: subscription?.plan_id,
+      sourceType: isFromSource ? sourceType : "topic",
+      sourceId: isFromSource ? sourceId : null,
       generatedAt: new Date().toISOString(),
     }).catch(() => undefined)
 
     return NextResponse.json({
       success: true,
       quiz: {
-        topic,
+        topic: resolvedTopic,
+        difficulty,
+        sourceType: isFromSource ? sourceType : "topic",
+        sourceId: isFromSource ? sourceId : null,
         questions: formattedQuestions,
       },
     })
