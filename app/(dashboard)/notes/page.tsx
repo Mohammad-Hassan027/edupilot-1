@@ -24,6 +24,7 @@ import {
   Plus,
   Eye,
   Trash2,
+  Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -215,10 +216,20 @@ export default function NotesPage() {
   const [sourceHint, setSourceHint] = useState("")
   const [history, setHistory] = useState<SavedNote[]>([])
   const [currentSavedId, setCurrentSavedId] = useState<string | null>(null)
+  const [historySearch, setHistorySearch] = useState("")
   const [copiedTab, setCopiedTab] = useState<NoteTab["type"] | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
   const copiedTimerRef = useRef<number | null>(null)
   const copiedAllTimerRef = useRef<number | null>(null)
+
+  const filteredHistory = useMemo(() => {
+    return history.filter(
+      (item) =>
+        !historySearch ||
+        item.source_title.toLowerCase().includes(historySearch.toLowerCase()) ||
+        (item.source_hint || "").toLowerCase().includes(historySearch.toLowerCase())
+    )
+  }, [history, historySearch])
 
   const selectedOption = useMemo(
     () => sourceOptions.find((option) => option.id === sourceMode) || sourceOptions[0],
@@ -304,6 +315,7 @@ export default function NotesPage() {
     setSourceHint(note.source_hint || note.source_label || "")
     setSourceMode(note.source_type)
     setActiveTab(normalizedTabs[0]?.type || "summary")
+    setHistorySearch("")
 
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
@@ -864,78 +876,94 @@ export default function NotesPage() {
               <CardContent>
                 {history.length ? (
                   <div className="space-y-3">
-                    {history.slice(0, 8).map((item) => {
-                      const isActive = currentSavedId === item.id
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search saved notes..."
+                        value={historySearch}
+                        onChange={(e) => setHistorySearch(e.target.value)}
+                        className="pl-9 bg-background/50 text-sm"
+                      />
+                    </div>
 
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            "rounded-xl border bg-background/40 px-4 py-3 transition-colors",
-                            isActive
-                              ? "border-primary/60 bg-primary/10"
-                              : "border-border/80 hover:border-primary/40 hover:bg-primary/5"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="truncate font-medium text-foreground">{item.source_title}</p>
-                                <Badge variant="secondary" className="capitalize">
-                                  {item.source_type}
-                                </Badge>
+                    {filteredHistory.length ? (
+                      filteredHistory.slice(0, 8).map((item) => {
+                        const isActive = currentSavedId === item.id
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              "rounded-xl border bg-background/40 px-4 py-3 transition-colors",
+                              isActive
+                                ? "border-primary/60 bg-primary/10"
+                                : "border-border/80 hover:border-primary/40 hover:bg-primary/5"
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="truncate font-medium text-foreground">{item.source_title}</p>
+                                  <Badge variant="secondary" className="capitalize">
+                                    {item.source_type}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {item.source_hint || item.source_label || "Saved note"}
+                                </p>
+                                <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+                                  {new Date(item.created_at).toLocaleString()}
+                                </p>
                               </div>
-                              <p className="mt-1 truncate text-xs text-muted-foreground">
-                                {item.source_hint || item.source_label || "Saved note"}
-                              </p>
-                              <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
-                                {new Date(item.created_at).toLocaleString()}
-                              </p>
+                            </div>
+
+                            <div className="mt-3 flex items-center gap-2">
+                              <Button
+                                variant={isActive ? "default" : "outline"}
+                                size="sm"
+                                className="gap-2 rounded-lg"
+                                onClick={() => openSavedNote(item)}
+                              >
+                                <Eye className="h-4 w-4" />
+                                Open
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 rounded-lg"
+                                onClick={() =>
+                                  downloadNotes({
+                                    title: item.source_title,
+                                    sourceHint: item.source_hint || item.source_label || "",
+                                    tabs: item.tabs.map((tab) => ({
+                                      ...tab,
+                                      content: normalizeNoteContent(tab.content, tab.title),
+                                    })),
+                                  })
+                                }
+                              >
+                                <Download className="h-4 w-4" />
+                                Download
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteSavedNote(item.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-
-                          <div className="mt-3 flex items-center gap-2">
-                            <Button
-                              variant={isActive ? "default" : "outline"}
-                              size="sm"
-                              className="gap-2 rounded-lg"
-                              onClick={() => openSavedNote(item)}
-                            >
-                              <Eye className="h-4 w-4" />
-                              Open
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 rounded-lg"
-                              onClick={() =>
-                                downloadNotes({
-                                  title: item.source_title,
-                                  sourceHint: item.source_hint || item.source_label || "",
-                                  tabs: item.tabs.map((tab) => ({
-                                    ...tab,
-                                    content: normalizeNoteContent(tab.content, tab.title),
-                                  })),
-                                })
-                              }
-                            >
-                              <Download className="h-4 w-4" />
-                              Download
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteSavedNote(item.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })
+                    ) : (
+                      <div className="rounded-xl border border-border/70 bg-background/30 px-4 py-5 text-sm text-muted-foreground text-center">
+                        No results found.
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/70 bg-background/30 px-4 py-5 text-sm text-muted-foreground">
