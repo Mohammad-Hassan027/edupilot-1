@@ -2,14 +2,56 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
-import { generateFlashcards } from "@/lib/ai"
+import { generateFlashcards, generateFlashcardsFromContent } from "@/lib/ai"
+import { getSupabaseAdmin } from "@/lib/supabase-server"
 import {
   logUsage,
   getSubscription,
   isTrialActive,
   getSavedFlashcardSets,
   saveFlashcardSet,
+  getSavedNoteById,
+  type FlashcardSourceType,
 } from "@/lib/database"
+
+async function resolveSourceMaterial(
+  userId: string,
+  sourceType: FlashcardSourceType,
+  sourceId: string
+): Promise<{ topic: string; content: string } | null> {
+  if (sourceType === "note") {
+    const note = await getSavedNoteById(userId, sourceId)
+    if (!note) return null
+
+    const content = note.tabs.map((tab) => `${tab.title}\n${tab.content}`).join("\n\n")
+    return { topic: note.source_title, content }
+  }
+
+  if (sourceType === "chat") {
+    const admin = await getSupabaseAdmin()
+    const { data: messages, error } = await admin
+      .from("chat_messages")
+      .select("role, content")
+      .eq("session_id", sourceId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+
+    if (error || !messages?.length) return null
+
+    const content = messages.map((m) => `${m.role === "user" ? "Student" : "Tutor"}: ${m.content}`).join("\n\n")
+
+    const { data: session } = await admin
+      .from("chat_sessions")
+      .select("title, topic")
+      .eq("id", sourceId)
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    return { topic: session?.title || session?.topic || "Chat Session", content }
+  }
+
+  return null
+}
 
 export async function GET() {
   try {
@@ -38,10 +80,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { topic, count = 10 } = await req.json()
+    const { topic, count = 10, sourceType, sourceId } = await req.json()
 
-    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
+    const isFromSource = sourceType === "note" || sourceType === "chat"
+
+    if (!isFromSource && (!topic || typeof topic !== "string" || topic.trim().length === 0)) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
+    }
+
+    if (isFromSource && (!sourceId || typeof sourceId !== "string")) {
+      return NextResponse.json({ error: "sourceId is required" }, { status: 400 })
     }
 
     const subscription = await getSubscription(user.id)
@@ -62,9 +110,23 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const normalizedTopic = topic.trim()
     const totalCards = Math.min(Number(count) || 10, 20)
-    const flashcards = await generateFlashcards(normalizedTopic, totalCards)
+
+    let normalizedTopic: string
+    let flashcards: Awaited<ReturnType<typeof generateFlashcards>>
+
+    if (isFromSource) {
+      const source = await resolveSourceMaterial(user.id, sourceType, sourceId)
+      if (!source) {
+        return NextResponse.json({ error: "Could not find the selected note or chat session" }, { status: 404 })
+      }
+
+      normalizedTopic = source.topic
+      flashcards = await generateFlashcardsFromContent(source.content, totalCards)
+    } else {
+      normalizedTopic = topic.trim()
+      flashcards = await generateFlashcards(normalizedTopic, totalCards)
+    }
 
     const savedSet = await saveFlashcardSet(user.id, {
       topic: normalizedTopic,
@@ -72,6 +134,8 @@ export async function POST(req: NextRequest) {
         front: card.front,
         back: card.back,
       })),
+      sourceType: isFromSource ? sourceType : "topic",
+      sourceId: isFromSource ? sourceId : null,
     })
 
     await logUsage(user.id, "flashcards", "flashcards_generated", {
@@ -82,6 +146,8 @@ export async function POST(req: NextRequest) {
       lastCardFront: flashcards[flashcards.length - 1]?.front || null,
       lastGeneratedAt: new Date().toISOString(),
       savedSetId: savedSet.id,
+      sourceType: isFromSource ? sourceType : "topic",
+      sourceId: isFromSource ? sourceId : null,
     }).catch(console.error)
 
     return NextResponse.json({ success: true, flashcards, savedSet })

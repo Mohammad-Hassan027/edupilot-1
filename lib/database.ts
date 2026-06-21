@@ -20,10 +20,19 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
+export type FlashcardReviewRating = "again" | "hard" | "good" | "easy"
+
 export type SavedFlashcard = {
   front: string
   back: string
+  interval: number
+  easeFactor: number
+  repetitions: number
+  nextReviewAt: string
+  lastReviewedAt: string | null
 }
+
+export type FlashcardSourceType = "topic" | "note" | "chat"
 
 export type SavedFlashcardSetRecord = {
   id: string
@@ -31,15 +40,31 @@ export type SavedFlashcardSetRecord = {
   topic: string
   card_count: number
   cards: SavedFlashcard[]
+  source_type: FlashcardSourceType
+  source_id: string | null
   created_at: string
   updated_at: string
+}
+
+function withDefaultReviewState(card: { front: string; back: string }): SavedFlashcard {
+  return {
+    front: card.front,
+    back: card.back,
+    interval: 0,
+    easeFactor: 2.5,
+    repetitions: 0,
+    nextReviewAt: new Date().toISOString(),
+    lastReviewedAt: null,
+  }
 }
 
 export async function saveFlashcardSet(
   userId: string,
   input: {
     topic: string
-    cards: SavedFlashcard[]
+    cards: Array<{ front: string; back: string }>
+    sourceType?: FlashcardSourceType
+    sourceId?: string | null
   }
 ) {
   const admin = await getSupabaseAdmin()
@@ -48,7 +73,9 @@ export async function saveFlashcardSet(
     user_id: userId,
     topic: input.topic,
     card_count: input.cards.length,
-    cards: input.cards,
+    cards: input.cards.map(withDefaultReviewState),
+    source_type: input.sourceType || "topic",
+    source_id: input.sourceId || null,
     updated_at: new Date().toISOString(),
   }
 
@@ -60,6 +87,99 @@ export async function saveFlashcardSet(
 
   if (error) {
     throw new Error(`Failed to save flashcard set: ${error.message}`)
+  }
+
+  return data as SavedFlashcardSetRecord
+}
+
+// Simplified SM-2 spaced repetition: maps a difficulty rating to a recall
+// quality score, then updates ease factor, interval, and repetitions the
+// same way SM-2 does, without requiring callers to track grade history.
+const REVIEW_RATING_QUALITY: Record<FlashcardReviewRating, number> = {
+  again: 0,
+  hard: 3,
+  good: 4,
+  easy: 5,
+}
+
+export async function updateFlashcardReview(
+  userId: string,
+  setId: string,
+  cardIndex: number,
+  rating: FlashcardReviewRating
+) {
+  const admin = await getSupabaseAdmin()
+
+  const { data: existing, error: fetchError } = await admin
+    .from("saved_flashcard_sets")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", setId)
+    .maybeSingle()
+
+  if (fetchError) {
+    throw new Error(`Failed to load flashcard set: ${fetchError.message}`)
+  }
+
+  if (!existing) {
+    throw new Error("Flashcard set not found")
+  }
+
+  const set = existing as SavedFlashcardSetRecord
+  const cards = [...set.cards]
+  const card = cards[cardIndex]
+
+  if (!card) {
+    throw new Error("Flashcard not found in set")
+  }
+
+  const quality = REVIEW_RATING_QUALITY[rating]
+  const previousEase = card.easeFactor ?? 2.5
+  const previousRepetitions = card.repetitions ?? 0
+  const previousInterval = card.interval ?? 0
+
+  let repetitions = previousRepetitions
+  let interval = previousInterval
+
+  if (quality < 3) {
+    repetitions = 0
+    interval = 1
+  } else {
+    repetitions = previousRepetitions + 1
+    if (repetitions === 1) interval = 1
+    else if (repetitions === 2) interval = 6
+    else interval = Math.round(previousInterval * previousEase)
+  }
+
+  const easeFactor = Math.max(
+    1.3,
+    previousEase + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+  )
+
+  const now = new Date()
+  const nextReviewAt = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000)
+
+  const updatedCard: SavedFlashcard = {
+    ...card,
+    interval,
+    easeFactor,
+    repetitions,
+    nextReviewAt: nextReviewAt.toISOString(),
+    lastReviewedAt: now.toISOString(),
+  }
+
+  cards[cardIndex] = updatedCard
+
+  const { data, error } = await admin
+    .from("saved_flashcard_sets")
+    .update({ cards, updated_at: now.toISOString() })
+    .eq("user_id", userId)
+    .eq("id", setId)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update flashcard review: ${error.message}`)
   }
 
   return data as SavedFlashcardSetRecord

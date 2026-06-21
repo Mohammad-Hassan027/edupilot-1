@@ -486,6 +486,42 @@ Rules:
   }
 }
 
+export async function generateFlashcardsFromContent(content: string, count = 10): Promise<Flashcard[]> {
+  const prompt = `Read the study material below and create exactly ${count} educational flashcards that test the key concepts, facts, and definitions found in it.
+
+Study material:
+${content.slice(0, 12000)}
+
+Return ONLY valid JSON array:
+[
+  {
+    "front": "Question or key term",
+    "back": "Clear answer or definition"
+  }
+]
+
+Rules:
+- Base every flashcard strictly on the material above
+- Return only JSON
+- No markdown
+- No backticks`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    if (!Array.isArray(parsed)) throw new Error("Response is not an array")
+
+    return parsed.slice(0, count).map((item: { front?: unknown; back?: unknown }) => ({
+      front: String(item.front || "Front"),
+      back: String(item.back || "Back"),
+    }))
+  } catch {
+    throw new Error("AI returned invalid flashcard format. Please try again.")
+  }
+}
+
 // =========================
 // Study Plan
 // =========================
