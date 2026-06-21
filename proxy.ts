@@ -7,6 +7,7 @@ const PROTECTED_ROUTES = [
   "/ai-voice",
   "/quiz",
   "/planner",
+  "/concept-map",
   "/profile",
   "/settings",
   "/billing",

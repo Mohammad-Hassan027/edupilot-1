@@ -11,6 +11,7 @@ import {
   Layers,
   HelpCircle as QuizIcon,
   Mic,
+  Network,
   BookOpen,
   Settings,
   HelpCircle,
@@ -34,6 +35,7 @@ const navItems = [
   { icon: Layers,            label: "Flashcards", href: "/flashcards",                   guestOk: false },
   { icon: Mic,               label: "AI Voice",   href: "/ai-voice",                     guestOk: false },
   { icon: QuizIcon,          label: "Quiz",       href: "/quiz",                         guestOk: false },
+  { icon: Network,           label: "Concept Map",href: "/concept-map",                  guestOk: false },
   { icon: Calendar,          label: "Planner",    href: "/planner",                      guestOk: false },
   { icon: BookOpen,          label: "Blogs",      href: "/blogs",      external: true,  guestOk: true  },
 ]

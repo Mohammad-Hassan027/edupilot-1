@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,8 +26,10 @@ import {
   Eye,
   Trash2,
   Search,
+  Network,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { LoginGateModal } from "@/components/login-gate-modal"
 
 type SourceMode = "pdf" | "video" | "spreadsheet"
 type NoteTab = { type: "summary" | "concepts" | "bullets" | "revision"; title: string; content: string }
@@ -203,6 +206,9 @@ function renderPrintableHtml(content: string) {
 }
 
 export default function NotesPage() {
+  const router = useRouter()
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [creatingMapFor, setCreatingMapFor] = useState<string | null>(null)
   const [sourceMode, setSourceMode] = useState<SourceMode>("pdf")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [uploadedFileMeta, setUploadedFileMeta] = useState<UploadedFileMeta | null>(null)
@@ -276,6 +282,34 @@ export default function NotesPage() {
       }
     } catch (error) {
       setGenerateError(error instanceof Error ? error.message : "Failed to delete note")
+    }
+  }
+
+  async function handleCreateConceptMap(noteId: string) {
+    try {
+      setCreatingMapFor(noteId)
+
+      const response = await fetch("/api/ai/concept-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceType: "note", sourceId: noteId }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          return
+        }
+        throw new Error(data.error || "Failed to generate concept map")
+      }
+
+      router.push(`/concept-map?map=${data.savedMap.id}`)
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Failed to generate concept map")
+    } finally {
+      setCreatingMapFor(null)
     }
   }
 
@@ -950,6 +984,17 @@ export default function NotesPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="gap-2 rounded-lg"
+                                disabled={creatingMapFor === item.id}
+                                onClick={() => handleCreateConceptMap(item.id)}
+                              >
+                                <Network className="h-4 w-4" />
+                                {creatingMapFor === item.id ? "Mapping..." : "Concept Map"}
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 className="gap-2 rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeleteSavedNote(item.id)}
                               >
@@ -1028,6 +1073,17 @@ export default function NotesPage() {
                     <Copy className="h-4 w-4" />
                     {copiedAll ? "Copied!" : "Copy All"}
                   </Button>
+                  {currentSavedId ? (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={creatingMapFor === currentSavedId}
+                      onClick={() => handleCreateConceptMap(currentSavedId)}
+                    >
+                      <Network className="h-4 w-4" />
+                      {creatingMapFor === currentSavedId ? "Mapping..." : "Concept Map"}
+                    </Button>
+                  ) : null}
                   <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => downloadNotes()}>
                     <Download className="h-5 w-5" />
                   </Button>
@@ -1096,6 +1152,8 @@ export default function NotesPage() {
           </Card>
         )}
       </div>
+
+      <LoginGateModal open={showLoginModal} onOpenChange={setShowLoginModal} featureName="Concept Map" />
     </div>
   )
 }
