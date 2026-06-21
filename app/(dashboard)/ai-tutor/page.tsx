@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useState, useRef, useEffect, useCallback, type ChangeEvent } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -28,6 +28,7 @@ import {
   MessageSquareText,
   Sparkles,
   MessageSquare,
+  Network,
   Clock,
   ChevronRight,
   Copy,
@@ -49,7 +50,6 @@ import {
   Loader2,
   Trash2,
   Download,
-  Network,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -217,7 +217,6 @@ interface SpeechRecognitionErrorEvent {
 
 function AITutorContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const targetSessionId = searchParams.get("session")
   const initialQuery = searchParams.get("q")
 
@@ -237,7 +236,6 @@ function AITutorContent() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
-  const [creatingMapForSession, setCreatingMapForSession] = useState<string | null>(null)
 
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [messageFeedback, setMessageFeedback] = useState<Record<string, FeedbackType>>({})
@@ -248,6 +246,7 @@ function AITutorContent() {
   const [showSourcesSidebar, setShowSourcesSidebar] = useState(false)
   const [activeSources, setActiveSources] = useState<ResourceLink[]>([])
   const [activeSourceTitle, setActiveSourceTitle] = useState("Sources")
+  const [creatingMapForSession, setCreatingMapForSession] = useState<string | null>(null)
 
   useEffect(() => {
     if (!initialQuery || targetSessionId) return
@@ -302,34 +301,6 @@ function AITutorContent() {
     }
   }
 
-  const handleCreateConceptMapFromChat = async (sessionId: string) => {
-    try {
-      setCreatingMapForSession(sessionId)
-
-      const response = await fetch("/api/ai/concept-map", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceType: "chat", sourceId: sessionId }),
-      })
-
-      const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        if (data.requiresLogin) {
-          setShowLoginModal(true)
-          return
-        }
-        throw new Error(data.error || "Failed to generate concept map")
-      }
-
-      router.push(`/concept-map?map=${data.savedMap.id}`)
-    } catch (error) {
-      console.error(error)
-    } finally {
-      setCreatingMapForSession(null)
-    }
-  }
-
   const handleOpenSession = async (sessionId: string) => {
     try {
       setIsOpeningSession(true)
@@ -356,6 +327,34 @@ function AITutorContent() {
       console.error(err)
     } finally {
       setIsOpeningSession(false)
+    }
+  }
+
+  const handleCreateConceptMapFromChat = async (sessionId: string) => {
+    try {
+      setCreatingMapForSession(sessionId)
+
+      const response = await fetch("/api/ai/concept-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceType: "chat", sourceId: sessionId }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          return
+        }
+        throw new Error(data.error || "Failed to generate concept map")
+      }
+
+      window.location.href = `/concept-map?map=${data.savedMap.id}`
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setCreatingMapForSession(null)
     }
   }
 
@@ -947,6 +946,20 @@ function AITutorContent() {
                         type="button"
                         size="icon"
                         variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-destructive desktop-hover-only"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setSessionToDelete(chat.id)
+                        }}
+                        aria-label="Delete chat"
+                        title="Delete chat"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
                         className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-primary desktop-hover-only"
                         disabled={creatingMapForSession === chat.id}
                         onClick={(event) => {
@@ -957,20 +970,6 @@ function AITutorContent() {
                         title="Generate concept map from this chat"
                       >
                         <Network className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-destructive desktop-hover-only"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setSessionToDelete(chat.id)
-                        }}
-                        aria-label="Delete chat"
-                        title="Delete chat"
-                      >
-                        <Trash2 className="h-4 w-4" />
                       </Button>
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </div>
