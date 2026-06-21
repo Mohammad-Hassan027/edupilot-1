@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useRef, useEffect, useCallback, type ChangeEvent } from "react"
 import { useSearchParams } from "next/navigation"
-import NextLink from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -53,6 +52,7 @@ import {
   Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import NextLink from "next/link"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
