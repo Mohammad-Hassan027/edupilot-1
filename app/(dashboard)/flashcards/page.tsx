@@ -21,35 +21,67 @@ import {
   Layers,
   History,
   Eye,
+  FileText,
+  MessageSquare,
+  Clock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { hasPaidAccess } from "@/lib/plans"
 import { useUser } from "@/hooks/use-user"
 
+type ReviewRating = "again" | "hard" | "good" | "easy"
+
 interface Flashcard {
   id: string
+  cardIndex: number
   front: string
   back: string
   mastered: boolean
+  interval: number
+  easeFactor: number
+  repetitions: number
+  nextReviewAt: string
+}
+
+interface SavedFlashcardCard {
+  front: string
+  back: string
+  interval?: number
+  easeFactor?: number
+  repetitions?: number
+  nextReviewAt?: string
 }
 
 interface SavedFlashcardSet {
   id: string
   topic: string
   card_count: number
-  cards: Array<{
-    front: string
-    back: string
-  }>
+  cards: SavedFlashcardCard[]
+  source_type?: "topic" | "note" | "chat"
+  source_id?: string | null
   created_at: string
+}
+
+function isDue(nextReviewAt?: string) {
+  if (!nextReviewAt) return true
+  return new Date(nextReviewAt).getTime() <= Date.now()
+}
+
+function countDue(set: SavedFlashcardSet) {
+  return set.cards.filter((card) => isDue(card.nextReviewAt)).length
 }
 
 const DEMO_CARD: Flashcard = {
   id: "demo",
+  cardIndex: 0,
   front: "What is EduPilot?",
   back: "EduPilot is an AI-powered study assistant that helps you learn faster with smart flashcards, quizzes, and personalized study plans.",
   mastered: false,
+  interval: 0,
+  easeFactor: 2.5,
+  repetitions: 0,
+  nextReviewAt: new Date().toISOString(),
 }
 
 // function formatRelativeTime(value: string) {
@@ -80,6 +112,7 @@ export default function FlashcardsPage() {
   const [history, setHistory] = useState<SavedFlashcardSet[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [currentSavedSetId, setCurrentSavedSetId] = useState<string | null>(null)
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
@@ -154,9 +187,14 @@ export default function FlashcardsPage() {
   function openSavedSet(set: SavedFlashcardSet) {
     const restoredCards: Flashcard[] = (set.cards || []).map((card, index) => ({
       id: `${set.id}-${index}`,
+      cardIndex: index,
       front: card.front,
       back: card.back,
-      mastered: false,
+      mastered: (card.repetitions ?? 0) > 0,
+      interval: card.interval ?? 0,
+      easeFactor: card.easeFactor ?? 2.5,
+      repetitions: card.repetitions ?? 0,
+      nextReviewAt: card.nextReviewAt ?? new Date().toISOString(),
     }))
 
     if (!restoredCards.length) return
@@ -214,11 +252,62 @@ export default function FlashcardsPage() {
     }
   }
 
-  const handleMastered = () => {
-    setCards((prev) => prev.map((c, i) => (i === currentIndex ? { ...c, mastered: true } : c)))
-    if (currentIndex < cards.length - 1) {
-      setCurrentIndex((i) => i + 1)
-      setIsFlipped(false)
+  const handleReview = async (rating: ReviewRating) => {
+    const card = cards[currentIndex]
+    if (!card) return
+
+    const advance = () => {
+      if (currentIndex < cards.length - 1) {
+        setCurrentIndex((i) => i + 1)
+        setIsFlipped(false)
+      }
+    }
+
+    if (!currentSavedSetId || card.id === "demo") {
+      setCards((prev) =>
+        prev.map((c, i) => (i === currentIndex ? { ...c, mastered: rating !== "again" } : c))
+      )
+      advance()
+      return
+    }
+
+    try {
+      setReviewSubmitting(true)
+
+      const response = await fetch(`/api/ai/flashcards/${currentSavedSetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardIndex: card.cardIndex, rating }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (response.ok && data.set) {
+        const updatedSet = data.set as SavedFlashcardSet
+        const updatedCard = updatedSet.cards[card.cardIndex]
+
+        setCards((prev) =>
+          prev.map((c, i) =>
+            i === currentIndex
+              ? {
+                  ...c,
+                  mastered: (updatedCard.repetitions ?? 0) > 0,
+                  interval: updatedCard.interval ?? c.interval,
+                  easeFactor: updatedCard.easeFactor ?? c.easeFactor,
+                  repetitions: updatedCard.repetitions ?? c.repetitions,
+                  nextReviewAt: updatedCard.nextReviewAt ?? c.nextReviewAt,
+                }
+              : c
+          )
+        )
+
+        setHistory((prev) => prev.map((item) => (item.id === updatedSet.id ? updatedSet : item)))
+      }
+    } catch {
+      //
+    } finally {
+      setReviewSubmitting(false)
+      advance()
     }
   }
 
@@ -255,8 +344,8 @@ export default function FlashcardsPage() {
           break
         case "m":
         case "M":
-          if (isFlipped && currentCard && !currentCard.mastered) {
-            handleMastered()
+          if (isFlipped && currentCard && !reviewSubmitting) {
+            void handleReview("good")
           }
           break
       }
@@ -264,7 +353,7 @@ export default function FlashcardsPage() {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [dialogOpen, isFlipped, currentCard, handleNext, handlePrev, handleMastered])
+  }, [dialogOpen, isFlipped, currentCard, reviewSubmitting, handleNext, handlePrev, handleReview])
 
   const handleReset = () => {
     setCards((c) => c.map((x) => ({ ...x, mastered: false })))
@@ -302,29 +391,27 @@ export default function FlashcardsPage() {
         return
       }
 
-      const newCards: Flashcard[] = data.flashcards.map((f: { front: string; back: string }, i: number) => ({
-        id: `ai-${Date.now()}-${i}`,
-        front: f.front,
-        back: f.back,
-        mastered: false,
-      }))
-
-      setCards(newCards)
-      setCurrentIndex(0)
-      setIsFlipped(false)
       setDialogOpen(false)
 
       if (data.savedSet) {
         const savedSet = data.savedSet as SavedFlashcardSet
-        setCurrentSavedSetId(savedSet.id)
         setHistory((prev) => [savedSet, ...prev.filter((item) => item.id !== savedSet.id)].slice(0, 12))
-
-        if (typeof window !== "undefined") {
-          const url = new URL(window.location.href)
-          url.searchParams.set("set", savedSet.id)
-          window.history.replaceState({}, "", url.toString())
-        }
+        openSavedSet(savedSet)
       } else {
+        const newCards: Flashcard[] = data.flashcards.map((f: { front: string; back: string }, i: number) => ({
+          id: `ai-${Date.now()}-${i}`,
+          cardIndex: i,
+          front: f.front,
+          back: f.back,
+          mastered: false,
+          interval: 0,
+          easeFactor: 2.5,
+          repetitions: 0,
+          nextReviewAt: new Date().toISOString(),
+        }))
+        setCards(newCards)
+        setCurrentIndex(0)
+        setIsFlipped(false)
         await loadHistory()
       }
     } catch {
@@ -422,18 +509,56 @@ export default function FlashcardsPage() {
               </div>
             </div>
 
+            {isFlipped ? (
+              <div className="space-y-2">
+                <p className="text-center text-xs text-muted-foreground">How well did you know this?</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                    disabled={reviewSubmitting}
+                    onClick={() => void handleReview("again")}
+                  >
+                    Again
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                    disabled={reviewSubmitting}
+                    onClick={() => void handleReview("hard")}
+                  >
+                    Hard
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white"
+                    disabled={reviewSubmitting}
+                    onClick={() => void handleReview("good")}
+                  >
+                    <Check className="h-4 w-4" />
+                    Good
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                    disabled={reviewSubmitting}
+                    onClick={() => void handleReview("easy")}
+                  >
+                    Easy
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between gap-3">
               <Button variant="outline" size="icon" onClick={handlePrev} disabled={currentIndex === 0}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
               <div className="flex gap-2 flex-1 justify-center flex-wrap">
-                {isFlipped && !currentCard?.mastered && (
-                  <Button size="sm" className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={handleMastered}>
-                    <Check className="h-4 w-4" />
-                    Got it!
-                  </Button>
-                )}
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={handleShuffle}>
                   <Shuffle className="h-4 w-4" />
                   Shuffle
@@ -453,7 +578,7 @@ export default function FlashcardsPage() {
               <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">Space</kbd> Flip</span>
               <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">←</kbd> Prev</span>
               <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">→</kbd> Next</span>
-              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">M</kbd> Mastered</span>
+              <span><kbd className="rounded border border-border/60 bg-secondary px-1.5 py-0.5 font-mono text-[10px]">M</kbd> Good</span>
             </div>
 
             {masteredCount === cards.length && cards.length > 1 && (
@@ -513,6 +638,23 @@ export default function FlashcardsPage() {
                                 <Badge variant="secondary" className="text-[11px]">
                                   {item.card_count} cards
                                 </Badge>
+                                {item.source_type === "note" ? (
+                                  <Badge variant="outline" className="gap-1 text-[11px]">
+                                    <FileText className="h-3 w-3" />
+                                    From Note
+                                  </Badge>
+                                ) : item.source_type === "chat" ? (
+                                  <Badge variant="outline" className="gap-1 text-[11px]">
+                                    <MessageSquare className="h-3 w-3" />
+                                    From Chat
+                                  </Badge>
+                                ) : null}
+                                {countDue(item) > 0 && (
+                                  <Badge variant="outline" className="gap-1 text-[11px] border-amber-500/40 text-amber-500">
+                                    <Clock className="h-3 w-3" />
+                                    {countDue(item)} due
+                                  </Badge>
+                                )}
                                 {isActive && (
                                   <Badge variant="default" className="text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white border-none">
                                     {masteredCount}/{cards.length} mastered ({Math.round(progress)}%)
