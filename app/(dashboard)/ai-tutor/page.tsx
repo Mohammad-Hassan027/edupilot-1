@@ -28,6 +28,7 @@ import {
   MessageSquareText,
   Sparkles,
   MessageSquare,
+  Network,
   Clock,
   ChevronRight,
   Copy,
@@ -248,6 +249,7 @@ function AITutorContent() {
   const [showSourcesSidebar, setShowSourcesSidebar] = useState(false)
   const [activeSources, setActiveSources] = useState<ResourceLink[]>([])
   const [activeSourceTitle, setActiveSourceTitle] = useState("Sources")
+  const [creatingMapForSession, setCreatingMapForSession] = useState<string | null>(null)
 
   useEffect(() => {
     if (!initialQuery || targetSessionId) return
@@ -360,6 +362,34 @@ function AITutorContent() {
       console.error(err)
     } finally {
       setIsOpeningSession(false)
+    }
+  }
+
+  const handleCreateConceptMapFromChat = async (sessionId: string) => {
+    try {
+      setCreatingMapForSession(sessionId)
+
+      const response = await fetch("/api/ai/concept-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceType: "chat", sourceId: sessionId }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (data.requiresLogin) {
+          setShowLoginModal(true)
+          return
+        }
+        throw new Error(data.error || "Failed to generate concept map")
+      }
+
+      window.location.href = `/concept-map?map=${data.savedMap.id}`
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setCreatingMapForSession(null)
     }
   }
 
@@ -975,6 +1005,21 @@ function AITutorContent() {
                         title="Delete chat"
                       >
                         <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-primary desktop-hover-only"
+                        disabled={creatingMapForSession === chat.id}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleCreateConceptMapFromChat(chat.id)
+                        }}
+                        aria-label="Generate concept map from this chat"
+                        title="Generate concept map from this chat"
+                      >
+                        <Network className="h-4 w-4" />
                       </Button>
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
                     </div>

@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
+import { LoginGateModal as ConceptMapLoginGateModal } from "@/components/login-gate-modal"
 import {
   FileText,
+  Network,
   Video,
   Table2,
   Sparkles,
@@ -231,6 +233,9 @@ export default function NotesPage() {
   const copiedTimerRef = useRef<number | null>(null)
   const copiedAllTimerRef = useRef<number | null>(null)
 
+  const [showConceptMapLoginModal, setShowConceptMapLoginModal] = useState(false)
+  const [creatingMapFor, setCreatingMapFor] = useState<string | null>(null)
+
   const filteredHistory = useMemo(() => {
     return history.filter(
       (item) =>
@@ -410,6 +415,34 @@ export default function NotesPage() {
     setUploadedFileMeta(null)
     setVideoUrl("")
     setGenerateError("")
+  }
+
+  async function handleCreateConceptMap(noteId: string) {
+    try {
+      setCreatingMapFor(noteId)
+
+      const response = await fetch("/api/ai/concept-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceType: "note", sourceId: noteId }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (data.requiresLogin) {
+          setShowConceptMapLoginModal(true)
+          return
+        }
+        throw new Error(data.error || "Failed to generate concept map")
+      }
+
+      window.location.href = `/concept-map?map=${data.savedMap.id}`
+    } catch (error) {
+      setGenerateError(error instanceof Error ? error.message : "Failed to generate concept map")
+    } finally {
+      setCreatingMapFor(null)
+    }
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -750,6 +783,12 @@ export default function NotesPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+      <ConceptMapLoginGateModal
+        open={showConceptMapLoginModal}
+        onOpenChange={setShowConceptMapLoginModal}
+        featureName="Concept Map"
+      />
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">AI Notes Generator</h1>
         <p className="text-muted-foreground">
@@ -970,6 +1009,17 @@ export default function NotesPage() {
 
                             <div className="mt-3 flex items-center gap-2">
                               <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 rounded-lg"
+                                disabled={creatingMapFor === item.id}
+                                onClick={() => handleCreateConceptMap(item.id)}
+                              >
+                                <Network className="h-4 w-4" />
+                                {creatingMapFor === item.id ? "Mapping..." : "Concept Map"}
+                              </Button>
+
+                              <Button
                                 variant={isActive ? "default" : "outline"}
                                 size="sm"
                                 className="gap-2 rounded-lg"
@@ -1078,6 +1128,17 @@ export default function NotesPage() {
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
+                  {currentSavedId ? (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      disabled={creatingMapFor === currentSavedId}
+                      onClick={() => handleCreateConceptMap(currentSavedId)}
+                    >
+                      <Network className="h-4 w-4" />
+                      {creatingMapFor === currentSavedId ? "Mapping..." : "Concept Map"}
+                    </Button>
+                  ) : null}
                   <Button variant="outline" className="gap-2" onClick={resetGeneratedView}>
                     <Plus className="h-4 w-4" />
                     Add New

@@ -523,6 +523,85 @@ Rules:
 }
 
 // =========================
+// Concept Map
+// =========================
+
+export interface ConceptMapNode {
+  id: string
+  label: string
+  excerpt: string
+}
+
+export interface ConceptMapEdge {
+  source: string
+  target: string
+  label?: string
+}
+
+export interface ConceptMapGraph {
+  nodes: ConceptMapNode[]
+  edges: ConceptMapEdge[]
+}
+
+export async function generateConceptMap(title: string, content: string): Promise<ConceptMapGraph> {
+  const prompt = `Read the study material below (titled "${title}") and extract the key concepts and how they relate to one another, as a concept map.
+
+Study material:
+${content.slice(0, 12000)}
+
+Return ONLY valid JSON in this exact shape:
+{
+  "nodes": [
+    { "id": "short-slug", "label": "Concept name", "excerpt": "1-2 sentence explanation of this concept, grounded in the material" }
+  ],
+  "edges": [
+    { "source": "node-id", "target": "node-id", "label": "short relationship, e.g. 'leads to', 'is a type of'" }
+  ]
+}
+
+Rules:
+- Extract between 6 and 14 of the most important concepts
+- Every edge's source and target must reference an id present in nodes
+- Build a connected graph: every node should have at least one edge
+- ids must be short kebab-case slugs, unique
+- Return only JSON, no markdown, no backticks`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned) as {
+      nodes?: Array<{ id?: unknown; label?: unknown; excerpt?: unknown }>
+      edges?: Array<{ source?: unknown; target?: unknown; label?: unknown }>
+    }
+
+    const nodes: ConceptMapNode[] = (parsed.nodes || [])
+      .filter((node) => node?.id && node?.label)
+      .map((node) => ({
+        id: String(node.id),
+        label: String(node.label),
+        excerpt: String(node.excerpt || ""),
+      }))
+
+    if (!nodes.length) throw new Error("No concepts extracted")
+
+    const nodeIds = new Set(nodes.map((node) => node.id))
+
+    const edges: ConceptMapEdge[] = (parsed.edges || [])
+      .filter((edge) => nodeIds.has(String(edge?.source)) && nodeIds.has(String(edge?.target)))
+      .map((edge) => ({
+        source: String(edge.source),
+        target: String(edge.target),
+        label: edge.label ? String(edge.label) : undefined,
+      }))
+
+    return { nodes, edges }
+  } catch {
+    throw new Error("AI returned invalid concept map format. Please try again.")
+  }
+}
+
+// =========================
 // Study Plan
 // =========================
 

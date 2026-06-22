@@ -1259,3 +1259,159 @@ export async function deleteSavedNote(userId: string, noteId: string) {
 
   return { success: true }
 }
+
+// ─── Shared note/chat content resolution (for AI features built on top of
+// existing notes or chat sessions, e.g. flashcards, concept maps) ────────────
+
+export type StudySourceType = "note" | "chat"
+
+export async function resolveStudySourceContent(
+  userId: string,
+  sourceType: StudySourceType,
+  sourceId: string
+): Promise<{ title: string; content: string } | null> {
+  if (sourceType === "note") {
+    const note = await getSavedNoteById(userId, sourceId)
+    if (!note) return null
+
+    const content = note.tabs.map((tab) => `${tab.title}\n${tab.content}`).join("\n\n")
+    return { title: note.source_title, content }
+  }
+
+  const admin = await getSupabaseAdmin()
+  const { data: messages, error } = await admin
+    .from("chat_messages")
+    .select("role, content")
+    .eq("session_id", sourceId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+
+  if (error || !messages?.length) return null
+
+  const content = messages.map((m) => `${m.role === "user" ? "Student" : "Tutor"}: ${m.content}`).join("\n\n")
+
+  const { data: session } = await admin
+    .from("chat_sessions")
+    .select("title, topic")
+    .eq("id", sourceId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  return { title: session?.title || session?.topic || "Chat Session", content }
+}
+
+// ─── Concept Maps ─────────────────────────────────────────────────────────────
+
+export type ConceptMapNode = {
+  id: string
+  label: string
+  excerpt: string
+}
+
+export type ConceptMapEdge = {
+  id: string
+  source: string
+  target: string
+  label?: string
+}
+
+export type SavedConceptMapRecord = {
+  id: string
+  user_id: string
+  title: string
+  source_type: StudySourceType
+  source_id: string
+  nodes: ConceptMapNode[]
+  edges: ConceptMapEdge[]
+  created_at: string
+  updated_at: string
+}
+
+export async function saveConceptMap(
+  userId: string,
+  input: {
+    title: string
+    sourceType: StudySourceType
+    sourceId: string
+    nodes: ConceptMapNode[]
+    edges: ConceptMapEdge[]
+  }
+) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    title: input.title,
+    source_type: input.sourceType,
+    source_id: input.sourceId,
+    nodes: input.nodes,
+    edges: input.edges,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("concept_maps")
+    .insert(payload)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save concept map: ${error.message}`)
+  }
+
+  return data as SavedConceptMapRecord
+}
+
+export async function getSavedConceptMaps(userId: string, limit = 12) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("concept_maps")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("concept_maps")) return []
+    throw new Error(`Failed to load concept map history: ${error.message}`)
+  }
+
+  return (data || []) as SavedConceptMapRecord[]
+}
+
+export async function getSavedConceptMapById(userId: string, mapId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("concept_maps")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", mapId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("concept_maps")) return null
+    throw new Error(`Failed to load concept map: ${error.message}`)
+  }
+
+  return (data || null) as SavedConceptMapRecord | null
+}
+
+export async function deleteSavedConceptMap(userId: string, mapId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("concept_maps")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", mapId)
+
+  if (error) {
+    throw new Error(`Failed to delete concept map: ${error.message}`)
+  }
+
+  return { success: true }
+}
