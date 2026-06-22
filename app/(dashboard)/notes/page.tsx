@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import NextLink from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,6 +15,7 @@ import {
   Network,
   Video,
   Table2,
+  HelpCircle,
   Sparkles,
   Download,
   Copy,
@@ -1067,6 +1069,13 @@ export default function NotesPage() {
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
+
+                              <Button asChild variant="outline" size="sm" className="gap-2 rounded-lg">
+                                <NextLink href={`/quiz?sourceType=note&sourceId=${item.id}`}>
+                                  <HelpCircle className="h-4 w-4" />
+                                  Quiz Me
+                                </NextLink>
+                              </Button>
                             </div>
                           </div>
                         )
@@ -1165,6 +1174,14 @@ export default function NotesPage() {
                   <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={() => downloadNotes()}>
                     <Download className="h-5 w-5" />
                   </Button>
+                  {currentSavedId ? (
+                    <Button asChild variant="outline" className="gap-2">
+                      <NextLink href={`/quiz?sourceType=note&sourceId=${currentSavedId}`}>
+                        <HelpCircle className="h-4 w-4" />
+                        Quiz Me
+                      </NextLink>
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </CardHeader>

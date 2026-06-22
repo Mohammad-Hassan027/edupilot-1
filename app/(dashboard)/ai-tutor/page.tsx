@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   Send,
+  HelpCircle,
   MessageSquareText,
   Sparkles,
   MessageSquare,
@@ -53,6 +54,7 @@ import {
   Layers,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import NextLink from "next/link"
 import { LoginGateModal } from "@/components/login-gate-modal"
 import { CreditsExhaustedModal } from "@/components/credits-exhausted-modal"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
@@ -1022,6 +1024,22 @@ function AITutorContent() {
                         <Network className="h-4 w-4" />
                       </Button>
                       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Button
+                        asChild
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground transition-opacity hover:text-primary desktop-hover-only"
+                      >
+                        <NextLink
+                          href={`/quiz?sourceType=chat&sourceId=${chat.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="Quiz me from this chat"
+                          title="Quiz me from this chat"
+                        >
+                          <HelpCircle className="h-4 w-4" />
+                        </NextLink>
+                      </Button>
                     </div>
                   </div>
                 ))

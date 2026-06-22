@@ -30,10 +30,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { topic, questions, answers } = await req.json() as {
+    const { topic, difficulty, questions, answers, sourceType, sourceId } = await req.json() as {
       topic: string
+      difficulty?: "easy" | "medium" | "hard"
       questions: QuizQuestion[]
       answers: QuizAnswer[]
+      sourceType?: "topic" | "note" | "chat"
+      sourceId?: string | null
     }
 
     if (!topic || !Array.isArray(questions) || !Array.isArray(answers) || questions.length === 0) {
@@ -56,11 +59,14 @@ export async function POST(req: NextRequest) {
 
     const savedAttempt = await saveQuizAttempt(user.id, {
       topic,
+      difficulty,
       questions,
       answers: evaluatedAnswers,
       score,
       totalQuestions,
       percentage,
+      sourceType,
+      sourceId,
     })
 
     await logUsage(user.id, "quiz", "quiz_completed", {
