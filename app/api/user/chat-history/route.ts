@@ -78,7 +78,10 @@ function formatTimeLabel(dateStr: string) {
   const diffMs = now.getTime() - date.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffDays === 0) return "Today"
+  if (diffDays === 0) {
+    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    return `Today · ${timeStr}`
+  }
   if (diffDays === 1) return "Yesterday"
   if (diffDays < 7) return `${diffDays} days ago`
   return date.toLocaleDateString()
