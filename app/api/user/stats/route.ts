@@ -156,6 +156,73 @@ function getEngagementLevel(secondsThisWeek: number, activeDaysThisWeek: number,
   return "Low"
 }
 
+function calculateStreaks(activityDates: string[]) {
+  const uniqueDays = [...new Set(activityDates)].sort().reverse()
+
+  if (uniqueDays.length === 0) {
+    return {
+      currentStreak: 0,
+      longestStreak: 0,
+    }
+  }
+
+  const today = startOfDay(new Date())
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  let currentStreak = 0
+
+  const firstDay = uniqueDays[0]
+
+  if (
+    firstDay === toDayKey(today) ||
+    firstDay === toDayKey(yesterday)
+  ) {
+    currentStreak = 1
+
+    let previousDate = new Date(firstDay)
+
+    for (let i = 1; i < uniqueDays.length; i++) {
+      const currentDate = new Date(uniqueDays[i])
+
+      const diffDays =
+        (previousDate.getTime() - currentDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+
+      if (diffDays === 1) {
+        currentStreak++
+        previousDate = currentDate
+      } else {
+        break
+      }
+    }
+  }
+
+  let longestStreak = 1
+  let running = 1
+
+  for (let i = 1; i < uniqueDays.length; i++) {
+    const previous = new Date(uniqueDays[i - 1])
+    const current = new Date(uniqueDays[i])
+
+    const diffDays =
+      (previous.getTime() - current.getTime()) /
+      (1000 * 60 * 60 * 24)
+
+    if (diffDays === 1) {
+      running++
+      longestStreak = Math.max(longestStreak, running)
+    } else {
+      running = 1
+    }
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+  }
+}
+
 export async function GET() {
   try {
     const user = await getUser()
@@ -207,11 +274,11 @@ export async function GET() {
     const quizzesTaken = allQuizAttempts.length
     const averageQuizScore = allQuizAttempts.length
       ? Number(
-          (
-            allQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.percentage || 0), 0) /
-            allQuizAttempts.length
-          ).toFixed(1)
-        )
+        (
+          allQuizAttempts.reduce((sum, attempt) => sum + Number(attempt.percentage || 0), 0) /
+          allQuizAttempts.length
+        ).toFixed(1)
+      )
       : 0
 
     const bestQuizScore = allQuizAttempts.length
@@ -256,8 +323,8 @@ export async function GET() {
           ? "+100%"
           : "0%"
         : `${thisWeekSeconds >= lastWeekSeconds ? "+" : ""}${Math.round(
-            ((thisWeekSeconds - lastWeekSeconds) / lastWeekSeconds) * 100
-          )}%`
+          ((thisWeekSeconds - lastWeekSeconds) / lastWeekSeconds) * 100
+        )}%`
 
     const weeklyActivity = buildWeeklyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
     const monthlyActivity = buildMonthlyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
@@ -276,6 +343,15 @@ export async function GET() {
       ...thisMonthQuizAttempts.map((attempt) => toDayKey(attempt.created_at)),
     ]).size
 
+    const activityDates = [
+      ...allSessions.map((session) => toDayKey(session.started_at)),
+      ...allLogs.map((log) => toDayKey(log.created_at)),
+      ...allSavedNotes.map((note) => toDayKey(note.created_at)),
+      ...allQuizAttempts.map((attempt) => toDayKey(attempt.created_at)),
+    ]
+
+    const { currentStreak, longestStreak } = calculateStreaks(activityDates)
+
     return NextResponse.json({
       learningHours: formatHours(thisWeekSeconds),
       totalLearningHours: formatHours(totalTrackedSeconds),
@@ -290,6 +366,8 @@ export async function GET() {
       lastWeekCount: lastWeekLogs.length + lastWeekSavedNotes.length + lastWeekQuizAttempts.length,
       activeDaysThisWeek,
       activeDaysThisMonth,
+      currentStreak,
+      longestStreak,
       weeklyActivity,
       monthlyActivity,
       featureUsage,
@@ -317,6 +395,8 @@ export async function GET() {
         lastWeekCount: 0,
         activeDaysThisWeek: 0,
         activeDaysThisMonth: 0,
+        currentStreak: 0,
+        longestStreak: 0,
         weeklyActivity: [
           { label: "Mon", count: 0 },
           { label: "Tue", count: 0 },

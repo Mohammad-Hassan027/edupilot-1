@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Clock, HelpCircle, Activity, Gauge } from "lucide-react"
+import { Clock, HelpCircle, Flame, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useActivityTracker } from "@/components/activity/activity-tracker-provider"
 
@@ -14,6 +14,8 @@ interface Stats {
   totalActivities: number
   weekTrend: string
   activeDaysThisMonth: number
+  currentStreak: number
+  longestStreak: number
   engagementLevel: string
 }
 
@@ -69,13 +71,13 @@ export function QuickStats() {
       bgColor: "bg-primary/10",
     },
     {
-      label: "Monthly Activity",
-      value: String(stats?.totalActivities ?? 0),
-      unit: "actions",
-      change: `${stats?.activeDaysThisMonth ?? 0} active days this month`,
-      icon: Activity,
-      color: "text-emerald-500",
-      bgColor: "bg-emerald-500/10",
+      label: "Study Streak",
+      value: String(stats?.currentStreak ?? 0),
+      unit: "days",
+      change: `Best: ${stats?.longestStreak ?? 0} days`,
+      icon: Flame,
+      color: "text-orange-500",
+      bgColor: "bg-orange-500/10",
     },
     {
       label: "Quizzes Taken",
