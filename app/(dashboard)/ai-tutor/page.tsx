@@ -53,6 +53,7 @@ import {
   Trash2,
   Download,
   Layers,
+  ArrowUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import NextLink from "next/link"
@@ -262,6 +263,7 @@ function AITutorContent() {
   const [activeSources, setActiveSources] = useState<ResourceLink[]>([])
   const [activeSourceTitle, setActiveSourceTitle] = useState("Sources")
   const [creatingMapForSession, setCreatingMapForSession] = useState<string | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   useEffect(() => {
     if (!initialQuery || targetSessionId) return
@@ -269,6 +271,7 @@ function AITutorContent() {
   }, [initialQuery, targetSessionId])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesTopRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -276,6 +279,16 @@ function AITutorContent() {
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null)
   const speechTranscriptRef = useRef("")
   const lastUserMessageRef = useRef("")
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget
+    const { scrollTop, scrollHeight, clientHeight } = container
+    setShowScrollTop(scrollTop < scrollHeight - clientHeight - 400)
+  }
+
+  const scrollToTop = () => {
+    messagesTopRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -420,6 +433,10 @@ function AITutorContent() {
       handleOpenSession(targetSessionId)
     }
   }, [targetSessionId])
+
+  useEffect(() => {
+    setShowScrollTop(false)
+  }, [activeSessionId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -1156,9 +1173,13 @@ function AITutorContent() {
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1">
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 md:p-4">
+          <div className="flex min-h-0 flex-1 relative">
+            <div
+              onScroll={handleScroll}
+              className="min-h-0 flex-1 overflow-y-auto p-3 md:p-4"
+            >
               <div className="mx-auto max-w-4xl space-y-4 md:space-y-6">
+                <div ref={messagesTopRef} />
                 {messages.map((message) => {
                   const feedback = messageFeedback[message.id]
                   const hasSources = message.role === "assistant" && (message.sources?.length || 0) > 0
@@ -1373,6 +1394,18 @@ function AITutorContent() {
                 <div ref={messagesEndRef} />
               </div>
             </div>
+
+            {showScrollTop && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={scrollToTop}
+                className="absolute bottom-4 left-4 z-20 h-9 w-9 rounded-full border border-border bg-background/80 hover:bg-secondary text-muted-foreground hover:text-foreground shadow-md transition-all duration-200 animate-in fade-in zoom-in-95"
+                title="Back to top"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            )}
 
             {showSourcesSidebar && (
               <aside className="hidden w-[340px] flex-col border-l border-border bg-card/80 backdrop-blur-sm xl:flex">
