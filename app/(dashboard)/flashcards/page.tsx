@@ -24,6 +24,7 @@ import {
   FileText,
   MessageSquare,
   Clock,
+  Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -361,6 +362,37 @@ export default function FlashcardsPage() {
     setIsFlipped(false)
   }
 
+  const handleExportCSV = () => {
+    if (cards.length <= 1 || cards[0].id === "demo") return
+
+    const headers = `"Front","Back"\n`
+    const csvContent = cards
+      .map(
+        (c) =>
+          `"${c.front.replace(/"/g, '""')}"` +
+          "," +
+          `"${c.back.replace(/"/g, '""')}"`
+      )
+      .join("\n")
+    const csvData = headers + csvContent
+
+    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    
+    // Clean topic name for filename
+    const cleanTopic = aiTopic ? aiTopic.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") : "set"
+    const filename = `edupilot-flashcards-${cleanTopic}-${Date.now()}.csv`
+    
+    link.setAttribute("href", url)
+    link.setAttribute("download", filename)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const handleGenerate = async () => {
     if (!aiTopic.trim()) return
 
@@ -567,6 +599,12 @@ export default function FlashcardsPage() {
                   <RotateCcw className="h-4 w-4" />
                   Reset
                 </Button>
+                {cards.length > 1 && cards[0].id !== "demo" && (
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExportCSV}>
+                    <Download className="h-4 w-4" />
+                    Export CSV
+                  </Button>
+                )}
               </div>
 
               <Button variant="outline" size="icon" onClick={handleNext} disabled={currentIndex === cards.length - 1}>
