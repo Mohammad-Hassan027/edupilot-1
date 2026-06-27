@@ -144,7 +144,8 @@ git push origin feat/your-feature-name
 ### Step 5: Submit a Pull Request
 1. Open a PR from your branch on the original `edupilot-1` repository.
 2. Fill out the PR template completely.
-3. Link the PR to the assigned issue using keyword triggers (e.g. `Closes #15`).
+3. Link the PR to the assigned issue using keyword triggers (e.g. `Closes #15`). 
+   > **Note:** Our automated GitHub Actions workflow will block the PR and leave a warning comment if it doesn't contain a valid issue linking keyword.
 
 ---
 
