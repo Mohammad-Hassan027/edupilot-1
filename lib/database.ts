@@ -807,23 +807,21 @@ export async function getCredits(userId: string) {
 
 export async function deductCredit(userId: string, feature: FeatureKey): Promise<boolean> {
   const admin = await getSupabaseAdmin()
-  const credits = await getCredits(userId)
 
-  if (!credits) return false
+  // Atomic, conditional decrement via the deduct_credit() SQL function.
+  // The DB-side WHERE <col> > 0 guard makes concurrent calls on the last credit
+  // resolve to exactly one success and one failure (no read-then-write race).
+  const { data, error } = await admin.rpc("deduct_credit", {
+    p_user_id: userId,
+    p_feature: feature,
+  })
 
-  const remainingKey = `${feature}_remaining` as keyof Credits
-  const remaining = Number(credits[remainingKey] ?? 0)
+  if (error) {
+    console.error("[deductCredit] RPC error:", error.message)
+    return false
+  }
 
-  if (remaining <= 0) return false
-
-  const { error } = await admin
-    .from("credits")
-    .update({
-      [remainingKey]: remaining - 1,
-    })
-    .eq("user_id", userId)
-
-  return !error
+  return data === true
 }
 
 export async function refillCreditsForTrial(userId: string) {
