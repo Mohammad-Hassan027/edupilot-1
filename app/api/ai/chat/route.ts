@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { getUser } from "@/lib/auth-server";
+import { requireAiAccess } from "@/lib/ai-guard";
 import { generateAIResponse } from "@/lib/ai";
 import { logUsage } from "@/lib/database";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
@@ -43,6 +43,10 @@ function formatReplyWithSources(reply: string, sources: ResourceLink[]) {
 
 export async function POST(req: NextRequest) {
   try {
+    const guard = await requireAiAccess();
+    if (guard.error) return guard.error;
+    const { user } = guard;
+
     const body = await req.json();
     const message = body.message;
     const sessionId = body.sessionId as string | undefined;
@@ -108,10 +112,9 @@ export async function POST(req: NextRequest) {
 
     const finalReply = formatReplyWithSources(aiResponse, sources);
 
-    const user = await getUser();
     let savedSessionId: string | null = null;
 
-    if (user) {
+    {
       const admin = await getSupabaseAdmin();
       let currentSessionId = sessionId;
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
-import { getUser } from "@/lib/auth-server"
+import { requireAiAccess } from "@/lib/ai-guard"
 import { generateAlternateExplanation, EXPLAIN_STYLE_LABELS, type ExplainStyle } from "@/lib/ai"
 import { logUsage } from "@/lib/database"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
@@ -10,6 +10,10 @@ const VALID_STYLES: ExplainStyle[] = ["simpler", "analogy", "step-by-step", "rea
 
 export async function POST(req: NextRequest) {
   try {
+    const guard = await requireAiAccess()
+    if (guard.error) return guard.error
+    const { user } = guard
+
     const body = await req.json().catch(() => null)
     const question = typeof body?.question === "string" ? body.question.trim() : ""
     const previousAnswer = typeof body?.previousAnswer === "string" ? body.previousAnswer.trim() : ""
@@ -30,9 +34,7 @@ export async function POST(req: NextRequest) {
     const explanation = await generateAlternateExplanation(question, previousAnswer, style)
     const reply = `> **Explained differently — ${EXPLAIN_STYLE_LABELS[style]}**\n\n${explanation}`
 
-    const user = await getUser()
-
-    if (user && sessionId) {
+    if (sessionId) {
       const admin = await getSupabaseAdmin()
       const now = new Date().toISOString()
 

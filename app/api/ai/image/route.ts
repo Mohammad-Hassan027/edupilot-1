@@ -1,10 +1,14 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { requireAiAccess } from "@/lib/ai-guard"
 import { generateImageWithGemini } from "@/lib/ai-tools"
 
 export async function POST(req: NextRequest) {
   try {
+    const guard = await requireAiAccess()
+    if (guard.error) return guard.error
+
     const { prompt } = await req.json()
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
