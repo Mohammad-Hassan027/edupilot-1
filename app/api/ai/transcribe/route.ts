@@ -1,11 +1,15 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { requireAiAccess } from "@/lib/ai-guard"
 
 const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
 export async function POST(req: NextRequest) {
   try {
+    const guard = await requireAiAccess()
+    if (guard.error) return guard.error
+
     const apiKey = process.env.GROQ_API_KEY
 
     if (!apiKey) {

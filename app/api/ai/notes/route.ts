@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
+import { requireAiAccess } from "@/lib/ai-guard"
 import {
   analyzeAttachmentsWithGemini,
   searchWithTavily,
@@ -195,6 +196,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const guard = await requireAiAccess()
+    if (guard.error) return guard.error
+    const { user } = guard
+
     const body = await req.json()
 
     const sourceMode = body?.sourceMode as SourceMode
@@ -255,7 +260,6 @@ export async function POST(req: NextRequest) {
       studyMaterial,
     })
 
-    const user = await getUser()
     let savedNote = null
     let saveWarning: string | null = null
 
