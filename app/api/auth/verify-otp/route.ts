@@ -7,6 +7,11 @@ function hashOTP(otp: string): string {
   return crypto.createHash("sha256").update(otp).digest("hex")
 }
 
+// Max wrong guesses allowed before the code is invalidated. This caps a
+// brute-force attacker to a handful of tries per issued code, well short of the
+// ~900k possible 6-digit values.
+const MAX_FAILED_ATTEMPTS = 5
+
 export async function POST(req: NextRequest) {
   try {
     const { email, token } = await req.json()
@@ -48,11 +53,40 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Reject if this code has already exhausted its attempt budget ──────────
+    const failedAttempts = record.failed_attempts ?? 0
+    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+      await admin.from("password_reset_otps").delete().eq("id", record.id)
+      return NextResponse.json(
+        { error: "Too many incorrect attempts. Please request a new reset code." },
+        { status: 429 }
+      )
+    }
+
     // ── Verify hash ───────────────────────────────────────────────────────────
     const inputHash = hashOTP(token)
     if (inputHash !== record.otp_hash) {
+      const newFailedAttempts = failedAttempts + 1
+
+      // Threshold reached — invalidate the code so it can't be brute-forced.
+      if (newFailedAttempts >= MAX_FAILED_ATTEMPTS) {
+        await admin.from("password_reset_otps").delete().eq("id", record.id)
+        return NextResponse.json(
+          { error: "Too many incorrect attempts. Please request a new reset code." },
+          { status: 429 }
+        )
+      }
+
+      await admin
+        .from("password_reset_otps")
+        .update({ failed_attempts: newFailedAttempts })
+        .eq("id", record.id)
+
+      const remaining = MAX_FAILED_ATTEMPTS - newFailedAttempts
       return NextResponse.json(
-        { error: "Incorrect code. Please check your email and try again." },
+        {
+          error: `Incorrect code. Please check your email and try again. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
+        },
         { status: 400 }
       )
     }
