@@ -25,12 +25,7 @@ import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => SpeechRecognition
-    webkitSpeechRecognition?: new () => SpeechRecognition
-  }
-}
+
 
 type VoiceState = "idle" | "listening" | "processing" | "speaking"
 
@@ -52,6 +47,11 @@ export default function AIVoicePage() {
   const { subscription, isLoading, error: userError, email } = useUser()
 
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
+  // Keep a ref in sync so event callbacks (e.g. onend) see the live value
+  const setVoiceStateAndRef = (s: VoiceState) => {
+    voiceStateRef.current = s
+    setVoiceState(s)
+  }
   const [messages, setMessages] = useState<Message[]>([])
   const [transcript, setTranscript] = useState("")
   const [error, setError] = useState("")
@@ -62,6 +62,7 @@ export default function AIVoicePage() {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null)
 
   const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const voiceStateRef = useRef<VoiceState>("idle")
   const synthRef = useRef<SpeechSynthesis | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const isSubmittingRef = useRef(false)
@@ -132,7 +133,7 @@ export default function AIVoicePage() {
 
     isSubmittingRef.current = false
     finalTranscriptRef.current = ""
-    setVoiceState("idle")
+    setVoiceStateAndRef("idle")
   }
 
   const speak = (text: string) => {
@@ -150,10 +151,10 @@ export default function AIVoicePage() {
 
     utter.rate = 0.95
     utter.pitch = 1
-    utter.onend = () => setVoiceState("idle")
-    utter.onerror = () => setVoiceState("idle")
+    utter.onend = () => setVoiceStateAndRef("idle")
+    utter.onerror = () => setVoiceStateAndRef("idle")
 
-    setVoiceState("speaking")
+    setVoiceStateAndRef("speaking")
     synthRef.current.speak(utter)
   }
 
@@ -190,7 +191,7 @@ export default function AIVoicePage() {
     setTranscript(item.prompt)
     setCurrentHistoryId(item.id)
     setError("")
-    setVoiceState("idle")
+    setVoiceStateAndRef("idle")
 
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
@@ -221,7 +222,7 @@ export default function AIVoicePage() {
     isSubmittingRef.current = true
     setError("")
     setTranscript(cleanText)
-    setVoiceState("processing")
+    setVoiceStateAndRef("processing")
 
     const userMessageId = `user-${Date.now()}`
     const assistantMessageId = `assistant-${Date.now()}`
@@ -246,14 +247,14 @@ export default function AIVoicePage() {
       if (!res.ok) {
         if (data.requiresLogin) {
           setShowLoginModal(true)
-          setVoiceState("idle")
+          setVoiceStateAndRef("idle")
           isSubmittingRef.current = false
           return
         }
 
         if (data.requiresUpgrade) {
           window.location.href = "/pricing?plan=pro&feature=ai-voice"
-          setVoiceState("idle")
+          setVoiceStateAndRef("idle")
           isSubmittingRef.current = false
           return
         }
@@ -292,7 +293,7 @@ export default function AIVoicePage() {
     } catch (e) {
       const errText = e instanceof Error ? e.message : "Something went wrong"
       setError(errText)
-      setVoiceState("idle")
+      setVoiceStateAndRef("idle")
     } finally {
       isSubmittingRef.current = false
     }
@@ -339,7 +340,7 @@ export default function AIVoicePage() {
     recognition.maxAlternatives = 1
 
     recognition.onstart = () => {
-      setVoiceState("listening")
+      setVoiceStateAndRef("listening")
     }
 
     recognition.onresult = (event) => {
@@ -393,11 +394,11 @@ export default function AIVoicePage() {
         setError(`Voice error: ${e.error}`)
       }
 
-      setVoiceState("idle")
+      setVoiceStateAndRef("idle")
     }
 
     recognition.onend = async () => {
-      if (voiceState === "listening") {
+      if (voiceStateRef.current === "listening") {
         const leftover = finalTranscriptRef.current.trim()
 
         if (leftover && !isSubmittingRef.current) {
@@ -406,7 +407,7 @@ export default function AIVoicePage() {
           return
         }
 
-        setVoiceState("idle")
+        setVoiceStateAndRef("idle")
       }
     }
 
