@@ -9,6 +9,7 @@ import {
   getSubscription,
   isTrialActive,
 } from "@/lib/database"
+import { awardXp, checkAndUnlockAchievements, XP_VALUES } from "@/lib/goals-db"
 
 type PlannerTaskInput = {
   id: string
@@ -109,6 +110,14 @@ export async function POST(req: NextRequest) {
       title,
       taskCount: normalizedTasks.length,
     }).catch(() => undefined)
+
+    // Award XP for study plan saved and check achievements
+    awardXp(user.id, XP_VALUES.study_plan).catch((err) => {
+      console.error("[ai/planner] Failed to award XP:", err);
+    });
+    checkAndUnlockAchievements(user.id).catch((err) => {
+      console.error("[ai/planner] Failed to check achievements:", err);
+    });
 
     return NextResponse.json({
       success: true,

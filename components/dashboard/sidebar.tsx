@@ -21,6 +21,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Trophy,
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ const navItems = [
   { icon: Network,           label: "Concept Map",href: "/concept-map",                  guestOk: false },
   { icon: Calendar,          label: "Planner",    href: "/planner",                      guestOk: false },
   { icon: Sparkles,          label: "Topic Analyzer", href: "/topic-analyzer",           guestOk: false },
+  { icon: Trophy,            label: "Goals & Badges", href: "/goals",                   guestOk: false },
   { icon: BookOpen,          label: "Blogs",      href: "/blogs",      external: true,  guestOk: true  },
 ]
 
