@@ -783,3 +783,68 @@ Answer as EduPilot Guide:`
 
   return callAIWithFallback(prompt)
 }
+
+// =========================
+// Topic Difficulty Analyzer
+// =========================
+
+export interface TopicAnalysisResult {
+  difficulty: "Beginner" | "Intermediate" | "Advanced"
+  estimatedHours: string
+  confidence: number
+  summary: string
+  studyOrder: string[]
+  prerequisites: string[]
+  relatedConcepts: string[]
+  revisionSessions: number
+  tips: string[]
+}
+
+export async function analyzeTopic(topic: string): Promise<TopicAnalysisResult> {
+  const prompt = `Analyze the complexity, requirements, and learning path for the academic/technical topic: "${topic}".
+
+Return ONLY a valid JSON object. Do not include any markdown, code blocks, backticks, or explanatory text before or after the JSON.
+The JSON object must have exactly the following structure:
+{
+  "difficulty": "Beginner" | "Intermediate" | "Advanced",
+  "estimatedHours": "e.g., 10-14",
+  "confidence": 92,
+  "summary": "a short AI summary of what this topic is and its learning curve (2-3 sentences)",
+  "studyOrder": ["Step 1 explanation", "Step 2 explanation", ...],
+  "prerequisites": ["Prerequisite 1", "Prerequisite 2", ...],
+  "relatedConcepts": ["Concept 1", "Concept 2", ...],
+  "revisionSessions": 4,
+  "tips": ["Tip 1", "Tip 2", ...]
+}
+
+Ensure the values are realistic and highly helpful for a student studying this topic.`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    
+    // Validate difficulty
+    let difficulty: "Beginner" | "Intermediate" | "Advanced" = "Intermediate"
+    const parsedDiff = String(parsed.difficulty || "").trim().toLowerCase()
+    if (parsedDiff === "beginner" || parsedDiff === "intermediate" || parsedDiff === "advanced") {
+      difficulty = (parsedDiff.charAt(0).toUpperCase() + parsedDiff.slice(1)) as "Beginner" | "Intermediate" | "Advanced"
+    }
+
+    return {
+      difficulty,
+      estimatedHours: String(parsed.estimatedHours || "10-15").trim(),
+      confidence: Math.min(100, Math.max(0, Number(parsed.confidence) || 85)),
+      summary: String(parsed.summary || `A study profile for ${topic}.`).trim(),
+      studyOrder: Array.isArray(parsed.studyOrder) ? parsed.studyOrder.map(String).filter(Boolean) : [],
+      prerequisites: Array.isArray(parsed.prerequisites) ? parsed.prerequisites.map(String).filter(Boolean) : [],
+      relatedConcepts: Array.isArray(parsed.relatedConcepts) ? parsed.relatedConcepts.map(String).filter(Boolean) : [],
+      revisionSessions: Math.max(1, Number(parsed.revisionSessions) || 3),
+      tips: Array.isArray(parsed.tips) ? parsed.tips.map(String).filter(Boolean) : [],
+    }
+  } catch (error) {
+    console.error("[analyzeTopic] Malformed JSON from AI:", raw)
+    throw new Error("AI returned an invalid response format. Please try again.")
+  }
+}
