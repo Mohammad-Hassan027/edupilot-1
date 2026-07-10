@@ -265,6 +265,15 @@ async function callGroq(prompt: string): Promise<string> {
   return text
 }
 
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const key = getGeminiKey()
+  const client = new GoogleGenerativeAI(key)
+  const model = client.getGenerativeModel({ model: "text-embedding-004" })
+  const result = await model.embedContent(text)
+  const embedding = result.embedding
+  return embedding.values
+}
+
 async function callGemini(prompt: string): Promise<string> {
   const key = getGeminiKey()
   const client = new GoogleGenerativeAI(key)
