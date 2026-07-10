@@ -15,6 +15,7 @@ const PROTECTED_ROUTES = [
   "/time-tracking",
   "/marketplace",
   "/document-chat",
+  "/essay-grader",
 ]
 
 export async function proxy(req: NextRequest) {
@@ -32,19 +33,52 @@ export async function proxy(req: NextRequest) {
 
   const res = NextResponse.next()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name) { return req.cookies.get(name)?.value },
-        set(name, value, options) { res.cookies.set(name, value, options) },
-        remove(name, options) { res.cookies.set(name, "", { ...options, maxAge: 0 }) },
-      },
-    }
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  const { data: { user } } = await supabase.auth.getUser()
+  let supabase: ReturnType<typeof createServerClient>
+
+  // Defensive guardrail against unconfigured environments or broken strings
+  if (!url || !anonKey || url.includes("obesllmvoplvkzjltuns")) {
+    console.error(
+      "❌ [Proxy Server]: Supabase initialization blocked. Server environment variables are missing or point to a broken instance."
+    )
+    
+    // Fall back to a placeholder client structure so Next.js server runtime doesn't crash
+    supabase = createServerClient(
+      "https://placeholder-invalid-domain.supabase.co",
+      "placeholder-anon-key",
+      {
+        cookies: {
+          get(name) { return req.cookies.get(name)?.value },
+          set(name, value, options) { res.cookies.set(name, value, options) },
+          remove(name, options) { res.cookies.set(name, "", { ...options, maxAge: 0 }) },
+        },
+      }
+    )
+  } else {
+    // Original initialization block running safely when credentials are valid
+    supabase = createServerClient(
+      url,
+      anonKey,
+      {
+        cookies: {
+          get(name) { return req.cookies.get(name)?.value },
+          set(name, value, options) { res.cookies.set(name, value, options) },
+          remove(name, options) { res.cookies.set(name, "", { ...options, maxAge: 0 }) },
+        },
+      }
+    )
+  }
+
+  // Wrapped in a try/catch block to prevent broken placeholder operations from throwing unhandled execution exceptions
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch (err) {
+    console.warn("⚠️ [Proxy Server]: Could not fetch user profile from Supabase instance.")
+  }
 
   // Protected routes → redirect to login if not authenticated
   const isProtected = PROTECTED_ROUTES.some(

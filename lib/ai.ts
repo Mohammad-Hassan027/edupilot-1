@@ -792,3 +792,60 @@ Answer as EduPilot Guide:`
 
   return callAIWithFallback(prompt)
 }
+
+// =========================
+// Essay Grader
+// =========================
+
+export interface EssayFeedback {
+  grade: string
+  pros: string[]
+  cons: string[]
+  suggestions: { quote: string; comment: string }[]
+}
+
+export async function gradeEssay(essay: string, rubric?: string): Promise<EssayFeedback> {
+  const prompt = `You are a strict but fair expert academic evaluator. You are reviewing a student's essay.
+${rubric ? `Here is the grading rubric or assignment prompt to base your evaluation on:\n"""\n${rubric}\n"""\n` : `Use standard academic writing standards for college-level essays (clear thesis, good structure, strong arguments, proper grammar).\n`}
+Here is the student's essay:
+"""
+${essay.slice(0, 15000)}
+"""
+
+Evaluate the essay and provide structured feedback.
+Return ONLY valid JSON in this exact shape:
+{
+  "grade": "Estimated Letter Grade (e.g., A-, B+, C)",
+  "pros": ["Strength 1", "Strength 2"],
+  "cons": ["Weakness 1", "Weakness 2"],
+  "suggestions": [
+    { "quote": "exact quote from the essay with a flaw", "comment": "how to improve this specific part" }
+  ]
+}
+
+Rules:
+- Return ONLY JSON.
+- No markdown formatting outside the JSON, no backticks.
+- suggestions array should have 2 to 5 items.`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    return {
+      grade: String(parsed.grade || "N/A"),
+      pros: Array.isArray(parsed.pros) ? parsed.pros.map(String) : [],
+      cons: Array.isArray(parsed.cons) ? parsed.cons.map(String) : [],
+      suggestions: Array.isArray(parsed.suggestions)
+        ? parsed.suggestions.map((s: any) => ({
+            quote: String(s?.quote || ""),
+            comment: String(s?.comment || ""),
+          }))
+        : [],
+    }
+  } catch (error) {
+    console.error("[gradeEssay] Invalid AI JSON:", raw)
+    throw new Error("AI returned invalid evaluation format. Please try again.")
+  }
+}
