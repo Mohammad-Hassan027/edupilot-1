@@ -847,4 +847,4 @@ Ensure the values are realistic and highly helpful for a student studying this t
     console.error("[analyzeTopic] Malformed JSON from AI:", raw)
     throw new Error("AI returned an invalid response format. Please try again.")
   }
-}
+}
