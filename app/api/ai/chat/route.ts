@@ -5,6 +5,7 @@ import { requireAiAccess } from "@/lib/ai-guard";
 import { generateAIResponse } from "@/lib/ai";
 import { logUsage } from "@/lib/database";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
+import { awardXp, checkAndUnlockAchievements, XP_VALUES } from "@/lib/goals-db";
 import {
   analyzeAttachmentsWithGemini,
   searchWithTavily,
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      savedSessionId = currentSessionId;
+      savedSessionId = currentSessionId ?? null;
 
       logUsage(
         user.id,
@@ -211,6 +212,14 @@ export async function POST(req: NextRequest) {
         },
       ).catch((err) => {
         console.error("[ai/chat] Failed to log usage metrics:", err);
+      });
+
+      // Award XP for AI Chat and trigger achievements sweep
+      awardXp(user.id, XP_VALUES.ai_chat).catch((err) => {
+        console.error("[ai/chat] Failed to award XP:", err);
+      });
+      checkAndUnlockAchievements(user.id).catch((err) => {
+        console.error("[ai/chat] Failed to check achievements:", err);
       });
     }
 

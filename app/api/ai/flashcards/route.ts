@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { generateFlashcards, generateFlashcardsFromContent } from "@/lib/ai"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
+import { awardXp, checkAndUnlockAchievements, XP_VALUES } from "@/lib/goals-db"
 import {
   logUsage,
   getSubscription,
@@ -149,6 +150,14 @@ export async function POST(req: NextRequest) {
       sourceType: isFromSource ? sourceType : "topic",
       sourceId: isFromSource ? sourceId : null,
     }).catch(console.error)
+
+    // Award XP for Flashcards and check achievements
+    awardXp(user.id, XP_VALUES.flashcards).catch((err) => {
+      console.error("[ai/flashcards] Failed to award XP:", err);
+    });
+    checkAndUnlockAchievements(user.id).catch((err) => {
+      console.error("[ai/flashcards] Failed to check achievements:", err);
+    });
 
     return NextResponse.json({ success: true, flashcards, savedSet })
   } catch (err) {
