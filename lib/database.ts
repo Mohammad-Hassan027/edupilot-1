@@ -1472,3 +1472,90 @@ export async function deleteSavedConceptMap(userId: string, mapId: string) {
 
   return { success: true }
 }
+
+// ─── Topic Analysis History ──────────────────────────────────────────────────
+
+export type TopicAnalysisHistoryRecord = {
+  id: string
+  user_id: string
+  topic: string
+  analysis_json: any
+  created_at: string
+}
+
+export async function getTopicAnalysisHistory(userId: string, limit = 15) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("topic_analysis_history")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("topic_analysis_history")) return []
+    throw new Error(`Failed to load topic analysis history: ${error.message}`)
+  }
+
+  return (data || []) as TopicAnalysisHistoryRecord[]
+}
+
+export async function getTopicAnalysisById(userId: string, analysisId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("topic_analysis_history")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("id", analysisId)
+    .maybeSingle()
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("topic_analysis_history")) return null
+    throw new Error(`Failed to load topic analysis: ${error.message}`)
+  }
+
+  return (data || null) as TopicAnalysisHistoryRecord | null
+}
+
+export async function saveTopicAnalysis(userId: string, topic: string, analysisJson: any) {
+  const admin = await getSupabaseAdmin()
+
+  const payload = {
+    user_id: userId,
+    topic,
+    analysis_json: analysisJson,
+    created_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await admin
+    .from("topic_analysis_history")
+    .insert(payload)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to save topic analysis: ${error.message}`)
+  }
+
+  return data as TopicAnalysisHistoryRecord
+}
+
+export async function deleteTopicAnalysis(userId: string, analysisId: string) {
+  const admin = await getSupabaseAdmin()
+
+  const { error } = await admin
+    .from("topic_analysis_history")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", analysisId)
+
+  if (error) {
+    throw new Error(`Failed to delete topic analysis: ${error.message}`)
+  }
+
+  return { success: true }
+}

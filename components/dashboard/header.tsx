@@ -35,6 +35,7 @@ const mobileNavItems = [
   { icon: Mic, label: "AI Voice", href: "/ai-voice", guestOk: false },
   { icon: HelpCircle, label: "Quiz", href: "/quiz", guestOk: false },
   { icon: Calendar, label: "Planner", href: "/planner", guestOk: false },
+  { icon: Sparkles, label: "Topic Analyzer", href: "/topic-analyzer", guestOk: false },
   { icon: BookOpen, label: "Blogs", href: "/blogs", guestOk: true },
   { icon: Settings, label: "Settings", href: "/settings", guestOk: false },
 ]
@@ -85,6 +86,7 @@ const FEATURE_ITEMS: SearchItem[] = [
   { id: "feature-ai-voice", title: "AI Voice", subtitle: "Practice with voice", href: "/ai-voice", icon: Mic, category: "feature", guestOk: false },
   { id: "feature-quiz", title: "Quiz", subtitle: "Generate and review quizzes", href: "/quiz", icon: HelpCircle, category: "feature", guestOk: false },
   { id: "feature-planner", title: "Planner", subtitle: "Create study plans", href: "/planner", icon: Calendar, category: "feature", guestOk: false },
+  { id: "feature-topic-analyzer", title: "Topic Analyzer", subtitle: "Analyze topic difficulty", href: "/topic-analyzer", icon: Sparkles, category: "feature", guestOk: false },
   { id: "feature-blogs", title: "Blogs", subtitle: "Read study blogs", href: "/blogs", icon: BookOpen, category: "feature", guestOk: true },
   { id: "feature-billing", title: "Billing", subtitle: "Manage your plan", href: "/billing", icon: CreditCard, category: "feature", guestOk: false },
   { id: "feature-profile", title: "Profile", subtitle: "View your profile", href: "/profile", icon: User, category: "feature", guestOk: false },
