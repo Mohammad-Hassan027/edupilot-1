@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
-import pdfParse from "pdf-parse/lib/pdf-parse"
+import { PDFParse } from "pdf-parse"
 import { generateEmbedding } from "@/lib/ai"
 
 export const maxDuration = 60
@@ -50,8 +50,10 @@ export async function POST(req: NextRequest) {
     // 2. Parse PDF Text
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    const pdfData = await pdfParse(buffer)
+    const parser = new PDFParse({ data: buffer })
+    const pdfData = await parser.getText()
     const text = pdfData.text
+    await parser.destroy()
 
     // 3. Create document record in DB
     const { data: doc, error: docError } = await supabase
