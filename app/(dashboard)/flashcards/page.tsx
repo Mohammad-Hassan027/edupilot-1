@@ -64,6 +64,19 @@ interface SavedFlashcardSet {
   created_at: string
 }
 
+interface DueFlashcard {
+  setId: string
+  topic: string
+  cardIndex: number
+  front: string
+  back: string
+  interval: number
+  easeFactor: number
+  repetitions: number
+  nextReviewAt: string
+  lastReviewedAt: string | null
+}
+
 function isDue(nextReviewAt?: string) {
   if (!nextReviewAt) return true
   return new Date(nextReviewAt).getTime() <= Date.now()
@@ -115,14 +128,28 @@ export default function FlashcardsPage() {
   const [currentSavedSetId, setCurrentSavedSetId] = useState<string | null>(null)
   const [reviewSubmitting, setReviewSubmitting] = useState(false)
 
+  const [dueCards, setDueCards] = useState<DueFlashcard[]>([])
+  const [dueLoading, setDueLoading] = useState(true)
+
   const currentCard = cards[currentIndex]
   const masteredCount = useMemo(() => cards.filter((c) => c.mastered).length, [cards])
   const progress = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0
   const isPaidUser = hasPaidAccess(subscription)
   const activePlanName = subscription?.plan_id === "premium" ? "Premium" : subscription?.plan_id === "pro" ? "Pro" : null
 
+  const dueSetGroups = useMemo(() => {
+    const groups = new Map<string, { setId: string; topic: string; count: number }>()
+    for (const card of dueCards) {
+      const existing = groups.get(card.setId)
+      if (existing) existing.count += 1
+      else groups.set(card.setId, { setId: card.setId, topic: card.topic, count: 1 })
+    }
+    return Array.from(groups.values())
+  }, [dueCards])
+
   useEffect(() => {
     void loadHistory()
+    void loadDueCards()
   }, [])
 
   useEffect(() => {
@@ -182,6 +209,69 @@ export default function FlashcardsPage() {
       //
     } finally {
       setHistoryLoading(false)
+    }
+  }
+
+  async function loadDueCards() {
+    try {
+      setDueLoading(true)
+      const response = await fetch("/api/ai/flashcards/due", { cache: "no-store" })
+      const data = await response.json().catch(() => ({ cards: [] }))
+
+      if (response.ok) {
+        setDueCards(data.cards || [])
+      }
+    } catch {
+      //
+    } finally {
+      setDueLoading(false)
+    }
+  }
+
+  async function startDueReview(setId: string) {
+    let set = history.find((item) => item.id === setId)
+
+    if (!set) {
+      try {
+        const response = await fetch(`/api/ai/flashcards/${setId}`, { cache: "no-store" })
+        const data = await response.json().catch(() => ({}))
+        if (response.ok && data.set) {
+          set = data.set as SavedFlashcardSet
+          setHistory((prev) => (prev.some((item) => item.id === set!.id) ? prev : [set!, ...prev]))
+        }
+      } catch {
+        //
+      }
+    }
+
+    if (!set) return
+
+    const dueOnly: Flashcard[] = set.cards
+      .map((card, index) => ({
+        id: `${set!.id}-${index}`,
+        cardIndex: index,
+        front: card.front,
+        back: card.back,
+        mastered: (card.repetitions ?? 0) > 0,
+        interval: card.interval ?? 0,
+        easeFactor: card.easeFactor ?? 2.5,
+        repetitions: card.repetitions ?? 0,
+        nextReviewAt: card.nextReviewAt ?? new Date().toISOString(),
+      }))
+      .filter((card) => isDue(card.nextReviewAt))
+
+    if (!dueOnly.length) return
+
+    setCards(dueOnly)
+    setCurrentIndex(0)
+    setIsFlipped(false)
+    setCurrentSavedSetId(set.id)
+    setAiTopic(set.topic)
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("set", set.id)
+      window.history.replaceState({}, "", url.toString())
     }
   }
 
@@ -303,6 +393,7 @@ export default function FlashcardsPage() {
         )
 
         setHistory((prev) => prev.map((item) => (item.id === updatedSet.id ? updatedSet : item)))
+        void loadDueCards()
       }
     } catch {
       //
@@ -629,6 +720,49 @@ export default function FlashcardsPage() {
             )}
           </div>
 
+          <div className="space-y-6">
+          <Card className="border-border bg-card h-fit">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Clock className="h-5 w-5 text-amber-500" />
+                Due for Review
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-3">
+              {dueLoading ? (
+                <div className="text-sm text-muted-foreground">Loading due cards...</div>
+              ) : dueCards.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+                  <Check className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">All caught up — no cards due right now.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {dueCards.length} card{dueCards.length === 1 ? "" : "s"} due across {dueSetGroups.length} deck
+                    {dueSetGroups.length === 1 ? "" : "s"}
+                  </p>
+                  {dueSetGroups.map((group) => (
+                    <button
+                      key={group.setId}
+                      type="button"
+                      onClick={() => void startDueReview(group.setId)}
+                      className="w-full rounded-xl border border-border bg-background/40 hover:border-amber-500/40 hover:bg-amber-500/5 text-left p-3 transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-foreground truncate">{group.topic}</p>
+                        <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-500 shrink-0">
+                          {group.count} due
+                        </Badge>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="border-border bg-card h-fit">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -736,6 +870,7 @@ export default function FlashcardsPage() {
               )}
             </CardContent>
           </Card>
+          </div>
         </div>
       </div>
 

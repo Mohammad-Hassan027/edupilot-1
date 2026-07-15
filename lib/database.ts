@@ -1,6 +1,12 @@
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
 import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
+import {
+  computeNextReview,
+  isCardDue,
+  RATING_TO_QUALITY,
+  type ReviewRating as SpacedRepetitionRating,
+} from "@/lib/spaced-repetition"
 
 export type SavedNoteTab = {
   type: "summary" | "concepts" | "bullets" | "revision"
@@ -20,7 +26,7 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
-export type FlashcardReviewRating = "again" | "hard" | "good" | "easy"
+export type FlashcardReviewRating = SpacedRepetitionRating
 
 export type SavedFlashcard = {
   front: string
@@ -92,16 +98,10 @@ export async function saveFlashcardSet(
   return data as SavedFlashcardSetRecord
 }
 
-// Simplified SM-2 spaced repetition: maps a difficulty rating to a recall
-// quality score, then updates ease factor, interval, and repetitions the
-// same way SM-2 does, without requiring callers to track grade history.
-const REVIEW_RATING_QUALITY: Record<FlashcardReviewRating, number> = {
-  again: 0,
-  hard: 3,
-  good: 4,
-  easy: 5,
-}
-
+// Spaced-repetition scheduling for flashcard reviews. The SM-2 math itself
+// lives in lib/spaced-repetition.ts as a pure, independently testable
+// function; this wrapper loads/saves the card state and logs the review to
+// flashcard_reviews for history.
 export async function updateFlashcardReview(
   userId: string,
   setId: string,
@@ -133,38 +133,23 @@ export async function updateFlashcardReview(
     throw new Error("Flashcard not found in set")
   }
 
-  const quality = REVIEW_RATING_QUALITY[rating]
-  const previousEase = card.easeFactor ?? 2.5
-  const previousRepetitions = card.repetitions ?? 0
-  const previousInterval = card.interval ?? 0
-
-  let repetitions = previousRepetitions
-  let interval = previousInterval
-
-  if (quality < 3) {
-    repetitions = 0
-    interval = 1
-  } else {
-    repetitions = previousRepetitions + 1
-    if (repetitions === 1) interval = 1
-    else if (repetitions === 2) interval = 6
-    else interval = Math.round(previousInterval * previousEase)
-  }
-
-  const easeFactor = Math.max(
-    1.3,
-    previousEase + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-  )
-
   const now = new Date()
-  const nextReviewAt = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000)
+  const schedule = computeNextReview(
+    {
+      interval: card.interval ?? 0,
+      easeFactor: card.easeFactor ?? 2.5,
+      repetitions: card.repetitions ?? 0,
+    },
+    rating,
+    now
+  )
 
   const updatedCard: SavedFlashcard = {
     ...card,
-    interval,
-    easeFactor,
-    repetitions,
-    nextReviewAt: nextReviewAt.toISOString(),
+    interval: schedule.interval,
+    easeFactor: schedule.easeFactor,
+    repetitions: schedule.repetitions,
+    nextReviewAt: schedule.nextReviewAt,
     lastReviewedAt: now.toISOString(),
   }
 
@@ -182,7 +167,74 @@ export async function updateFlashcardReview(
     throw new Error(`Failed to update flashcard review: ${error.message}`)
   }
 
+  // Best-effort review history log. This table may not exist yet if the
+  // migration hasn't been applied — never let logging failures break the
+  // primary scheduling update.
+  try {
+    const { error: logError } = await admin.from("flashcard_reviews").insert({
+      user_id: userId,
+      set_id: setId,
+      card_index: cardIndex,
+      rating,
+      quality: RATING_TO_QUALITY[rating],
+      interval_days: schedule.interval,
+      ease_factor: schedule.easeFactor,
+      repetitions: schedule.repetitions,
+      reviewed_at: now.toISOString(),
+    })
+    if (logError) console.error("[flashcards] Failed to log review history:", logError.message)
+  } catch (err) {
+    console.error("[flashcards] Failed to log review history:", err)
+  }
+
   return data as SavedFlashcardSetRecord
+}
+
+export type DueFlashcard = {
+  setId: string
+  topic: string
+  cardIndex: number
+  front: string
+  back: string
+  interval: number
+  easeFactor: number
+  repetitions: number
+  nextReviewAt: string
+  lastReviewedAt: string | null
+}
+
+// Cards are stored per-set as a JSONB array (see SavedFlashcard), so "due"
+// cards are computed by loading each user's sets and filtering/flattening
+// their cards client-side rather than a single SQL WHERE clause. This keeps
+// the query correct without depending on the optional get_due_flashcards
+// SQL helper (see migration-flashcard-spaced-repetition.sql) being applied.
+export async function getDueFlashcards(userId: string, before: Date = new Date()): Promise<DueFlashcard[]> {
+  const sets = await getSavedFlashcardSets(userId, 100)
+
+  const due: DueFlashcard[] = []
+
+  for (const set of sets) {
+    set.cards.forEach((card, cardIndex) => {
+      if (!isCardDue(card.nextReviewAt, before)) return
+
+      due.push({
+        setId: set.id,
+        topic: set.topic,
+        cardIndex,
+        front: card.front,
+        back: card.back,
+        interval: card.interval ?? 0,
+        easeFactor: card.easeFactor ?? 2.5,
+        repetitions: card.repetitions ?? 0,
+        nextReviewAt: card.nextReviewAt ?? set.created_at,
+        lastReviewedAt: card.lastReviewedAt ?? null,
+      })
+    })
+  }
+
+  due.sort((a, b) => new Date(a.nextReviewAt).getTime() - new Date(b.nextReviewAt).getTime())
+
+  return due
 }
 
 export async function getSavedFlashcardSets(userId: string, limit = 12) {
