@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
+import { gradeShortAnswer } from "@/lib/ai"
 import { logUsage, saveQuizAttempt } from "@/lib/database"
 
 type QuizOption = {
@@ -11,15 +12,18 @@ type QuizOption = {
 
 type QuizQuestion = {
   id: string
+  type?: "mcq" | "short_answer"
   question: string
   options: QuizOption[]
-  correctOptionId: string
+  correctOptionId: string | null
+  expectedAnswer?: string | null
   explanation?: string | null
 }
 
 type QuizAnswer = {
   questionId: string
   selectedOptionId: string | null
+  textAnswer?: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
       difficulty?: "easy" | "medium" | "hard"
       questions: QuizQuestion[]
       answers: QuizAnswer[]
-      sourceType?: "topic" | "note" | "chat"
+      sourceType?: "topic" | "note" | "chat" | "flashcards"
       sourceId?: string | null
     }
 
@@ -43,15 +47,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid quiz submission" }, { status: 400 })
     }
 
-    const evaluatedAnswers = questions.map((question) => {
-      const submitted = answers.find((answer) => answer.questionId === question.id)
+    const evaluatedAnswers = await Promise.all(
+      questions.map(async (question) => {
+        const submitted = answers.find((answer) => answer.questionId === question.id)
 
-      return {
-        questionId: question.id,
-        selectedOptionId: submitted?.selectedOptionId ?? null,
-        isCorrect: submitted?.selectedOptionId === question.correctOptionId,
-      }
-    })
+        if (question.type === "short_answer") {
+          const textAnswer = submitted?.textAnswer?.trim() || ""
+
+          if (!textAnswer) {
+            return {
+              questionId: question.id,
+              selectedOptionId: null,
+              textAnswer: null,
+              isCorrect: false,
+              feedback: "No answer provided.",
+            }
+          }
+
+          try {
+            const grade = await gradeShortAnswer(question.question, question.expectedAnswer || "", textAnswer)
+            return {
+              questionId: question.id,
+              selectedOptionId: null,
+              textAnswer,
+              isCorrect: grade.isCorrect,
+              feedback: grade.feedback,
+            }
+          } catch (err) {
+            console.error("[ai/quiz/submit] Short-answer grading failed:", err)
+            return {
+              questionId: question.id,
+              selectedOptionId: null,
+              textAnswer,
+              isCorrect: false,
+              feedback: "Could not automatically grade this answer.",
+            }
+          }
+        }
+
+        return {
+          questionId: question.id,
+          selectedOptionId: submitted?.selectedOptionId ?? null,
+          isCorrect: submitted?.selectedOptionId === question.correctOptionId,
+        }
+      })
+    )
 
     const score = evaluatedAnswers.filter((answer) => answer.isCorrect).length
     const totalQuestions = questions.length

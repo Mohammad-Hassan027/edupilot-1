@@ -131,7 +131,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
-import { generateQuiz, generateQuizFromContent, type QuizDifficulty } from "@/lib/ai"
+import { generateQuiz, generateQuizFromContent, type QuizDifficulty, type QuizFormat } from "@/lib/ai"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import {
   getSubscription,
@@ -139,6 +139,7 @@ import {
   logUsage,
   getSavedQuizAttempts,
   getSavedNoteById,
+  getSavedFlashcardSetById,
   type QuizSourceType,
 } from "@/lib/database"
 
@@ -147,9 +148,11 @@ type GeneratedQuizQuestion = {
   options: string[]
   answer: string
   explanation?: string
+  type: QuizFormat
 }
 
 const VALID_DIFFICULTIES: QuizDifficulty[] = ["easy", "medium", "hard"]
+const VALID_FORMATS: QuizFormat[] = ["mcq", "short_answer"]
 
 async function loadQuizSourceMaterial(
   userId: string,
@@ -162,6 +165,17 @@ async function loadQuizSourceMaterial(
 
     const content = note.tabs.map((tab) => `${tab.title}\n${tab.content}`).join("\n\n")
     return { topic: note.source_title, content }
+  }
+
+  if (sourceType === "flashcards") {
+    const set = await getSavedFlashcardSetById(userId, sourceId)
+    if (!set) return null
+
+    const content = set.cards
+      .map((card, index) => `${index + 1}. Q: ${card.front}\n   A: ${card.back}`)
+      .join("\n\n")
+
+    return { topic: set.topic, content }
   }
 
   if (sourceType === "chat") {
@@ -228,9 +242,10 @@ export async function POST(req: NextRequest) {
     const difficulty: QuizDifficulty = VALID_DIFFICULTIES.includes(body?.difficulty)
       ? body.difficulty
       : "medium"
+    const format: QuizFormat = VALID_FORMATS.includes(body?.format) ? body.format : "mcq"
     const sourceType = body?.sourceType as QuizSourceType | undefined
     const sourceId = typeof body?.sourceId === "string" ? body.sourceId : ""
-    const isFromSource = sourceType === "note" || sourceType === "chat"
+    const isFromSource = sourceType === "note" || sourceType === "chat" || sourceType === "flashcards"
 
     if (!isFromSource && !topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
@@ -266,16 +281,31 @@ export async function POST(req: NextRequest) {
     if (isFromSource) {
       const source = await loadQuizSourceMaterial(user.id, sourceType as QuizSourceType, sourceId)
       if (!source) {
-        return NextResponse.json({ error: "Could not find the selected note or chat session" }, { status: 404 })
+        return NextResponse.json(
+          { error: "Could not find the selected note, chat session, or flashcard deck" },
+          { status: 404 }
+        )
       }
 
       resolvedTopic = source.topic
-      quiz = await generateQuizFromContent(source.topic, source.content, count, difficulty)
+      quiz = await generateQuizFromContent(source.topic, source.content, count, difficulty, format)
     } else {
-      quiz = await generateQuiz(topic, count, difficulty)
+      quiz = await generateQuiz(topic, count, difficulty, format)
     }
 
     const formattedQuestions = (quiz as GeneratedQuizQuestion[]).map((item, questionIndex) => {
+      if (item.type === "short_answer") {
+        return {
+          id: `q${questionIndex + 1}`,
+          type: "short_answer" as const,
+          question: String(item.question || `Question ${questionIndex + 1}`),
+          options: [],
+          correctOptionId: null,
+          expectedAnswer: String(item.answer || ""),
+          explanation: item.explanation ? String(item.explanation) : "",
+        }
+      }
+
       const options = Array.isArray(item.options) ? item.options.slice(0, 4) : []
 
       const normalizedOptions =
@@ -296,6 +326,7 @@ export async function POST(req: NextRequest) {
 
       return {
         id: `q${questionIndex + 1}`,
+        type: "mcq" as const,
         question: String(item.question || `Question ${questionIndex + 1}`),
         options: optionObjects,
         correctOptionId: matchedCorrect.id,
@@ -306,6 +337,7 @@ export async function POST(req: NextRequest) {
     await logUsage(user.id, "quiz", "quiz_generated", {
       topic: resolvedTopic,
       difficulty,
+      format,
       count: formattedQuestions.length,
       planId: subscription?.plan_id,
       sourceType: isFromSource ? sourceType : "topic",
@@ -318,6 +350,7 @@ export async function POST(req: NextRequest) {
       quiz: {
         topic: resolvedTopic,
         difficulty,
+        format,
         sourceType: isFromSource ? sourceType : "topic",
         sourceId: isFromSource ? sourceId : null,
         questions: formattedQuestions,

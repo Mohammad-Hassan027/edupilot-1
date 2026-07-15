@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Clock,
   Download,
+  Brain,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -603,6 +604,14 @@ export default function FlashcardsPage() {
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExportCSV}>
                     <Download className="h-4 w-4" />
                     Export CSV
+                  </Button>
+                )}
+                {currentSavedSetId && cards[0].id !== "demo" && (
+                  <Button asChild variant="outline" size="sm" className="gap-1.5">
+                    <Link href={`/quiz?sourceType=flashcards&sourceId=${currentSavedSetId}`}>
+                      <Brain className="h-4 w-4" />
+                      Generate Quiz
+                    </Link>
                   </Button>
                 )}
               </div>

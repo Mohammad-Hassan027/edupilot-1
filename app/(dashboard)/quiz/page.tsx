@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye, BarChart3 } from "lucide-react"
+import { Crown, Brain, History, Trash2, CheckCircle2, XCircle, Trophy, Eye, BarChart3, Layers } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import { canAccessFeature } from "@/lib/plans"
 import { LoginGateModal } from "@/components/login-gate-modal"
@@ -21,18 +21,24 @@ type QuizOption = {
   text: string
 }
 
+type QuizQuestionType = "mcq" | "short_answer"
+
 type QuizQuestion = {
   id: string
+  type?: QuizQuestionType
   question: string
   options: QuizOption[]
-  correctOptionId: string
+  correctOptionId: string | null
+  expectedAnswer?: string | null
   explanation?: string | null
 }
 
 type QuizAnswer = {
   questionId: string
   selectedOptionId: string | null
+  textAnswer?: string | null
   isCorrect?: boolean
+  feedback?: string | null
 }
 
 type QuizAttempt = {
@@ -63,6 +69,7 @@ export default function QuizPage() {
   const [topic, setTopic] = useState("")
   const [count, setCount] = useState("5")
   const [difficulty, setDifficulty] = useState<QuizDifficulty>("medium")
+  const [format, setFormat] = useState<QuizQuestionType>("mcq")
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -77,6 +84,7 @@ export default function QuizPage() {
   const [quizTopic, setQuizTopic] = useState("")
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({})
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>({})
   const [submittedAttempt, setSubmittedAttempt] = useState<QuizAttempt | null>(null)
 
   const [history, setHistory] = useState<QuizAttempt[]>([])
@@ -85,7 +93,9 @@ export default function QuizPage() {
   const [pageError, setPageError] = useState("")
 
   const [topicStats, setTopicStats] = useState<QuizTopicStats[]>([])
-  const [sourceInfo, setSourceInfo] = useState<{ sourceType: "note" | "chat"; sourceId: string } | null>(null)
+  const [sourceInfo, setSourceInfo] = useState<{ sourceType: "note" | "chat" | "flashcards"; sourceId: string } | null>(
+    null
+  )
 
   const canUseQuiz = canAccessFeature(subscription, "quiz")
   const activePlanName =
@@ -120,7 +130,11 @@ export default function QuizPage() {
     const querySourceType = params.get("sourceType")
     const querySourceId = params.get("sourceId")
 
-    if ((querySourceType !== "note" && querySourceType !== "chat") || !querySourceId) return
+    if (
+      (querySourceType !== "note" && querySourceType !== "chat" && querySourceType !== "flashcards") ||
+      !querySourceId
+    )
+      return
     if (sourceInfo || questions.length > 0) return
 
     if (error === "not_authenticated" || !email) {
@@ -195,6 +209,17 @@ export default function QuizPage() {
     return `${submittedAttempt.score}/${submittedAttempt.total_questions}`
   }, [submittedAttempt])
 
+  const missedQuestions = useMemo(() => {
+    if (!submittedAttempt) return []
+    return submittedAttempt.questions
+      .map((question, index) => ({
+        question,
+        index,
+        answer: submittedAttempt.answers.find((a) => a.questionId === question.id) || null,
+      }))
+      .filter((item) => !item.answer?.isCorrect)
+  }, [submittedAttempt])
+
   async function loadHistory() {
     try {
       setHistoryLoading(true)
@@ -241,12 +266,17 @@ export default function QuizPage() {
     setCurrentAttemptId(attempt.id)
 
     const mapped: Record<string, string> = {}
+    const mappedText: Record<string, string> = {}
     for (const answer of attempt.answers || []) {
       if (answer.selectedOptionId) {
         mapped[answer.questionId] = answer.selectedOptionId
       }
+      if (answer.textAnswer) {
+        mappedText[answer.questionId] = answer.textAnswer
+      }
     }
     setSelectedAnswers(mapped)
+    setTextAnswers(mappedText)
 
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
@@ -255,7 +285,7 @@ export default function QuizPage() {
     }
   }
 
-  async function handleGenerateQuiz(sourceOverride?: { sourceType: "note" | "chat"; sourceId: string }) {
+  async function handleGenerateQuiz(sourceOverride?: { sourceType: "note" | "chat" | "flashcards"; sourceId: string }) {
     setPageError("")
 
     if (isLoading) return
@@ -279,8 +309,8 @@ export default function QuizPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           sourceOverride
-            ? { ...sourceOverride, count: Number(count), difficulty }
-            : { topic: topic.trim(), count: Number(count), difficulty }
+            ? { ...sourceOverride, count: Number(count), difficulty, format }
+            : { topic: topic.trim(), count: Number(count), difficulty, format }
         ),
       })
 
@@ -301,6 +331,7 @@ export default function QuizPage() {
         setQuizTopic(data.quiz?.topic || topic.trim())
         setQuestions(data.quiz?.questions || [])
         setSelectedAnswers({})
+        setTextAnswers({})
         setSubmittedAttempt(null)
         setActiveQuestionIndex(0)
         setTimeRemaining(timerEnabled ? secondsPerQuestion : null)
@@ -334,6 +365,11 @@ export default function QuizPage() {
     }
   }
 
+  function handleTextAnswerChange(questionId: string, value: string) {
+    if (submittedAttempt) return
+    setTextAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
+
   async function handleSubmitQuiz() {
     if (!questions.length) return
 
@@ -342,6 +378,7 @@ export default function QuizPage() {
       const answers = questions.map((question) => ({
         questionId: question.id,
         selectedOptionId: selectedAnswers[question.id] || null,
+        textAnswer: textAnswers[question.id] || null,
       }))
 
       const response = await fetch("/api/ai/quiz/submit", {
@@ -404,6 +441,7 @@ export default function QuizPage() {
         setSubmittedAttempt(null)
         setQuestions([])
         setSelectedAnswers({})
+        setTextAnswers({})
         setQuizTopic("")
       }
     } catch (err) {
@@ -462,6 +500,13 @@ export default function QuizPage() {
                   </div>
                 </div>
 
+                {sourceInfo?.sourceType === "flashcards" ? (
+                  <Badge variant="outline" className="gap-1.5 mx-auto w-fit text-[11px]">
+                    <Layers className="h-3 w-3" />
+                    Generating from your flashcard deck
+                  </Badge>
+                ) : null}
+
                 <div className="space-y-2">
                   <Label>Quiz Topic</Label>
                   <Input
@@ -471,7 +516,7 @@ export default function QuizPage() {
                   />
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Number of Questions</Label>
                     <Select value={count} onValueChange={setCount}>
@@ -484,6 +529,19 @@ export default function QuizPage() {
                             {value} Questions
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Question Format</Label>
+                    <Select value={format} onValueChange={(value) => setFormat(value as QuizQuestionType)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mcq">Multiple Choice</SelectItem>
+                        <SelectItem value="short_answer">Short Answer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -582,6 +640,33 @@ export default function QuizPage() {
                     </div>
                   </div>
                   <Progress value={submittedAttempt.percentage} />
+
+                  {missedQuestions.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Missed Questions ({missedQuestions.length})
+                      </p>
+                      <div className="space-y-2">
+                        {missedQuestions.map(({ question, index }) => (
+                          <button
+                            key={question.id}
+                            type="button"
+                            onClick={() =>
+                              document
+                                .getElementById(`question-${index}`)
+                                ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                            }
+                            className="w-full rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-left text-sm text-foreground transition hover:bg-destructive/10"
+                          >
+                            <span className="text-muted-foreground">Q{index + 1}: </span>
+                            {question.question}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium text-emerald-500">Perfect score — no missed questions!</p>
+                  )}
                 </CardContent>
               </Card>
             ) : null}
@@ -626,47 +711,76 @@ export default function QuizPage() {
                           <p className="font-medium text-foreground">{question.question}</p>
                         </div>
 
-                        <div className="space-y-2">
-                          {question.options.map((option) => {
-                            const isSelected = selectedAnswers[question.id] === option.id
-                            const isCorrect = question.correctOptionId === option.id
-                            const showResults = Boolean(submittedAttempt)
+                        {question.type === "short_answer" ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={submittedAttempt ? answerResult?.textAnswer || "" : textAnswers[question.id] || ""}
+                              onChange={(e) => handleTextAnswerChange(question.id, e.target.value)}
+                              disabled={Boolean(submittedAttempt)}
+                              placeholder="Type your answer..."
+                              className={cn(
+                                "min-h-[90px] w-full resize-none rounded-lg border px-4 py-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-primary",
+                                submittedAttempt
+                                  ? answerResult?.isCorrect
+                                    ? "border-emerald-500 bg-emerald-500/10"
+                                    : "border-destructive bg-destructive/10"
+                                  : "border-border bg-background"
+                              )}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {question.options.map((option) => {
+                              const isSelected = selectedAnswers[question.id] === option.id
+                              const isCorrect = question.correctOptionId === option.id
+                              const showResults = Boolean(submittedAttempt)
 
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onClick={() => handleSelect(question.id, option.id)}
-                                className={cn(
-                                  "w-full rounded-lg border px-4 py-3 text-left transition",
-                                  isSelected && !showResults && "border-primary bg-primary/10",
-                                  showResults && isCorrect && "border-emerald-500 bg-emerald-500/10",
-                                  showResults && isSelected && !isCorrect && "border-destructive bg-destructive/10",
-                                  !isSelected && !showResults && "border-border hover:border-primary/40"
-                                )}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-sm text-foreground">{option.text}</span>
-                                  {submittedAttempt && isCorrect ? (
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                  ) : null}
-                                  {submittedAttempt && isSelected && !isCorrect ? (
-                                    <XCircle className="h-4 w-4 text-destructive" />
-                                  ) : null}
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  onClick={() => handleSelect(question.id, option.id)}
+                                  className={cn(
+                                    "w-full rounded-lg border px-4 py-3 text-left transition",
+                                    isSelected && !showResults && "border-primary bg-primary/10",
+                                    showResults && isCorrect && "border-emerald-500 bg-emerald-500/10",
+                                    showResults && isSelected && !isCorrect && "border-destructive bg-destructive/10",
+                                    !isSelected && !showResults && "border-border hover:border-primary/40"
+                                  )}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-foreground">{option.text}</span>
+                                    {submittedAttempt && isCorrect ? (
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    ) : null}
+                                    {submittedAttempt && isSelected && !isCorrect ? (
+                                      <XCircle className="h-4 w-4 text-destructive" />
+                                    ) : null}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
 
                         {submittedAttempt ? (
-                          <div className="rounded-lg bg-secondary/30 p-3 text-sm">
+                          <div className="rounded-lg bg-secondary/30 p-3 text-sm space-y-1">
                             <p className="font-medium text-foreground mb-1">
                               {answerResult?.isCorrect ? "Correct Answer" : "Review"}
                             </p>
-                            <p className="text-muted-foreground">
-                              {question.explanation || "Review this concept and try again to improve your score."}
-                            </p>
+                            {question.type === "short_answer" && !answerResult?.isCorrect ? (
+                              <p className="text-foreground">
+                                <span className="text-muted-foreground">Expected answer: </span>
+                                {question.expectedAnswer}
+                              </p>
+                            ) : null}
+                            {question.type === "short_answer" && answerResult?.feedback ? (
+                              <p className="text-muted-foreground">{answerResult.feedback}</p>
+                            ) : (
+                              <p className="text-muted-foreground">
+                                {question.explanation || "Review this concept and try again to improve your score."}
+                              </p>
+                            )}
                           </div>
                         ) : null}
                       </div>

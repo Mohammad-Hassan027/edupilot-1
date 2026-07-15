@@ -408,19 +408,30 @@ Stay accurate and stay focused on the original question. Do not just repeat the 
 // Quiz
 // =========================
 
+export type QuizFormat = "mcq" | "short_answer"
+
 export interface QuizQuestion {
   question: string
   options: string[]
   answer: string
   explanation: string
+  type: QuizFormat
 }
 
-function normalizeQuizItem(item: unknown, index: number): QuizQuestion {
+function normalizeQuizItem(item: unknown, index: number, format: QuizFormat = "mcq"): QuizQuestion {
   const raw = (item || {}) as {
     question?: unknown
     options?: unknown
     answer?: unknown
     explanation?: unknown
+  }
+
+  const question = String(raw.question || `Question ${index + 1}`).trim()
+  const explanation = String(raw.explanation || "").trim()
+
+  if (format === "short_answer") {
+    const answer = String(raw.answer || "").trim() || "No answer provided."
+    return { question, options: [], answer, explanation, type: "short_answer" }
   }
 
   let options = Array.isArray(raw.options)
@@ -438,12 +449,7 @@ function normalizeQuizItem(item: unknown, index: number): QuizQuestion {
     answer = options[0]
   }
 
-  return {
-    question: String(raw.question || `Question ${index + 1}`).trim(),
-    options,
-    answer,
-    explanation: String(raw.explanation || "").trim(),
-  }
+  return { question, options, answer, explanation, type: "mcq" }
 }
 
 export type QuizDifficulty = "easy" | "medium" | "hard"
@@ -454,27 +460,39 @@ const QUIZ_DIFFICULTY_GUIDANCE: Record<QuizDifficulty, string> = {
   hard: "Keep questions at an advanced level: multi-step reasoning, edge cases, and nuanced distinctions.",
 }
 
-export async function generateQuiz(
-  topic: string,
-  count = 5,
-  difficulty: QuizDifficulty = "medium"
-): Promise<QuizQuestion[]> {
-  const prompt = `Generate exactly ${count} multiple-choice quiz questions about "${topic}".
+function buildQuizQuestionSchema(format: QuizFormat) {
+  if (format === "short_answer") {
+    return `[
+  {
+    "question": "Question text?",
+    "answer": "The ideal, concise expected answer (1-2 sentences)",
+    "explanation": "Brief explanation"
+  }
+]`
+  }
 
-Difficulty: ${difficulty}. ${QUIZ_DIFFICULTY_GUIDANCE[difficulty]}
-
-Return ONLY valid JSON array in this exact structure:
-[
+  return `[
   {
     "question": "Question text?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "answer": "Option A",
     "explanation": "Brief explanation"
   }
-]
+]`
+}
 
-Rules:
-- Return only JSON
+function buildQuizFormatRules(count: number, format: QuizFormat) {
+  if (format === "short_answer") {
+    return `- Return only JSON
+- No markdown
+- No backticks
+- Exactly ${count} questions
+- Each question must require a short written answer (not multiple choice)
+- "answer" must be the ideal expected answer, concise and specific
+- Keep explanations short`
+  }
+
+  return `- Return only JSON
 - No markdown
 - No backticks
 - Exactly ${count} questions
@@ -482,6 +500,24 @@ Rules:
 - "answer" must exactly match one option
 - Questions should be educational and accurate
 - Keep explanations short`
+}
+
+export async function generateQuiz(
+  topic: string,
+  count = 5,
+  difficulty: QuizDifficulty = "medium",
+  format: QuizFormat = "mcq"
+): Promise<QuizQuestion[]> {
+  const questionKind = format === "short_answer" ? "short-answer" : "multiple-choice"
+  const prompt = `Generate exactly ${count} ${questionKind} quiz questions about "${topic}".
+
+Difficulty: ${difficulty}. ${QUIZ_DIFFICULTY_GUIDANCE[difficulty]}
+
+Return ONLY valid JSON array in this exact structure:
+${buildQuizQuestionSchema(format)}
+
+Rules:
+${buildQuizFormatRules(count, format)}`
 
   const raw = await callAIWithFallback(prompt)
   const cleaned = cleanJsonText(raw)
@@ -493,7 +529,7 @@ Rules:
       throw new Error("Quiz response is not an array")
     }
 
-    const normalized = parsed.slice(0, count).map((item, index) => normalizeQuizItem(item, index))
+    const normalized = parsed.slice(0, count).map((item, index) => normalizeQuizItem(item, index, format))
 
     if (!normalized.length) {
       throw new Error("No quiz questions generated")
@@ -510,9 +546,11 @@ export async function generateQuizFromContent(
   title: string,
   content: string,
   count = 5,
-  difficulty: QuizDifficulty = "medium"
+  difficulty: QuizDifficulty = "medium",
+  format: QuizFormat = "mcq"
 ): Promise<QuizQuestion[]> {
-  const prompt = `Read the study material below (titled "${title}") and generate exactly ${count} multiple-choice quiz questions that test understanding of it.
+  const questionKind = format === "short_answer" ? "short-answer" : "multiple-choice"
+  const prompt = `Read the study material below (titled "${title}") and generate exactly ${count} ${questionKind} quiz questions that test understanding of it.
 
 Difficulty: ${difficulty}. ${QUIZ_DIFFICULTY_GUIDANCE[difficulty]}
 
@@ -520,24 +558,11 @@ Study material:
 ${content.slice(0, 12000)}
 
 Return ONLY valid JSON array in this exact structure:
-[
-  {
-    "question": "Question text?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "answer": "Option A",
-    "explanation": "Brief explanation"
-  }
-]
+${buildQuizQuestionSchema(format)}
 
 Rules:
 - Base every question strictly on the material above
-- Return only JSON
-- No markdown
-- No backticks
-- Exactly ${count} questions
-- Exactly 4 options per question
-- "answer" must exactly match one option
-- Keep explanations short`
+${buildQuizFormatRules(count, format)}`
 
   const raw = await callAIWithFallback(prompt)
   const cleaned = cleanJsonText(raw)
@@ -549,7 +574,7 @@ Rules:
       throw new Error("Quiz response is not an array")
     }
 
-    const normalized = parsed.slice(0, count).map((item, index) => normalizeQuizItem(item, index))
+    const normalized = parsed.slice(0, count).map((item, index) => normalizeQuizItem(item, index, format))
 
     if (!normalized.length) {
       throw new Error("No quiz questions generated")
@@ -559,6 +584,66 @@ Rules:
   } catch (error) {
     console.error("[generateQuizFromContent] Invalid AI JSON:", raw)
     throw new Error("AI returned invalid quiz format. Please try again.")
+  }
+}
+
+// =========================
+// Short-Answer Grading
+// =========================
+
+export interface ShortAnswerGrade {
+  isCorrect: boolean
+  score: number
+  feedback: string
+}
+
+export async function gradeShortAnswer(
+  question: string,
+  expectedAnswer: string,
+  studentAnswer: string
+): Promise<ShortAnswerGrade> {
+  const prompt = `You are grading a student's short-answer response to a quiz question.
+
+Question: "${question}"
+Expected/ideal answer: "${expectedAnswer}"
+Student's answer: "${studentAnswer?.trim() || "(no answer given)"}"
+
+Judge whether the student's answer captures the key correct idea, even if worded differently. Minor
+wording differences, synonyms, and partial phrasing are acceptable as long as the core meaning is
+correct. An empty, off-topic, or clearly wrong answer is incorrect.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "isCorrect": true,
+  "score": 1,
+  "feedback": "One short sentence explaining the judgement."
+}
+
+Rules:
+- "score" is a number between 0 and 1 (1 = fully correct, 0.5 = partially correct, 0 = incorrect)
+- "isCorrect" should be true only when score is 0.6 or higher
+- Return only JSON, no markdown, no backticks`
+
+  const raw = await callAIWithFallback(prompt)
+  const cleaned = cleanJsonText(raw)
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    const rawScore = Number(parsed.score)
+    const score = Number.isFinite(rawScore) ? Math.min(1, Math.max(0, rawScore)) : parsed.isCorrect ? 1 : 0
+
+    return {
+      isCorrect: Boolean(parsed.isCorrect ?? score >= 0.6),
+      score,
+      feedback: String(parsed.feedback || "").trim(),
+    }
+  } catch (error) {
+    console.error("[gradeShortAnswer] Invalid AI JSON:", raw)
+    return {
+      isCorrect: false,
+      score: 0,
+      feedback: "Could not automatically grade this answer. Please review it manually.",
+    }
   }
 }
 
