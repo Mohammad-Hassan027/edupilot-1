@@ -37,6 +37,8 @@ import {
   History,
   Eye,
   Trash2,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +74,7 @@ interface SavedStudyPlan {
   }>;
   created_at: string;
   updated_at: string;
+  reminders_enabled?: boolean;
 }
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -187,6 +190,9 @@ export default function PlannerPage() {
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [reminderTogglingId, setReminderTogglingId] = useState<string | null>(
+    null,
+  );
 
   const canUsePlanner = canAccessFeature(subscription, "planner");
   const activePlanName = canUsePlanner
@@ -583,6 +589,46 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
       setPageError(
         err instanceof Error ? err.message : "Failed to delete planner history",
       );
+    }
+  }
+
+  async function handleToggleReminders(plan: SavedStudyPlan) {
+    const nextValue = !plan.reminders_enabled;
+    setReminderTogglingId(plan.id);
+
+    // optimistic update
+    setHistory((prev) =>
+      prev.map((item) =>
+        item.id === plan.id ? { ...item, reminders_enabled: nextValue } : item,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/ai/planner/${plan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remindersEnabled: nextValue }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update reminder setting");
+      }
+    } catch (err) {
+      // revert on failure
+      setHistory((prev) =>
+        prev.map((item) =>
+          item.id === plan.id
+            ? { ...item, reminders_enabled: plan.reminders_enabled }
+            : item,
+        ),
+      );
+      setPageError(
+        err instanceof Error ? err.message : "Failed to update reminder setting",
+      );
+    } finally {
+      setReminderTogglingId(null);
     }
   }
 
@@ -1087,6 +1133,29 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                         <Button
                           variant="ghost"
                           size="icon"
+                          className={cn(
+                            "h-8 w-8",
+                            plan.reminders_enabled
+                              ? "text-primary hover:text-primary"
+                              : "text-muted-foreground",
+                          )}
+                          title={
+                            plan.reminders_enabled
+                              ? "Email reminders on for this plan"
+                              : "Email reminders off for this plan"
+                          }
+                          disabled={reminderTogglingId === plan.id}
+                          onClick={() => handleToggleReminders(plan)}
+                        >
+                          {plan.reminders_enabled ? (
+                            <Bell className="h-4 w-4" />
+                          ) : (
+                            <BellOff className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8"
                           onClick={() => openSavedPlan(plan)}
                         >
@@ -1107,6 +1176,11 @@ Generate 5-6 schedule items that fit within 4 hours total. Make times realistic 
                         {plan.goal}
                       </p>
                     ) : null}
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      {plan.reminders_enabled
+                        ? "Email reminders on"
+                        : "Email reminders off"}
+                    </p>
                   </div>
                 ))
               )}
