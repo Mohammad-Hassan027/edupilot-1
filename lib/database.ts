@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
-import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
+import type { Credits, Subscription, Profile, FeatureKey, Referral } from "@/types"
+import { FREE_CREDITS as FREE_CREDIT_VALUES, REFERRAL_BONUS_CREDITS } from "@/types"
+import * as crypto from "crypto"
 
 export type SavedNoteTab = {
   type: "summary" | "concepts" | "bullets" | "revision"
@@ -1558,4 +1559,160 @@ export async function deleteTopicAnalysis(userId: string, analysisId: string) {
   }
 
   return { success: true }
+}
+
+// ─── Referral program ───────────────────────────────────────────────────────
+
+function generateReferralCode(): string {
+  // Short, URL-friendly, human-shareable code. Not derived from the user id
+  // so it can't be guessed/enumerated from a leaked uuid.
+  return crypto.randomBytes(5).toString("hex").toUpperCase()
+}
+
+/**
+ * Returns the user's referral code, generating and persisting one on first
+ * use (profiles.referral_code is created lazily rather than at signup so it
+ * works for pre-existing users too).
+ */
+export async function ensureReferralCode(userId: string): Promise<string> {
+  const admin = await getSupabaseAdmin()
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("referral_code")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (existing?.referral_code) {
+    return existing.referral_code as string
+  }
+
+  // Retry on the (very unlikely) unique-constraint collision.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateReferralCode()
+    const { data, error } = await admin
+      .from("profiles")
+      .update({ referral_code: code, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .select("referral_code")
+      .single()
+
+    if (!error && data?.referral_code) {
+      return data.referral_code as string
+    }
+  }
+
+  throw new Error("Failed to generate a referral code")
+}
+
+/**
+ * Looks up the profile that owns a referral code. Returns null for an
+ * unknown/invalid code (callers should treat that as "ignore silently",
+ * not as a signup blocker).
+ */
+export async function getReferrerByCode(
+  referralCode: string
+): Promise<{ user_id: string } | null> {
+  if (!referralCode) return null
+
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("profiles")
+    .select("user_id")
+    .eq("referral_code", referralCode.trim().toUpperCase())
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as { user_id: string }
+}
+
+/**
+ * Records a pending referral for a freshly-created account. Safeguards:
+ *  - self-referral: referrer_id === referredUserId is rejected (also enforced
+ *    by the DB CHECK constraint as a second line of defense).
+ *  - duplicate redemption: referred_user_id is UNIQUE, so a given account can
+ *    only ever be the "referred" party once — a second attempt (e.g. someone
+ *    trying to redeem a code again after the fact) is a no-op.
+ * Returns true if a pending referral was created.
+ */
+export async function createReferral(
+  referrerId: string,
+  referredUserId: string,
+  referralCode: string
+): Promise<boolean> {
+  if (!referrerId || !referredUserId || referrerId === referredUserId) {
+    return false
+  }
+
+  const admin = await getSupabaseAdmin()
+  const { error } = await admin.from("referrals").insert({
+    referrer_id: referrerId,
+    referred_user_id: referredUserId,
+    referral_code: referralCode,
+    status: "pending",
+  })
+
+  // Unique/constraint violations (already redeemed, self-referral, etc.) are
+  // expected and should be swallowed rather than blocking signup.
+  return !error
+}
+
+/**
+ * Marks a pending referral as completed and atomically awards bonus credits
+ * to both the referrer and the referred user via the complete_referral()
+ * RPC. Idempotent — calling this more than once for the same referred user
+ * only pays out on the first call (RPC only updates rows WHERE status =
+ * 'pending').
+ *
+ * NOTE: this app currently auto-confirms email on signup (see
+ * app/api/auth/register/route.ts, email_confirm: true), so there is no
+ * separate "email verified" event to hook into yet. This is called right
+ * after the referred user's account + profile are provisioned, which is the
+ * closest available proxy for "verified" today. If real email verification
+ * is added later, move this call to fire when the user's email actually
+ * gets confirmed instead of at raw signup.
+ */
+export async function completeReferral(referredUserId: string): Promise<boolean> {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin.rpc("complete_referral", {
+    p_referred_user_id: referredUserId,
+    p_bonus_credits: REFERRAL_BONUS_CREDITS,
+  })
+
+  if (error) {
+    console.error("[completeReferral] RPC error:", error.message)
+    return false
+  }
+
+  return data === true
+}
+
+export interface ReferralStats {
+  referralCode: string
+  totalReferrals: number
+  completedReferrals: number
+  creditsEarned: number
+}
+
+/** Aggregate referral metrics for a user's profile page. */
+export async function getReferralStats(userId: string): Promise<ReferralStats> {
+  const admin = await getSupabaseAdmin()
+  const referralCode = await ensureReferralCode(userId)
+
+  const { data, error } = await admin
+    .from("referrals")
+    .select("status")
+    .eq("referrer_id", userId)
+
+  const list = error || !data ? [] : (data as { status: string }[])
+
+  const totalReferrals = list.length
+  const completedReferrals = list.filter((r) => r.status === "completed").length
+
+  return {
+    referralCode,
+    totalReferrals,
+    completedReferrals,
+    creditsEarned: completedReferrals * REFERRAL_BONUS_CREDITS,
+  }
 }
