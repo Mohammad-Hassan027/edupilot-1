@@ -589,6 +589,9 @@ export type SavedStudyPlanRecord = {
   tasks: SavedPlannerTask[]
   created_at: string
   updated_at: string
+  reminders_enabled?: boolean
+  reminder_last_sent_at?: string | null
+  notified_task_ids?: string[]
 }
 
 export async function saveStudyPlan(
@@ -700,6 +703,109 @@ export async function deleteSavedStudyPlan(userId: string, planId: string) {
   }
 
   return { success: true }
+}
+
+export type TodaysPlannerTask = SavedPlannerTask & {
+  planId: string
+  planTitle: string
+}
+
+// Flattens today's tasks across all of a user's saved study plans (the
+// planner stores tasks with a plain day-of-month `day` field, scoped to the
+// current calendar month — same convention the planner UI itself uses).
+// Used by the dashboard "Today's Study Sessions" widget.
+export async function getTodaysPlannerTasks(userId: string): Promise<TodaysPlannerTask[]> {
+  const plans = await getSavedStudyPlans(userId, 50)
+  const today = new Date().getDate()
+
+  const todaysTasks: TodaysPlannerTask[] = []
+  for (const plan of plans) {
+    for (const task of plan.tasks || []) {
+      if (Number(task.day) === today) {
+        todaysTasks.push({ ...task, planId: plan.id, planTitle: plan.title })
+      }
+    }
+  }
+
+  return todaysTasks.sort((a, b) => a.time.localeCompare(b.time))
+}
+
+export async function setStudyPlanReminders(
+  userId: string,
+  planId: string,
+  remindersEnabled: boolean
+) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .update({ reminders_enabled: remindersEnabled, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("id", planId)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update reminder setting: ${error.message}`)
+  }
+
+  return data as SavedStudyPlanRecord
+}
+
+// Plans with reminders turned on, across all users. Used by the reminder cron
+// job (app/api/planner/send-reminders) which runs with the service-role key.
+export async function getPlansWithRemindersEnabled() {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .select("*")
+    .eq("reminders_enabled", true)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_study_plans")) {
+      return []
+    }
+    throw new Error(`Failed to load plans with reminders: ${error.message}`)
+  }
+
+  return (data || []) as SavedStudyPlanRecord[]
+}
+
+// Marks a set of task ids as "reminder sent" for a plan, appending to any
+// ids already recorded, so the cron job never emails the same session twice.
+export async function markStudyPlanTasksNotified(
+  planId: string,
+  existingNotifiedIds: string[],
+  newlyNotifiedIds: string[]
+) {
+  const admin = await getSupabaseAdmin()
+
+  const merged = Array.from(new Set([...existingNotifiedIds, ...newlyNotifiedIds]))
+
+  const { error } = await admin
+    .from("saved_study_plans")
+    .update({
+      notified_task_ids: merged,
+      reminder_last_sent_at: new Date().toISOString(),
+    })
+    .eq("id", planId)
+
+  if (error) {
+    throw new Error(`Failed to mark study plan tasks as notified: ${error.message}`)
+  }
+}
+
+// Looks up a user's email via the Supabase admin auth API (profiles doesn't
+// store email). Used by the reminder cron job to know where to send.
+export async function getUserEmailById(userId: string): Promise<string | null> {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin.auth.admin.getUserById(userId)
+  if (error || !data?.user?.email) return null
+
+  return data.user.email
 }
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
