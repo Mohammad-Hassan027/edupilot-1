@@ -10,9 +10,10 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserAvatar } from "@/components/user-avatar"
-import { Camera, Save, User, Mail, X, Trash2, Loader2, Edit2, CheckCircle } from "lucide-react"
+import { Camera, Save, User, Mail, X, Trash2, Loader2, Edit2, CheckCircle, Gift, Copy, Users, Coins } from "lucide-react"
 import { useUser } from "@/hooks/use-user"
 import type { Profile } from "@/types"
+import type { ReferralStats } from "@/lib/database"
 
 export default function ProfilePage() {
   const { profile, email, isLoading, refetch, setUserState, fullName: userFullName } = useUser()
@@ -26,11 +27,57 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null)
+  const [referralLoading, setReferralLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+
   useEffect(() => {
     setFullName(profile?.full_name || userFullName || "")
     setBio(profile?.bio || "")
     setAvatarUrl(profile?.avatar_url || null)
   }, [profile?.full_name, profile?.bio, profile?.avatar_url, userFullName])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadReferralStats() {
+      setReferralLoading(true)
+      try {
+        const res = await fetch("/api/user/referrals")
+        const data = await res.json().catch(() => null)
+        if (!cancelled && res.ok && data?.success) {
+          setReferralStats(data.data as ReferralStats)
+        }
+      } catch {
+        // Referral stats are supplementary — a failed fetch just leaves the
+        // card in its loading/empty state, it should never break the page.
+      } finally {
+        if (!cancelled) setReferralLoading(false)
+      }
+    }
+
+    loadReferralStats()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const referralLink =
+    referralStats && typeof window !== "undefined"
+      ? `${window.location.origin}/register?ref=${referralStats.referralCode}`
+      : ""
+
+  const handleCopyReferralLink = async () => {
+    if (!referralLink) return
+    try {
+      await navigator.clipboard.writeText(referralLink)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard access can be denied — silently ignore, the link is still
+      // visible/selectable in the input.
+    }
+  }
 
   const displayName = fullName || profile?.full_name || userFullName || email?.split("@")[0] || "User"
 
@@ -356,6 +403,71 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Gift className="h-4 w-4 text-primary" />
+            Referral Program
+          </CardTitle>
+          <CardDescription>
+            Invite classmates with your link — you and your friend both earn bonus credits once they sign up.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          {referralLoading ? (
+            <Skeleton className="h-24 rounded-lg" />
+          ) : referralStats ? (
+            <>
+              <div className="space-y-2">
+                <Label>Your referral link</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={referralLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="border-border bg-secondary font-mono text-xs sm:text-sm"
+                  />
+                  <Button type="button" variant="outline" className="shrink-0 gap-2" onClick={handleCopyReferralLink}>
+                    <Copy className="h-4 w-4" />
+                    {copied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Share this link. When someone signs up through it, you both get bonus credits.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-border bg-secondary/40 p-4">
+                  <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="text-xs">Total invites</span>
+                  </div>
+                  <p className="text-xl font-semibold text-foreground">{referralStats.totalReferrals}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/40 p-4">
+                  <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    <span className="text-xs">Successful referrals</span>
+                  </div>
+                  <p className="text-xl font-semibold text-foreground">{referralStats.completedReferrals}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-secondary/40 p-4">
+                  <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                    <Coins className="h-3.5 w-3.5" />
+                    <span className="text-xs">Credits earned</span>
+                  </div>
+                  <p className="text-xl font-semibold text-foreground">{referralStats.creditsEarned}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Couldn&apos;t load your referral link right now. Try refreshing the page.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

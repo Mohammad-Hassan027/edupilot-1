@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { GraduationCap, Mail, Lock, Eye, EyeOff, User, AlertCircle, Check } from "lucide-react"
+import { GraduationCap, Mail, Lock, Eye, EyeOff, User, AlertCircle, Check, Gift } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { captureReferralCode, getStoredReferralCode, clearStoredReferralCode } from "@/lib/referral-client"
 
 function PasswordStrengthBar({ password }: { password: string }) {
   const checks = {
@@ -44,6 +45,12 @@ export default function RegisterPage() {
   const [showCpw, setShowCpw]             = useState(false)
   const [error, setError]                 = useState<string | null>(null)
   const [isLoading, setIsLoading]         = useState(false)
+  const [referralCode, setReferralCode]   = useState<string | null>(null)
+
+  useEffect(() => {
+    captureReferralCode()
+    setReferralCode(getStoredReferralCode())
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -56,10 +63,12 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, full_name: fullName }),
+        body: JSON.stringify({ email, password, full_name: fullName, referral_code: referralCode }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Registration failed."); return }
+
+      clearStoredReferralCode()
 
       if (data.autoLogin) {
         router.push("/dashboard")
@@ -125,6 +134,13 @@ export default function RegisterPage() {
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /><span>{error}</span>
+            </div>
+          )}
+
+          {referralCode && (
+            <div data-testid="referral-banner" className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
+              <Gift className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>You were invited by a friend! Sign up now and you&apos;ll both get bonus credits.</span>
             </div>
           )}
 

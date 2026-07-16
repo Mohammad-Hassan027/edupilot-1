@@ -12,6 +12,7 @@ export interface User {
 export interface Profile {
   id: string
   user_id: string
+  referral_code?: string | null
   full_name: string | null
   avatar_url: string | null
   bio: string | null
@@ -41,6 +42,24 @@ export const FREE_CREDITS: Record<FeatureKey, number> = {
   flashcards: 20,
   study_plan: 20,
 }
+
+// ─── Referral program ───────────────────────────────────────────────────────
+
+export type ReferralStatus = "pending" | "completed"
+
+export interface Referral {
+  id: string
+  referrer_id: string
+  referred_user_id: string
+  referral_code: string
+  status: ReferralStatus
+  created_at: string
+  completed_at: string | null
+}
+
+// Bonus credits (added to each of ai_chat/flashcards/study_plan remaining)
+// awarded to both the referrer and the referred user once a referral completes.
+export const REFERRAL_BONUS_CREDITS = 5
 
 // ─── Subscription & Trial ────────────────────────────────────────────────────
 
