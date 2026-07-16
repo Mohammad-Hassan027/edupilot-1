@@ -383,22 +383,28 @@ export type SavedQuizOption = {
   text: string
 }
 
+export type QuizQuestionType = "mcq" | "short_answer"
+
 export type SavedQuizQuestion = {
   id: string
+  type?: QuizQuestionType
   question: string
   options: SavedQuizOption[]
-  correctOptionId: string
+  correctOptionId: string | null
+  expectedAnswer?: string | null
   explanation?: string | null
 }
 
 export type SavedQuizAnswer = {
   questionId: string
   selectedOptionId: string | null
+  textAnswer?: string | null
   isCorrect: boolean
+  feedback?: string | null
 }
 
 export type QuizDifficultyLevel = "easy" | "medium" | "hard"
-export type QuizSourceType = "topic" | "note" | "chat"
+export type QuizSourceType = "topic" | "note" | "chat" | "flashcards"
 
 export type SavedQuizAttemptRecord = {
   id: string
