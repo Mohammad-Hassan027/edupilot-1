@@ -19,7 +19,7 @@ interface StatsData {
   aiChats: number
   flashcardSessions: number
   weekTrend: string
-  weeklyActivity: Array<{ day: string; count: number }>
+  weeklyActivity: Array<{ day: string; count: number; label?: string }>
 }
 
 // Historical, per-feature-type usage trend + aggregates. Sourced from the same
@@ -54,12 +54,13 @@ export default function AnalyticsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/user/stats")
+    setIsLoading(true)
+    fetch(`/api/user/stats?period=${period}`)
       .then(r => r.json())
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setIsLoading(false))
-  }, [])
+  }, [period])
 
   useEffect(() => {
     setIsHistoryLoading(true)
@@ -151,7 +152,7 @@ export default function AnalyticsPage() {
                         <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}   />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }} />
                     <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="url(#actGrad)" strokeWidth={2} dot={false} />
