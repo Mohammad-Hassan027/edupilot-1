@@ -1,8 +1,15 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getUser } from "@/lib/auth-server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 
 export const dynamic = "force-dynamic"
+
+type Period = "week" | "month" | "all"
+
+function parsePeriod(raw: string | null): Period {
+  if (raw === "month" || raw === "all") return raw
+  return "week"
+}
 
 type UsageLogRow = {
   feature: string
@@ -223,7 +230,8 @@ function calculateStreaks(activityDates: string[]) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const period = parsePeriod(req.nextUrl.searchParams.get("period"))
   try {
     const user = await getUser()
 
@@ -270,6 +278,19 @@ export async function GET() {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    // Derive the "current period" cutoff used for the stats cards
+    const periodStart =
+      period === "week"
+        ? oneWeekAgo
+        : period === "month"
+        ? currentMonthStart
+        : new Date(0) // "all" — beginning of time
+
+    const periodLogs = allLogs.filter((log) => new Date(log.created_at) >= periodStart)
+    const periodSessions = allSessions.filter((s) => new Date(s.started_at) >= periodStart)
+    const periodSavedNotes = allSavedNotes.filter((n) => new Date(n.created_at) >= periodStart)
+    const periodQuizAttempts = allQuizAttempts.filter((a) => new Date(a.created_at) >= periodStart)
 
     const quizzesTaken = allQuizAttempts.length
     const averageQuizScore = allQuizAttempts.length
@@ -329,6 +350,19 @@ export async function GET() {
     const weeklyActivity = buildWeeklyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
     const monthlyActivity = buildMonthlyActivity(allLogs, allSessions, allSavedNotes, allQuizAttempts)
 
+    // Activity chart shown in the UI — scoped to the selected period
+    const periodActivity =
+      period === "week"
+        ? weeklyActivity
+        : period === "month"
+        ? monthlyActivity
+        : monthlyActivity // "all" reuses the 6-month monthly view
+
+    // Period-scoped aggregates for the stats cards
+    const periodSeconds = periodSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0)
+    const periodAiChats = periodLogs.filter((l) => l.feature === "ai_chat" || l.feature === "ai_voice").length
+    const periodFlashcardSessions = periodLogs.filter((l) => l.feature === "flashcards").length
+
     const activeDaysThisWeek = new Set([
       ...thisWeekSessions.map((session) => toDayKey(session.started_at)),
       ...thisWeekLogs.map((log) => toDayKey(log.created_at)),
@@ -353,11 +387,18 @@ export async function GET() {
     const { currentStreak, longestStreak } = calculateStreaks(activityDates)
 
     return NextResponse.json({
-      learningHours: formatHours(thisWeekSeconds),
+      // Period-scoped values (change with the selector)
+      learningHours: formatHours(periodSeconds),
+      quizzesTaken: periodQuizAttempts.length,
+      aiChats: periodAiChats,
+      flashcardSessions: periodFlashcardSessions,
+      weeklyActivity: periodActivity,
+      // Streak is always all-time
+      streak: currentStreak,
+      // All-time / supplementary values
       totalLearningHours: formatHours(totalTrackedSeconds),
       trackedSecondsThisWeek: thisWeekSeconds,
       totalTrackedSeconds,
-      quizzesTaken,
       averageQuizScore,
       bestQuizScore,
       totalActivities,
@@ -366,9 +407,7 @@ export async function GET() {
       lastWeekCount: lastWeekLogs.length + lastWeekSavedNotes.length + lastWeekQuizAttempts.length,
       activeDaysThisWeek,
       activeDaysThisMonth,
-      currentStreak,
       longestStreak,
-      weeklyActivity,
       monthlyActivity,
       featureUsage,
       engagementLevel: getEngagementLevel(

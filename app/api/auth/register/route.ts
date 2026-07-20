@@ -3,11 +3,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase-server"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
 import { mapAuthError, getPasswordErrors } from "@/lib/auth"
-import { createProfile, createCredits, createSubscription } from "@/lib/database"
+import {
+  createProfile,
+  createCredits,
+  createSubscription,
+  getReferrerByCode,
+  createReferral,
+  completeReferral,
+} from "@/lib/database"
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, full_name } = await req.json()
+    const { email, password, full_name, referral_code } = await req.json()
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
@@ -52,6 +59,26 @@ export async function POST(req: NextRequest) {
       createCredits(userId),
       createSubscription(userId),
     ])
+
+    // ── Referral redemption ────────────────────────────────────────────────
+    // Best-effort: a missing/invalid/self referral code must never block
+    // registration. Payout happens immediately because this app auto-confirms
+    // email on signup (email_confirm: true above) — there's no separate
+    // "email verified" event today. See completeReferral() in lib/database.ts
+    // for how to move this once real email verification exists.
+    if (typeof referral_code === "string" && referral_code.trim()) {
+      try {
+        const referrer = await getReferrerByCode(referral_code.trim())
+        if (referrer && referrer.user_id !== userId) {
+          const created = await createReferral(referrer.user_id, userId, referral_code.trim().toUpperCase())
+          if (created) {
+            await completeReferral(userId)
+          }
+        }
+      } catch (referralError) {
+        console.error("[register] Referral redemption failed:", referralError)
+      }
+    }
 
     // Now sign the user in automatically so they get a session cookie
     const supabase = await getSupabaseServer()

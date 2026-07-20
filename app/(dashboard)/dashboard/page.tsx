@@ -6,11 +6,13 @@ import { RevisionWidget } from "@/components/dashboard/revision-widget"
 import { SavedNotesCard } from "@/components/dashboard/saved-notes-card"
 import { MonthlyActivityCard } from "@/components/dashboard/monthly-activity-card"
 import { FeatureUsageCard } from "@/components/dashboard/feature-usage-card"
+import { TodaysSessionsCard } from "@/components/dashboard/todays-sessions-card"
 
 export default function DashboardPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <QuickStats />
+      <TodaysSessionsCard />
       <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <RecentTopics />

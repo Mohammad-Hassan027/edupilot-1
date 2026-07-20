@@ -1,6 +1,13 @@
+import {
+  computeNextReview,
+  isCardDue,
+  RATING_TO_QUALITY,
+  type ReviewRating as SpacedRepetitionRating,
+} from "@/lib/spaced-repetition"
 import { getSupabaseAdmin } from "@/lib/supabase-server"
-import type { Credits, Subscription, Profile, FeatureKey } from "@/types"
-import { FREE_CREDITS as FREE_CREDIT_VALUES } from "@/types"
+import type { Credits, Subscription, Profile, FeatureKey, Referral } from "@/types"
+import { FREE_CREDITS as FREE_CREDIT_VALUES, REFERRAL_BONUS_CREDITS } from "@/types"
+import * as crypto from "crypto"
 
 export type SavedNoteTab = {
   type: "summary" | "concepts" | "bullets" | "revision"
@@ -20,7 +27,7 @@ export type SavedNoteRecord = {
   updated_at: string
 }
 
-export type FlashcardReviewRating = "again" | "hard" | "good" | "easy"
+export type FlashcardReviewRating = SpacedRepetitionRating
 
 export type SavedFlashcard = {
   front: string
@@ -92,16 +99,10 @@ export async function saveFlashcardSet(
   return data as SavedFlashcardSetRecord
 }
 
-// Simplified SM-2 spaced repetition: maps a difficulty rating to a recall
-// quality score, then updates ease factor, interval, and repetitions the
-// same way SM-2 does, without requiring callers to track grade history.
-const REVIEW_RATING_QUALITY: Record<FlashcardReviewRating, number> = {
-  again: 0,
-  hard: 3,
-  good: 4,
-  easy: 5,
-}
-
+// Spaced-repetition scheduling for flashcard reviews. The SM-2 math itself
+// lives in lib/spaced-repetition.ts as a pure, independently testable
+// function; this wrapper loads/saves the card state and logs the review to
+// flashcard_reviews for history.
 export async function updateFlashcardReview(
   userId: string,
   setId: string,
@@ -133,38 +134,23 @@ export async function updateFlashcardReview(
     throw new Error("Flashcard not found in set")
   }
 
-  const quality = REVIEW_RATING_QUALITY[rating]
-  const previousEase = card.easeFactor ?? 2.5
-  const previousRepetitions = card.repetitions ?? 0
-  const previousInterval = card.interval ?? 0
-
-  let repetitions = previousRepetitions
-  let interval = previousInterval
-
-  if (quality < 3) {
-    repetitions = 0
-    interval = 1
-  } else {
-    repetitions = previousRepetitions + 1
-    if (repetitions === 1) interval = 1
-    else if (repetitions === 2) interval = 6
-    else interval = Math.round(previousInterval * previousEase)
-  }
-
-  const easeFactor = Math.max(
-    1.3,
-    previousEase + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-  )
-
   const now = new Date()
-  const nextReviewAt = new Date(now.getTime() + interval * 24 * 60 * 60 * 1000)
+  const schedule = computeNextReview(
+    {
+      interval: card.interval ?? 0,
+      easeFactor: card.easeFactor ?? 2.5,
+      repetitions: card.repetitions ?? 0,
+    },
+    rating,
+    now
+  )
 
   const updatedCard: SavedFlashcard = {
     ...card,
-    interval,
-    easeFactor,
-    repetitions,
-    nextReviewAt: nextReviewAt.toISOString(),
+    interval: schedule.interval,
+    easeFactor: schedule.easeFactor,
+    repetitions: schedule.repetitions,
+    nextReviewAt: schedule.nextReviewAt,
     lastReviewedAt: now.toISOString(),
   }
 
@@ -182,7 +168,74 @@ export async function updateFlashcardReview(
     throw new Error(`Failed to update flashcard review: ${error.message}`)
   }
 
+  // Best-effort review history log. This table may not exist yet if the
+  // migration hasn't been applied — never let logging failures break the
+  // primary scheduling update.
+  try {
+    const { error: logError } = await admin.from("flashcard_reviews").insert({
+      user_id: userId,
+      set_id: setId,
+      card_index: cardIndex,
+      rating,
+      quality: RATING_TO_QUALITY[rating],
+      interval_days: schedule.interval,
+      ease_factor: schedule.easeFactor,
+      repetitions: schedule.repetitions,
+      reviewed_at: now.toISOString(),
+    })
+    if (logError) console.error("[flashcards] Failed to log review history:", logError.message)
+  } catch (err) {
+    console.error("[flashcards] Failed to log review history:", err)
+  }
+
   return data as SavedFlashcardSetRecord
+}
+
+export type DueFlashcard = {
+  setId: string
+  topic: string
+  cardIndex: number
+  front: string
+  back: string
+  interval: number
+  easeFactor: number
+  repetitions: number
+  nextReviewAt: string
+  lastReviewedAt: string | null
+}
+
+// Cards are stored per-set as a JSONB array (see SavedFlashcard), so "due"
+// cards are computed by loading each user's sets and filtering/flattening
+// their cards client-side rather than a single SQL WHERE clause. This keeps
+// the query correct without depending on the optional get_due_flashcards
+// SQL helper (see migration-flashcard-spaced-repetition.sql) being applied.
+export async function getDueFlashcards(userId: string, before: Date = new Date()): Promise<DueFlashcard[]> {
+  const sets = await getSavedFlashcardSets(userId, 100)
+
+  const due: DueFlashcard[] = []
+
+  for (const set of sets) {
+    set.cards.forEach((card, cardIndex) => {
+      if (!isCardDue(card.nextReviewAt, before)) return
+
+      due.push({
+        setId: set.id,
+        topic: set.topic,
+        cardIndex,
+        front: card.front,
+        back: card.back,
+        interval: card.interval ?? 0,
+        easeFactor: card.easeFactor ?? 2.5,
+        repetitions: card.repetitions ?? 0,
+        nextReviewAt: card.nextReviewAt ?? set.created_at,
+        lastReviewedAt: card.lastReviewedAt ?? null,
+      })
+    })
+  }
+
+  due.sort((a, b) => new Date(a.nextReviewAt).getTime() - new Date(b.nextReviewAt).getTime())
+
+  return due
 }
 
 export async function getSavedFlashcardSets(userId: string, limit = 12) {
@@ -331,22 +384,28 @@ export type SavedQuizOption = {
   text: string
 }
 
+export type QuizQuestionType = "mcq" | "short_answer"
+
 export type SavedQuizQuestion = {
   id: string
+  type?: QuizQuestionType
   question: string
   options: SavedQuizOption[]
-  correctOptionId: string
+  correctOptionId: string | null
+  expectedAnswer?: string | null
   explanation?: string | null
 }
 
 export type SavedQuizAnswer = {
   questionId: string
   selectedOptionId: string | null
+  textAnswer?: string | null
   isCorrect: boolean
+  feedback?: string | null
 }
 
 export type QuizDifficultyLevel = "easy" | "medium" | "hard"
-export type QuizSourceType = "topic" | "note" | "chat"
+export type QuizSourceType = "topic" | "note" | "chat" | "flashcards"
 
 export type SavedQuizAttemptRecord = {
   id: string
@@ -531,6 +590,9 @@ export type SavedStudyPlanRecord = {
   tasks: SavedPlannerTask[]
   created_at: string
   updated_at: string
+  reminders_enabled?: boolean
+  reminder_last_sent_at?: string | null
+  notified_task_ids?: string[]
 }
 
 export async function saveStudyPlan(
@@ -642,6 +704,109 @@ export async function deleteSavedStudyPlan(userId: string, planId: string) {
   }
 
   return { success: true }
+}
+
+export type TodaysPlannerTask = SavedPlannerTask & {
+  planId: string
+  planTitle: string
+}
+
+// Flattens today's tasks across all of a user's saved study plans (the
+// planner stores tasks with a plain day-of-month `day` field, scoped to the
+// current calendar month — same convention the planner UI itself uses).
+// Used by the dashboard "Today's Study Sessions" widget.
+export async function getTodaysPlannerTasks(userId: string): Promise<TodaysPlannerTask[]> {
+  const plans = await getSavedStudyPlans(userId, 50)
+  const today = new Date().getDate()
+
+  const todaysTasks: TodaysPlannerTask[] = []
+  for (const plan of plans) {
+    for (const task of plan.tasks || []) {
+      if (Number(task.day) === today) {
+        todaysTasks.push({ ...task, planId: plan.id, planTitle: plan.title })
+      }
+    }
+  }
+
+  return todaysTasks.sort((a, b) => a.time.localeCompare(b.time))
+}
+
+export async function setStudyPlanReminders(
+  userId: string,
+  planId: string,
+  remindersEnabled: boolean
+) {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .update({ reminders_enabled: remindersEnabled, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("id", planId)
+    .select("*")
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update reminder setting: ${error.message}`)
+  }
+
+  return data as SavedStudyPlanRecord
+}
+
+// Plans with reminders turned on, across all users. Used by the reminder cron
+// job (app/api/planner/send-reminders) which runs with the service-role key.
+export async function getPlansWithRemindersEnabled() {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin
+    .from("saved_study_plans")
+    .select("*")
+    .eq("reminders_enabled", true)
+
+  if (error) {
+    const message = error.message?.toLowerCase() || ""
+    if (message.includes("saved_study_plans")) {
+      return []
+    }
+    throw new Error(`Failed to load plans with reminders: ${error.message}`)
+  }
+
+  return (data || []) as SavedStudyPlanRecord[]
+}
+
+// Marks a set of task ids as "reminder sent" for a plan, appending to any
+// ids already recorded, so the cron job never emails the same session twice.
+export async function markStudyPlanTasksNotified(
+  planId: string,
+  existingNotifiedIds: string[],
+  newlyNotifiedIds: string[]
+) {
+  const admin = await getSupabaseAdmin()
+
+  const merged = Array.from(new Set([...existingNotifiedIds, ...newlyNotifiedIds]))
+
+  const { error } = await admin
+    .from("saved_study_plans")
+    .update({
+      notified_task_ids: merged,
+      reminder_last_sent_at: new Date().toISOString(),
+    })
+    .eq("id", planId)
+
+  if (error) {
+    throw new Error(`Failed to mark study plan tasks as notified: ${error.message}`)
+  }
+}
+
+// Looks up a user's email via the Supabase admin auth API (profiles doesn't
+// store email). Used by the reminder cron job to know where to send.
+export async function getUserEmailById(userId: string): Promise<string | null> {
+  const admin = await getSupabaseAdmin()
+
+  const { data, error } = await admin.auth.admin.getUserById(userId)
+  if (error || !data?.user?.email) return null
+
+  return data.user.email
 }
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
@@ -1558,4 +1723,160 @@ export async function deleteTopicAnalysis(userId: string, analysisId: string) {
   }
 
   return { success: true }
+}
+
+// ─── Referral program ───────────────────────────────────────────────────────
+
+function generateReferralCode(): string {
+  // Short, URL-friendly, human-shareable code. Not derived from the user id
+  // so it can't be guessed/enumerated from a leaked uuid.
+  return crypto.randomBytes(5).toString("hex").toUpperCase()
+}
+
+/**
+ * Returns the user's referral code, generating and persisting one on first
+ * use (profiles.referral_code is created lazily rather than at signup so it
+ * works for pre-existing users too).
+ */
+export async function ensureReferralCode(userId: string): Promise<string> {
+  const admin = await getSupabaseAdmin()
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("referral_code")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (existing?.referral_code) {
+    return existing.referral_code as string
+  }
+
+  // Retry on the (very unlikely) unique-constraint collision.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateReferralCode()
+    const { data, error } = await admin
+      .from("profiles")
+      .update({ referral_code: code, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .select("referral_code")
+      .single()
+
+    if (!error && data?.referral_code) {
+      return data.referral_code as string
+    }
+  }
+
+  throw new Error("Failed to generate a referral code")
+}
+
+/**
+ * Looks up the profile that owns a referral code. Returns null for an
+ * unknown/invalid code (callers should treat that as "ignore silently",
+ * not as a signup blocker).
+ */
+export async function getReferrerByCode(
+  referralCode: string
+): Promise<{ user_id: string } | null> {
+  if (!referralCode) return null
+
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin
+    .from("profiles")
+    .select("user_id")
+    .eq("referral_code", referralCode.trim().toUpperCase())
+    .maybeSingle()
+
+  if (error || !data) return null
+  return data as { user_id: string }
+}
+
+/**
+ * Records a pending referral for a freshly-created account. Safeguards:
+ *  - self-referral: referrer_id === referredUserId is rejected (also enforced
+ *    by the DB CHECK constraint as a second line of defense).
+ *  - duplicate redemption: referred_user_id is UNIQUE, so a given account can
+ *    only ever be the "referred" party once — a second attempt (e.g. someone
+ *    trying to redeem a code again after the fact) is a no-op.
+ * Returns true if a pending referral was created.
+ */
+export async function createReferral(
+  referrerId: string,
+  referredUserId: string,
+  referralCode: string
+): Promise<boolean> {
+  if (!referrerId || !referredUserId || referrerId === referredUserId) {
+    return false
+  }
+
+  const admin = await getSupabaseAdmin()
+  const { error } = await admin.from("referrals").insert({
+    referrer_id: referrerId,
+    referred_user_id: referredUserId,
+    referral_code: referralCode,
+    status: "pending",
+  })
+
+  // Unique/constraint violations (already redeemed, self-referral, etc.) are
+  // expected and should be swallowed rather than blocking signup.
+  return !error
+}
+
+/**
+ * Marks a pending referral as completed and atomically awards bonus credits
+ * to both the referrer and the referred user via the complete_referral()
+ * RPC. Idempotent — calling this more than once for the same referred user
+ * only pays out on the first call (RPC only updates rows WHERE status =
+ * 'pending').
+ *
+ * NOTE: this app currently auto-confirms email on signup (see
+ * app/api/auth/register/route.ts, email_confirm: true), so there is no
+ * separate "email verified" event to hook into yet. This is called right
+ * after the referred user's account + profile are provisioned, which is the
+ * closest available proxy for "verified" today. If real email verification
+ * is added later, move this call to fire when the user's email actually
+ * gets confirmed instead of at raw signup.
+ */
+export async function completeReferral(referredUserId: string): Promise<boolean> {
+  const admin = await getSupabaseAdmin()
+  const { data, error } = await admin.rpc("complete_referral", {
+    p_referred_user_id: referredUserId,
+    p_bonus_credits: REFERRAL_BONUS_CREDITS,
+  })
+
+  if (error) {
+    console.error("[completeReferral] RPC error:", error.message)
+    return false
+  }
+
+  return data === true
+}
+
+export interface ReferralStats {
+  referralCode: string
+  totalReferrals: number
+  completedReferrals: number
+  creditsEarned: number
+}
+
+/** Aggregate referral metrics for a user's profile page. */
+export async function getReferralStats(userId: string): Promise<ReferralStats> {
+  const admin = await getSupabaseAdmin()
+  const referralCode = await ensureReferralCode(userId)
+
+  const { data, error } = await admin
+    .from("referrals")
+    .select("status")
+    .eq("referrer_id", userId)
+
+  const list = error || !data ? [] : (data as { status: string }[])
+
+  const totalReferrals = list.length
+  const completedReferrals = list.filter((r) => r.status === "completed").length
+
+  return {
+    referralCode,
+    totalReferrals,
+    completedReferrals,
+    creditsEarned: completedReferrals * REFERRAL_BONUS_CREDITS,
+  }
 }

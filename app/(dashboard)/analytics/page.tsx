@@ -4,9 +4,9 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
+import { Area, AreaChart, Bar, BarChart, Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from "recharts"
 import {
-  TrendingUp, Clock, Target, Flame, Brain, Trophy, BookOpen, Calendar
+  TrendingUp, Clock, Target, Flame, Brain, Trophy, BookOpen, Calendar, MessageSquareText, Layers, ListChecks
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -19,7 +19,30 @@ interface StatsData {
   aiChats: number
   flashcardSessions: number
   weekTrend: string
-  weeklyActivity: Array<{ day: string; count: number }>
+  weeklyActivity: Array<{ day: string; count: number; label?: string }>
+}
+
+// Historical, per-feature-type usage trend + aggregates. Sourced from the same
+// usage_logs table that lib/credits.ts writes to on every credit deduction
+// (see app/api/usage/history/route.ts) rather than a separate pipeline. This
+// is fetched independently of /api/user/stats so it never adds load to the
+// main /dashboard page.
+interface UsageHistoryPoint {
+  date: string
+  label: string
+  ai_chat: number
+  flashcards: number
+  study_plan: number
+}
+
+interface UsageHistoryData {
+  trend: UsageHistoryPoint[]
+  aggregates: {
+    totalSessions: number
+    decksCreated: number
+    plansCreated: number
+    totalCreditActions: number
+  }
 }
 
 export default function AnalyticsPage() {
@@ -27,14 +50,26 @@ export default function AnalyticsPage() {
   const [stats, setStats]     = useState<StatsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [period, setPeriod]   = useState("week")
+  const [usageHistory, setUsageHistory] = useState<UsageHistoryData | null>(null)
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/user/stats")
+    setIsLoading(true)
+    fetch(`/api/user/stats?period=${period}`)
       .then(r => r.json())
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setIsLoading(false))
-  }, [])
+  }, [period])
+
+  useEffect(() => {
+    setIsHistoryLoading(true)
+    fetch(`/api/usage/history?period=${period}`)
+      .then(r => r.json())
+      .then(setUsageHistory)
+      .catch(() => setUsageHistory(null))
+      .finally(() => setIsHistoryLoading(false))
+  }, [period])
 
   const isTrial = subscription?.trial_active === true
 
@@ -117,7 +152,7 @@ export default function AnalyticsPage() {
                         <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}   />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }} />
                     <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="url(#actGrad)" strokeWidth={2} dot={false} />
@@ -170,6 +205,71 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Usage by Feature Type - aggregate stats sourced from usage_logs (same
+          source lib/credits.ts writes to on every credit deduction) */}
+      {isHistoryLoading ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: "Total AI Sessions", value: usageHistory?.aggregates.totalSessions ?? 0, icon: MessageSquareText, color: "text-violet-500", bgColor: "bg-violet-500/10" },
+            { label: "Decks Created",     value: usageHistory?.aggregates.decksCreated ?? 0,   icon: Layers,           color: "text-emerald-500", bgColor: "bg-emerald-500/10" },
+            { label: "Plans Created",     value: usageHistory?.aggregates.plansCreated ?? 0,   icon: ListChecks,       color: "text-primary",     bgColor: "bg-primary/10" },
+          ].map((stat) => (
+            <Card key={stat.label} className="border-border bg-card">
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", stat.bgColor)}>
+                  <stat.icon className={cn("h-6 w-6", stat.color)} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Credit Usage Trend, segmented by feature type */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            Usage Trend by Feature
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isHistoryLoading ? (
+            <Skeleton className="h-[260px]" />
+          ) : usageHistory?.trend && usageHistory.trend.some(d => d.ai_chat + d.flashcards + d.study_plan > 0) ? (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={usageHistory.trend} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} minTickGap={20} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="ai_chat" name="AI Chats" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="flashcards" name="Flashcards" stroke="hsl(var(--chart-2,142 71% 45%))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="study_plan" name="Study Plans" stroke="hsl(var(--chart-3,199 89% 48%))" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[260px] flex items-center justify-center">
+              <div className="text-center">
+                <TrendingUp className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-40" />
+                <p className="text-sm text-muted-foreground">No usage recorded for this period yet</p>
+                <p className="text-xs text-muted-foreground">Chats, flashcard sets, and study plans will show up here over time</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Summary */}
       <Card className="border-border bg-card">
