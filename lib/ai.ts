@@ -188,8 +188,7 @@ function getGeminiKey() {
   }
   return key
 }
-
-function cleanJsonText(raw: string) {
+export function cleanJsonText(raw: string) {
   const cleaned = raw
     .replace(/```json\s*/gi, "")
     .replace(/```/g, "")
@@ -300,7 +299,7 @@ async function callGemini(prompt: string): Promise<string> {
   throw new Error(lastError)
 }
 
-async function callAIWithFallback(prompt: string): Promise<string> {
+export async function callAIWithFallback(prompt: string): Promise<string> {
   const errors: string[] = []
 
   try {

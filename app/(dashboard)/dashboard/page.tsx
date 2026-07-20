@@ -2,6 +2,7 @@ import { QuickStats } from "@/components/dashboard/quick-stats"
 import { RecentTopics } from "@/components/dashboard/recent-topics"
 import { StudyAnalytics } from "@/components/dashboard/study-analytics"
 import { QuizScores } from "@/components/dashboard/quiz-scores"
+import { RevisionWidget } from "@/components/dashboard/revision-widget"
 import { SavedNotesCard } from "@/components/dashboard/saved-notes-card"
 import { MonthlyActivityCard } from "@/components/dashboard/monthly-activity-card"
 import { FeatureUsageCard } from "@/components/dashboard/feature-usage-card"
@@ -20,7 +21,10 @@ export default function DashboardPage() {
         <div className="lg:col-span-1">
           <QuizScores />
         </div>
-        <div className="lg:col-span-2 xl:col-span-1">
+        <div className="lg:col-span-1">
+          <RevisionWidget />
+        </div>
+        <div className="lg:col-span-1">
           <SavedNotesCard />
         </div>
         <div className="lg:col-span-2 xl:col-span-3">
