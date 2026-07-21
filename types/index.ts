@@ -167,3 +167,32 @@ export interface PasswordStrength {
     hasSpecial: boolean
   }
 }
+
+// ─── Revision Scheduler ──────────────────────────────────────────────────────
+
+export interface RevisionSchedule {
+  id: string
+  user_id: string
+  topic: string
+  subject: string
+  study_date: string
+  scheduled_date: string
+  revision_stage: number
+  priority: "low" | "medium" | "high"
+  estimated_minutes: number
+  status: "pending" | "completed"
+  completed_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RevisionStats {
+  pendingCount: number
+  completedCount: number
+  completedTodayCount: number
+  overdueCount: number
+  upcomingCount: number
+  streakCount: number
+}
+

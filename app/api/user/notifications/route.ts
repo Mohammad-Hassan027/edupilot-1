@@ -95,6 +95,14 @@ function mapUsageLogToNotification(log: {
       taskCount > 0
         ? `"${titleValue}" was saved with ${taskCount} task${taskCount > 1 ? "s" : ""}.`
         : `"${titleValue}" was saved successfully.`
+  } else if (log.feature === "revision" && action === "revision_completed") {
+    type = "success"
+    title = "Revision Completed"
+    message = `You finished your revision session on "${topic}".`
+  } else if (log.feature === "revision" && action === "revision_generated") {
+    type = "info"
+    title = "Revision Schedule Generated"
+    message = `New revision schedules are generated for your recent study sessions.`
   }
 
   return {
